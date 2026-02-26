@@ -1,0 +1,13 @@
+export { authService } from "./auth-service";
+export { attendanceService } from "./attendance-service";
+export { studentService } from "./student-service";
+export { staffService } from "./staff-service";
+export { departmentService } from "./department-service";
+export { sectionService } from "./section-service";
+export { academicPeriodService } from "./academic-period-service";
+export { academicProgramService } from "./academic-program-service";
+export { businessRuleService } from "./business-rule-service";
+export { gateTerminalService } from "./gate-terminal-service";
+export { reportService } from "./report-service";
+export { userService } from "./user-service";
+export { auditLogService } from "./audit-log-service";
