@@ -14,11 +14,18 @@ public class LoginRequest
 public class LoginResponse
 {
     public string Token { get; set; } = string.Empty;
+    public string RefreshToken { get; set; } = string.Empty;
     public DateTime ExpiresAt { get; set; }
     public string Username { get; set; } = string.Empty;
     public string Email { get; set; } = string.Empty;
     public string FullName { get; set; } = string.Empty;
     public List<string> Roles { get; set; } = new();
+}
+
+public class RefreshTokenRequest
+{
+    [Required]
+    public string RefreshToken { get; set; } = string.Empty;
 }
 
 public class ChangePasswordRequest

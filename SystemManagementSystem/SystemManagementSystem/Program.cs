@@ -3,6 +3,7 @@ using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using Scalar.AspNetCore;
 using SystemManagementSystem.Data;
 using SystemManagementSystem.Helpers;
 using SystemManagementSystem.Middleware;
@@ -42,6 +43,7 @@ builder.Services.AddAuthorization();
 
 // ──── Helpers ────
 builder.Services.AddSingleton<JwtTokenHelper>();
+builder.Services.AddHttpContextAccessor();
 
 // ──── Application Services ────
 builder.Services.AddScoped<IAuthService, AuthService>();
@@ -89,6 +91,12 @@ app.UseMiddleware<ExceptionHandlingMiddleware>();
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
+    app.MapScalarApiReference(options =>
+    {
+        options
+            .WithTitle("DBTC Attendance Management System API")
+            .WithDefaultHttpClient(ScalarTarget.CSharp, ScalarClient.HttpClient);
+    });
 }
 
 app.UseHttpsRedirection();

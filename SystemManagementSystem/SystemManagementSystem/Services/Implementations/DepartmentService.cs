@@ -1,3 +1,5 @@
+using System.Security.Claims;
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using SystemManagementSystem.Data;
 using SystemManagementSystem.DTOs.Common;
@@ -10,8 +12,21 @@ namespace SystemManagementSystem.Services.Implementations;
 public class DepartmentService : IDepartmentService
 {
     private readonly ApplicationDbContext _context;
+    private readonly IAuditLogService _auditLog;
+    private readonly IHttpContextAccessor _httpContextAccessor;
 
-    public DepartmentService(ApplicationDbContext context) => _context = context;
+    public DepartmentService(ApplicationDbContext context, IAuditLogService auditLog, IHttpContextAccessor httpContextAccessor)
+    {
+        _context = context;
+        _auditLog = auditLog;
+        _httpContextAccessor = httpContextAccessor;
+    }
+
+    private Guid? GetCurrentUserId()
+    {
+        var claim = _httpContextAccessor.HttpContext?.User.FindFirst(ClaimTypes.NameIdentifier);
+        return claim != null ? Guid.Parse(claim.Value) : null;
+    }
 
     public async Task<PagedResult<DepartmentResponse>> GetAllAsync(int page, int pageSize)
     {
@@ -60,6 +75,12 @@ public class DepartmentService : IDepartmentService
 
         _context.Departments.Add(dept);
         await _context.SaveChangesAsync();
+
+        await _auditLog.LogAsync("Create", "Department", dept.Id.ToString(),
+            null,
+            JsonSerializer.Serialize(new { dept.Name, dept.Code, dept.Description }),
+            GetCurrentUserId());
+
         return await GetByIdAsync(dept.Id);
     }
 
@@ -79,6 +100,12 @@ public class DepartmentService : IDepartmentService
         if (request.Description != null) dept.Description = request.Description;
 
         await _context.SaveChangesAsync();
+
+        var newValues = JsonSerializer.Serialize(new { dept.Name, dept.Code, dept.Description });
+        await _auditLog.LogAsync("Update", "Department", id.ToString(),
+            JsonSerializer.Serialize(new { Name = dept.Name, Code = dept.Code, Description = dept.Description }),
+            newValues, GetCurrentUserId());
+
         return await GetByIdAsync(id);
     }
 
@@ -87,8 +114,12 @@ public class DepartmentService : IDepartmentService
         var dept = await _context.Departments.FindAsync(id)
             ?? throw new KeyNotFoundException($"Department with ID {id} not found.");
 
+        var oldValues = JsonSerializer.Serialize(new { dept.Name, dept.Code, dept.Description });
+
         dept.IsDeleted = true;
         await _context.SaveChangesAsync();
+
+        await _auditLog.LogAsync("Delete", "Department", id.ToString(), oldValues, null, GetCurrentUserId());
     }
 
     private static DepartmentResponse MapToResponse(Department d) => new()

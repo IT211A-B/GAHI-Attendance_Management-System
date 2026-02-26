@@ -32,6 +32,7 @@ public class ApplicationDbContext : DbContext
     // Configuration & Audit
     public DbSet<BusinessRule> BusinessRules => Set<BusinessRule>();
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
+    public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

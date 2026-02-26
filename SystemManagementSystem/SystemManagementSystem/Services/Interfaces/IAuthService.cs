@@ -5,5 +5,6 @@ namespace SystemManagementSystem.Services.Interfaces;
 public interface IAuthService
 {
     Task<LoginResponse> LoginAsync(LoginRequest request);
+    Task<LoginResponse> RefreshAsync(string refreshToken);
     Task ChangePasswordAsync(Guid userId, ChangePasswordRequest request);
 }

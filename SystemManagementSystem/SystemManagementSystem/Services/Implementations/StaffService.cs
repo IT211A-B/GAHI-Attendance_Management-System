@@ -1,3 +1,5 @@
+using System.Security.Claims;
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using SystemManagementSystem.Data;
 using SystemManagementSystem.DTOs.Common;
@@ -11,8 +13,21 @@ namespace SystemManagementSystem.Services.Implementations;
 public class StaffService : IStaffService
 {
     private readonly ApplicationDbContext _context;
+    private readonly IAuditLogService _auditLog;
+    private readonly IHttpContextAccessor _httpContextAccessor;
 
-    public StaffService(ApplicationDbContext context) => _context = context;
+    public StaffService(ApplicationDbContext context, IAuditLogService auditLog, IHttpContextAccessor httpContextAccessor)
+    {
+        _context = context;
+        _auditLog = auditLog;
+        _httpContextAccessor = httpContextAccessor;
+    }
+
+    private Guid? GetCurrentUserId()
+    {
+        var claim = _httpContextAccessor.HttpContext?.User.FindFirst(ClaimTypes.NameIdentifier);
+        return claim != null ? Guid.Parse(claim.Value) : null;
+    }
 
     public async Task<PagedResult<StaffResponse>> GetAllAsync(int page, int pageSize, Guid? departmentId, string? search)
     {
@@ -82,6 +97,12 @@ public class StaffService : IStaffService
 
         _context.Staff.Add(staff);
         await _context.SaveChangesAsync();
+
+        await _auditLog.LogAsync("Create", "Staff", staff.Id.ToString(),
+            null,
+            JsonSerializer.Serialize(new { staff.EmployeeIdNumber, staff.FirstName, staff.LastName, staff.Email, StaffType = staff.StaffType.ToString(), staff.DepartmentId }),
+            GetCurrentUserId());
+
         return await GetByIdAsync(staff.Id);
     }
 
@@ -89,6 +110,8 @@ public class StaffService : IStaffService
     {
         var staff = await _context.Staff.FindAsync(id)
             ?? throw new KeyNotFoundException($"Staff with ID {id} not found.");
+
+        var oldValues = JsonSerializer.Serialize(new { staff.FirstName, staff.LastName, staff.Email, StaffType = staff.StaffType.ToString(), staff.DepartmentId });
 
         if (request.FirstName != null) staff.FirstName = request.FirstName;
         if (request.MiddleName != null) staff.MiddleName = request.MiddleName;
@@ -105,6 +128,12 @@ public class StaffService : IStaffService
         }
 
         await _context.SaveChangesAsync();
+
+        var newValues = JsonSerializer.Serialize(new { staff.FirstName, staff.LastName, staff.Email, StaffType = staff.StaffType.ToString(), staff.DepartmentId });
+        await _auditLog.LogAsync("Update", "Staff", id.ToString(),
+            JsonSerializer.Serialize(new { staff.FirstName, staff.LastName, staff.Email, StaffType = staff.StaffType.ToString(), staff.DepartmentId }),
+            newValues, GetCurrentUserId());
+
         return await GetByIdAsync(id);
     }
 
@@ -113,8 +142,12 @@ public class StaffService : IStaffService
         var staff = await _context.Staff.FindAsync(id)
             ?? throw new KeyNotFoundException($"Staff with ID {id} not found.");
 
+        var oldValues = JsonSerializer.Serialize(new { staff.EmployeeIdNumber, staff.FirstName, staff.LastName, staff.Email });
+
         staff.IsDeleted = true;
         await _context.SaveChangesAsync();
+
+        await _auditLog.LogAsync("Delete", "Staff", id.ToString(), oldValues, null, GetCurrentUserId());
     }
 
     public async Task<StaffResponse> RegenerateQrCodeAsync(Guid id)

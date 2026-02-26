@@ -1,3 +1,5 @@
+using System.Security.Claims;
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using SystemManagementSystem.Data;
 using SystemManagementSystem.DTOs.Common;
@@ -10,10 +12,20 @@ namespace SystemManagementSystem.Services.Implementations;
 public class UserService : IUserService
 {
     private readonly ApplicationDbContext _context;
+    private readonly IAuditLogService _auditLog;
+    private readonly IHttpContextAccessor _httpContextAccessor;
 
-    public UserService(ApplicationDbContext context)
+    public UserService(ApplicationDbContext context, IAuditLogService auditLog, IHttpContextAccessor httpContextAccessor)
     {
         _context = context;
+        _auditLog = auditLog;
+        _httpContextAccessor = httpContextAccessor;
+    }
+
+    private Guid? GetCurrentUserId()
+    {
+        var claim = _httpContextAccessor.HttpContext?.User.FindFirst(ClaimTypes.NameIdentifier);
+        return claim != null ? Guid.Parse(claim.Value) : null;
     }
 
     public async Task<PagedResult<UserResponse>> GetAllAsync(int page, int pageSize)
@@ -79,6 +91,11 @@ public class UserService : IUserService
         _context.Users.Add(user);
         await _context.SaveChangesAsync();
 
+        await _auditLog.LogAsync("Create", "User", user.Id.ToString(),
+            null,
+            JsonSerializer.Serialize(new { user.Username, user.Email, user.FirstName, user.LastName }),
+            GetCurrentUserId());
+
         return await GetByIdAsync(user.Id);
     }
 
@@ -88,6 +105,8 @@ public class UserService : IUserService
             .Include(u => u.UserRoles).ThenInclude(ur => ur.Role)
             .FirstOrDefaultAsync(u => u.Id == id)
             ?? throw new KeyNotFoundException($"User with ID {id} not found.");
+
+        var oldValues = JsonSerializer.Serialize(new { user.Email, user.FirstName, user.LastName, user.IsActive });
 
         if (request.Email != null)
         {
@@ -101,6 +120,10 @@ public class UserService : IUserService
         if (request.IsActive.HasValue) user.IsActive = request.IsActive.Value;
 
         await _context.SaveChangesAsync();
+
+        var newValues = JsonSerializer.Serialize(new { user.Email, user.FirstName, user.LastName, user.IsActive });
+        await _auditLog.LogAsync("Update", "User", id.ToString(), oldValues, newValues, GetCurrentUserId());
+
         return MapToResponse(user);
     }
 
@@ -109,8 +132,12 @@ public class UserService : IUserService
         var user = await _context.Users.FindAsync(id)
             ?? throw new KeyNotFoundException($"User with ID {id} not found.");
 
+        var oldValues = JsonSerializer.Serialize(new { user.Username, user.Email, user.FirstName, user.LastName });
+
         user.IsDeleted = true;
         await _context.SaveChangesAsync();
+
+        await _auditLog.LogAsync("Delete", "User", id.ToString(), oldValues, null, GetCurrentUserId());
     }
 
     public async Task<UserResponse> AssignRolesAsync(Guid userId, AssignRolesRequest request)
@@ -120,16 +147,22 @@ public class UserService : IUserService
             .FirstOrDefaultAsync(u => u.Id == userId)
             ?? throw new KeyNotFoundException($"User with ID {userId} not found.");
 
-        // Remove existing roles
-        _context.UserRoles.RemoveRange(user.UserRoles);
-
-        // Add new roles
+        // Validate all roles first
         foreach (var roleId in request.RoleIds)
         {
             if (!await _context.Roles.AnyAsync(r => r.Id == roleId))
                 throw new KeyNotFoundException($"Role with ID {roleId} not found.");
+        }
 
-            user.UserRoles.Add(new UserRole { UserId = userId, RoleId = roleId });
+        // Remove existing roles
+        var existingRoles = user.UserRoles.ToList();
+        _context.UserRoles.RemoveRange(existingRoles);
+        await _context.SaveChangesAsync();
+
+        // Add new roles
+        foreach (var roleId in request.RoleIds)
+        {
+            _context.UserRoles.Add(new UserRole { UserId = userId, RoleId = roleId });
         }
 
         await _context.SaveChangesAsync();

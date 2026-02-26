@@ -1,3 +1,5 @@
+using System.Security.Claims;
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using SystemManagementSystem.Data;
 using SystemManagementSystem.DTOs.Common;
@@ -10,8 +12,21 @@ namespace SystemManagementSystem.Services.Implementations;
 public class StudentService : IStudentService
 {
     private readonly ApplicationDbContext _context;
+    private readonly IAuditLogService _auditLog;
+    private readonly IHttpContextAccessor _httpContextAccessor;
 
-    public StudentService(ApplicationDbContext context) => _context = context;
+    public StudentService(ApplicationDbContext context, IAuditLogService auditLog, IHttpContextAccessor httpContextAccessor)
+    {
+        _context = context;
+        _auditLog = auditLog;
+        _httpContextAccessor = httpContextAccessor;
+    }
+
+    private Guid? GetCurrentUserId()
+    {
+        var claim = _httpContextAccessor.HttpContext?.User.FindFirst(ClaimTypes.NameIdentifier);
+        return claim != null ? Guid.Parse(claim.Value) : null;
+    }
 
     public async Task<PagedResult<StudentResponse>> GetAllAsync(int page, int pageSize, Guid? sectionId, string? search)
     {
@@ -81,6 +96,12 @@ public class StudentService : IStudentService
 
         _context.Students.Add(student);
         await _context.SaveChangesAsync();
+
+        await _auditLog.LogAsync("Create", "Student", student.Id.ToString(),
+            null,
+            JsonSerializer.Serialize(new { student.StudentIdNumber, student.FirstName, student.MiddleName, student.LastName, student.Email, student.ContactNumber, student.SectionId }),
+            GetCurrentUserId());
+
         return await GetByIdAsync(student.Id);
     }
 
@@ -88,6 +109,8 @@ public class StudentService : IStudentService
     {
         var student = await _context.Students.FindAsync(id)
             ?? throw new KeyNotFoundException($"Student with ID {id} not found.");
+
+        var oldValues = JsonSerializer.Serialize(new { student.FirstName, student.MiddleName, student.LastName, student.Email, student.ContactNumber, EnrollmentStatus = student.EnrollmentStatus.ToString(), student.SectionId });
 
         if (request.FirstName != null) student.FirstName = request.FirstName;
         if (request.MiddleName != null) student.MiddleName = request.MiddleName;
@@ -104,6 +127,10 @@ public class StudentService : IStudentService
         }
 
         await _context.SaveChangesAsync();
+
+        var newValues = JsonSerializer.Serialize(new { student.FirstName, student.MiddleName, student.LastName, student.Email, student.ContactNumber, EnrollmentStatus = student.EnrollmentStatus.ToString(), student.SectionId });
+        await _auditLog.LogAsync("Update", "Student", id.ToString(), oldValues, newValues, GetCurrentUserId());
+
         return await GetByIdAsync(id);
     }
 
@@ -112,8 +139,12 @@ public class StudentService : IStudentService
         var student = await _context.Students.FindAsync(id)
             ?? throw new KeyNotFoundException($"Student with ID {id} not found.");
 
+        var oldValues = JsonSerializer.Serialize(new { student.StudentIdNumber, student.FirstName, student.LastName, student.Email });
+
         student.IsDeleted = true;
         await _context.SaveChangesAsync();
+
+        await _auditLog.LogAsync("Delete", "Student", id.ToString(), oldValues, null, GetCurrentUserId());
     }
 
     public async Task<StudentResponse> RegenerateQrCodeAsync(Guid id)

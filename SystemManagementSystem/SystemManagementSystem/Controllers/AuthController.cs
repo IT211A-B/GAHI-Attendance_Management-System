@@ -29,6 +29,16 @@ public class AuthController : ControllerBase
     }
 
     /// <summary>
+    /// Refresh an expired JWT token using a valid refresh token.
+    /// </summary>
+    [HttpPost("refresh")]
+    public async Task<ActionResult<ApiResponse<LoginResponse>>> Refresh([FromBody] RefreshTokenRequest request)
+    {
+        var result = await _authService.RefreshAsync(request.RefreshToken);
+        return Ok(ApiResponse<LoginResponse>.Ok(result, "Token refreshed successfully."));
+    }
+
+    /// <summary>
     /// Change the current user's password.
     /// </summary>
     [Authorize]
