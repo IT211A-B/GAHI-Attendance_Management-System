@@ -45,3 +45,9 @@ Desktop.ini
 
 ## dotnet tool
 .dotnet/
+
+## Build/test output logs
+*.txt
+
+## User secrets
+secrets.json
