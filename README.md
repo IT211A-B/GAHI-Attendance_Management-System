@@ -1,1 +1,5 @@
 # DonBosco-Attendance_Management-System
+
+BACKEND - JAKE F. SUCGANG
+FRONTEND - JOHN PAOLO M. CABALUNA
+QA - CLYDE Z. PARBA
