@@ -1,6 +1,9 @@
 using AspNetCore.Scalar;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.OpenApi.Models;
 using Donbosco_Attendance_Management_System.Data;
+using Donbosco_Attendance_Management_System.Services;
+using Donbosco_Attendance_Management_System.Middleware;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -14,19 +17,49 @@ var connectionString = builder.Configuration.GetValue<string>("DB_CONNECTION_STR
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(connectionString));
 
+// Register services
+builder.Services.AddScoped<IAuthService, AuthService>();
+
 // Add health checks
 builder.Services.AddHealthChecks()
     .AddNpgSql(connectionString!);
 
-// Configure Swagger/OpenAPI
+// Configure Swagger/OpenAPI with JWT support
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
 {
-    options.SwaggerDoc("v1", new Microsoft.OpenApi.Models.OpenApiInfo
+    options.SwaggerDoc("v1", new OpenApiInfo
     {
         Title = "Donbosco Attendance Management System API",
         Version = "v1",
         Description = "A comprehensive school attendance management system API"
+    });
+
+    // Add JWT Authentication to Swagger
+    options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+    {
+        Name = "Authorization",
+        Type = SecuritySchemeType.Http,
+        Scheme = "bearer",
+        BearerFormat = "JWT",
+        In = ParameterLocation.Header,
+        Description = "Enter your JWT token in the format: {your_token}\n\n" +
+                      "Example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+    });
+
+    options.AddSecurityRequirement(new OpenApiSecurityRequirement
+    {
+        {
+            new OpenApiSecurityScheme
+            {
+                Reference = new OpenApiReference
+                {
+                    Type = ReferenceType.SecurityScheme,
+                    Id = "Bearer"
+                }
+            },
+            Array.Empty<string>()
+        }
     });
 });
 
@@ -50,6 +83,18 @@ app.UseScalar(options =>
 {
     options.UseSpecUrl("/swagger/v1/swagger.json");
 });
+
+// Custom middleware pipeline for authentication
+// Order matters: JwtMiddleware -> RoleMiddleware -> OwnerMiddleware
+
+// 1. JWT Middleware: Validates token and attaches user to HttpContext
+app.UseJwtMiddleware();
+
+// 2. Role Middleware: Checks role requirements from [RequireRole] attribute
+app.UseRoleMiddleware();
+
+// 3. Owner Middleware: Verifies schedule ownership from [RequireOwner] attribute
+app.UseOwnerMiddleware();
 
 app.UseAuthorization();
 
