@@ -1,8 +1,6 @@
 namespace Donbosco_Attendance_Management_System.DTOs.Responses;
 
-/// <summary>
-/// User profile data returned in responses
-/// </summary>
+// user profile data returned in responses
 public class UserProfileResponse
 {
     public Guid Id { get; set; }

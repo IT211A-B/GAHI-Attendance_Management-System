@@ -7,9 +7,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Donbosco_Attendance_Management_System.Middleware;
 
-/// <summary>
-/// Middleware that validates JWT tokens and attaches the authenticated user to HttpContext.Items
-/// </summary>
+// validates jwt tokens and attaches user to HttpContext.Items
 public class JwtMiddleware
 {
     private readonly RequestDelegate _next;
@@ -31,7 +29,7 @@ public class JwtMiddleware
 
             if (user != null)
             {
-                // Attach user info to HttpContext.Items for easy access in controllers
+                // attach user info to context
                 context.Items["User"] = user;
                 context.Items["UserId"] = user.Id;
                 context.Items["UserRole"] = user.Role;
@@ -53,7 +51,7 @@ public class JwtMiddleware
             return null;
         }
 
-        // Expected format: "Bearer {token}"
+        // expected format: Bearer {token}
         if (authHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
         {
             return authHeader.Substring("Bearer ".Length).Trim();
@@ -90,7 +88,7 @@ public class JwtMiddleware
                 ValidateAudience = true,
                 ValidAudience = audience,
                 ValidateLifetime = true,
-                ClockSkew = TimeSpan.Zero // No clock skew tolerance
+                ClockSkew = TimeSpan.Zero
             };
 
             var principal = tokenHandler.ValidateToken(token, validationParameters, out var validatedToken);
@@ -146,9 +144,7 @@ public class JwtMiddleware
     }
 }
 
-/// <summary>
-/// Extension methods for registering JwtMiddleware
-/// </summary>
+// extension methods for registering JwtMiddleware
 public static class JwtMiddlewareExtensions
 {
     public static IApplicationBuilder UseJwtMiddleware(this IApplicationBuilder builder)

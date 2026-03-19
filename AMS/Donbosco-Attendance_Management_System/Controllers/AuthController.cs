@@ -18,11 +18,7 @@ public class AuthController : ControllerBase
         _logger = logger;
     }
 
-    /// <summary>
-    /// Authenticate user and receive JWT token
-    /// </summary>
-    /// <param name="request">Login credentials</param>
-    /// <returns>JWT token with user profile</returns>
+    // authenticate user and return jwt token
     [HttpPost("login")]
     public async Task<IActionResult> Login([FromBody] LoginRequest request)
     {
@@ -59,10 +55,7 @@ public class AuthController : ControllerBase
         return Ok(ApiResponse<AuthResponse>.SuccessResponse(response!));
     }
 
-    /// <summary>
-    /// Get current user profile from JWT token
-    /// </summary>
-    /// <returns>User profile data</returns>
+    // get current user profile from jwt token
     [HttpGet("me")]
     public async Task<IActionResult> GetCurrentUser()
     {
@@ -89,17 +82,11 @@ public class AuthController : ControllerBase
         return Ok(ApiResponse<UserProfileResponse>.SuccessResponse(userProfile));
     }
 
-    /// <summary>
-    /// Logout - client should discard the token
-    /// </summary>
-    /// <returns>Success message</returns>
+    // logout endpoint - client should discard the token
     [HttpPost("logout")]
     public IActionResult Logout()
     {
-        // JWT tokens are stateless - actual logout happens client-side
-        // by removing the token from storage
-        // This endpoint exists for API completeness and potential future
-        // token blacklisting implementation
+        // jwt tokens are stateless so actual logout happens client-side
 
         return Ok(ApiResponse.SuccessResponse());
     }

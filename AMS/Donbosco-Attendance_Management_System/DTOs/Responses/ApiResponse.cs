@@ -1,9 +1,6 @@
 namespace Donbosco_Attendance_Management_System.DTOs.Responses;
 
-/// <summary>
-/// Standard JSON envelope for all API responses
-/// </summary>
-/// <typeparam name="T">Type of data being returned</typeparam>
+// standard json envelope for all api responses
 public class ApiResponse<T>
 {
     public bool Success { get; set; }
@@ -57,9 +54,7 @@ public class ApiError
     public object? Details { get; set; }
 }
 
-/// <summary>
-/// Non-generic version for responses without data
-/// </summary>
+// non-generic version for responses without data
 public class ApiResponse : ApiResponse<object>
 {
     public static ApiResponse SuccessResponse()
@@ -87,9 +82,7 @@ public class ApiResponse : ApiResponse<object>
     }
 }
 
-/// <summary>
-/// Error codes used throughout the API
-/// </summary>
+// error codes used throughout the api
 public static class ErrorCodes
 {
     public const string UNAUTHORIZED = "UNAUTHORIZED";

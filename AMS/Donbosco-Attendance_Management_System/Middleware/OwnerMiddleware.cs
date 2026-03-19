@@ -4,27 +4,17 @@ using Donbosco_Attendance_Management_System.DTOs.Responses;
 
 namespace Donbosco_Attendance_Management_System.Middleware;
 
-/// <summary>
-/// Attribute to require schedule ownership (teacher_id must match current user)
-/// Admins can optionally bypass this check
-/// </summary>
+// require schedule ownership
 [AttributeUsage(AttributeTargets.Class | AttributeTargets.Method, AllowMultiple = false)]
 public class RequireOwnerAttribute : Attribute
 {
-    /// <summary>
-    /// If true, admin can bypass ownership check (e.g., for DELETE any schedule)
-    /// If false, admin must also be the owner (rare case)
-    /// </summary>
+    // if true, admin can bypass ownership check
     public bool AdminBypass { get; set; } = true;
 
     public RequireOwnerAttribute() { }
 }
 
-/// <summary>
-/// Middleware that verifies schedule ownership for mutating operations
-/// Checks if the authenticated user owns the schedule (teacher_id == current user id)
-/// Admin can bypass for certain operations like DELETE
-/// </summary>
+// verifies schedule ownership for mutating operations
 public class OwnerMiddleware
 {
     private readonly RequestDelegate _next;
@@ -38,7 +28,7 @@ public class OwnerMiddleware
 
     public async Task InvokeAsync(HttpContext context, AppDbContext dbContext)
     {
-        // Get the endpoint metadata to check for RequireOwner attribute
+        // get endpoint metadata
         var endpoint = context.GetEndpoint();
 
         if (endpoint == null)
@@ -47,31 +37,31 @@ public class OwnerMiddleware
             return;
         }
 
-        // Check for RequireOwner attribute
+        // check for requireowner attribute
         var requireOwnerAttribute = endpoint.Metadata
             .OfType<RequireOwnerAttribute>()
             .FirstOrDefault();
 
         if (requireOwnerAttribute == null)
         {
-            // No ownership requirement, proceed
+            // no ownership requirement
             await _next(context);
             return;
         }
 
-        // Get current user info from HttpContext (set by JwtMiddleware)
+        // get current user info
         var userId = context.Items["UserId"] as Guid?;
         var userRole = context.Items["UserRole"] as string;
 
         if (userId == null)
         {
-            // No user attached - return 401 Unauthorized
+            // no user attached
             _logger.LogWarning("Unauthenticated access attempt to owner-protected endpoint");
             await WriteUnauthorizedResponse(context, "Authentication required");
             return;
         }
 
-        // Admin bypass check
+        // admin bypass
         if (requireOwnerAttribute.AdminBypass && string.Equals(userRole, "admin", StringComparison.OrdinalIgnoreCase))
         {
             _logger.LogDebug("Admin user {UserId} bypassing ownership check", userId);
@@ -79,29 +69,29 @@ public class OwnerMiddleware
             return;
         }
 
-        // Extract schedule ID from route
+        // get schedule id from route
         var scheduleId = ExtractScheduleId(context);
 
         if (scheduleId == null)
         {
-            // No schedule ID in route - let the controller handle it (likely 400 or 404)
+            // no schedule id in route
             await _next(context);
             return;
         }
 
-        // Check ownership in database
+        // check ownership in database
         var schedule = await dbContext.Schedules
             .AsNoTracking()
             .FirstOrDefaultAsync(s => s.Id == scheduleId.Value);
 
         if (schedule == null)
         {
-            // Schedule doesn't exist - let the controller return 404
+            // schedule not found
             await _next(context);
             return;
         }
 
-        // Verify ownership
+        // verify ownership
         if (schedule.TeacherId != userId.Value)
         {
             _logger.LogWarning(
@@ -115,14 +105,14 @@ public class OwnerMiddleware
             return;
         }
 
-        // User is the owner, proceed
+        // user is the owner
         _logger.LogDebug("Ownership verified for user {UserId} on schedule {ScheduleId}", userId, scheduleId);
         await _next(context);
     }
 
     private Guid? ExtractScheduleId(HttpContext context)
     {
-        // Try to get schedule ID from route values
+        // try to get schedule id from route values
         if (context.Request.RouteValues.TryGetValue("id", out var idValue))
         {
             if (idValue is Guid guidId)
@@ -136,7 +126,7 @@ public class OwnerMiddleware
             }
         }
 
-        // Try to get from route parameter with different name
+        // try scheduleid parameter
         if (context.Request.RouteValues.TryGetValue("scheduleId", out var scheduleIdValue))
         {
             if (scheduleIdValue is Guid guidScheduleId)
@@ -172,9 +162,7 @@ public class OwnerMiddleware
     }
 }
 
-/// <summary>
-/// Extension methods for registering OwnerMiddleware
-/// </summary>
+// extension methods for registering OwnerMiddleware
 public static class OwnerMiddlewareExtensions
 {
     public static IApplicationBuilder UseOwnerMiddleware(this IApplicationBuilder builder)

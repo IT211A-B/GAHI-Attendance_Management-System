@@ -3,9 +3,7 @@ using Donbosco_Attendance_Management_System.DTOs.Responses;
 
 namespace Donbosco_Attendance_Management_System.Middleware;
 
-/// <summary>
-/// Attribute to restrict access to specific roles
-/// </summary>
+// attribute to restrict access to specific roles
 [AttributeUsage(AttributeTargets.Class | AttributeTargets.Method, AllowMultiple = false)]
 public class RequireRoleAttribute : Attribute
 {
@@ -17,10 +15,7 @@ public class RequireRoleAttribute : Attribute
     }
 }
 
-/// <summary>
-/// Middleware that checks if the authenticated user has the required role(s)
-/// Should be used after JwtMiddleware
-/// </summary>
+// checks if authenticated user has required role(s)
 public class RoleMiddleware
 {
     private readonly RequestDelegate _next;
@@ -34,7 +29,7 @@ public class RoleMiddleware
 
     public async Task InvokeAsync(HttpContext context)
     {
-        // Get the endpoint metadata to check for RequireRole attribute
+        // get endpoint metadata
         var endpoint = context.GetEndpoint();
 
         if (endpoint == null)
@@ -43,33 +38,33 @@ public class RoleMiddleware
             return;
         }
 
-        // Check for RequireRole attribute on the endpoint or controller
+        // check for requirerole attribute
         var requireRoleAttribute = endpoint.Metadata
             .OfType<RequireRoleAttribute>()
             .FirstOrDefault();
 
         if (requireRoleAttribute == null)
         {
-            // No role requirement, proceed
+            // no role requirement
             await _next(context);
             return;
         }
 
-        // Check if user is authenticated
+        // get user role
         var userRole = context.Items["UserRole"] as string;
 
         if (string.IsNullOrEmpty(userRole))
         {
-            // No user attached - return 401 Unauthorized
+            // no user attached
             _logger.LogWarning("Unauthenticated access attempt to protected endpoint");
             await WriteUnauthorizedResponse(context, "Authentication required");
             return;
         }
 
-        // Check if user has one of the required roles
+        // check if user has required role
         if (!requireRoleAttribute.Roles.Contains(userRole, StringComparer.OrdinalIgnoreCase))
         {
-            // User doesn't have required role - return 403 Forbidden
+            // user doesn't have required role
             _logger.LogWarning(
                 "User with role '{UserRole}' attempted to access endpoint requiring roles: {RequiredRoles}",
                 userRole,
@@ -80,7 +75,7 @@ public class RoleMiddleware
             return;
         }
 
-        // User has required role, proceed
+        // user has required role
         await _next(context);
     }
 
@@ -107,9 +102,7 @@ public class RoleMiddleware
     }
 }
 
-/// <summary>
-/// Extension methods for registering RoleMiddleware
-/// </summary>
+// extension methods for registering RoleMiddleware
 public static class RoleMiddlewareExtensions
 {
     public static IApplicationBuilder UseRoleMiddleware(this IApplicationBuilder builder)

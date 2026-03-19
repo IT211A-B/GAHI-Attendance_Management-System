@@ -1,6 +1,8 @@
 using AspNetCore.Scalar;
 using Microsoft.EntityFrameworkCore;
 using Donbosco_Attendance_Management_System.Data;
+using Donbosco_Attendance_Management_System.Services;
+using Donbosco_Attendance_Management_System.Middleware;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -13,6 +15,12 @@ var connectionString = builder.Configuration.GetValue<string>("DB_CONNECTION_STR
     ?? builder.Configuration.GetConnectionString("DefaultConnection");
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(connectionString));
+
+// Register services
+builder.Services.AddScoped<IAuthService, AuthService>();
+builder.Services.AddScoped<IUsersService, UsersService>();
+builder.Services.AddScoped<IClassroomsService, ClassroomsService>();
+builder.Services.AddScoped<ISectionsService, SectionsService>();
 
 // Add health checks
 builder.Services.AddHealthChecks()
@@ -27,6 +35,31 @@ builder.Services.AddSwaggerGen(options =>
         Title = "Donbosco Attendance Management System API",
         Version = "v1",
         Description = "A comprehensive school attendance management system API"
+    });
+
+    // Add JWT Authentication to Swagger
+    options.AddSecurityDefinition("Bearer", new Microsoft.OpenApi.Models.OpenApiSecurityScheme
+    {
+        Description = "JWT Authorization header using the Bearer scheme. Enter 'Bearer' [space] and then your token in the text input below.",
+        Name = "Authorization",
+        In = Microsoft.OpenApi.Models.ParameterLocation.Header,
+        Type = Microsoft.OpenApi.Models.SecuritySchemeType.ApiKey,
+        Scheme = "Bearer"
+    });
+
+    options.AddSecurityRequirement(new Microsoft.OpenApi.Models.OpenApiSecurityRequirement
+    {
+        {
+            new Microsoft.OpenApi.Models.OpenApiSecurityScheme
+            {
+                Reference = new Microsoft.OpenApi.Models.OpenApiReference
+                {
+                    Type = Microsoft.OpenApi.Models.ReferenceType.SecurityScheme,
+                    Id = "Bearer"
+                }
+            },
+            Array.Empty<string>()
+        }
     });
 });
 
@@ -50,6 +83,12 @@ app.UseScalar(options =>
 {
     options.UseSpecUrl("/swagger/v1/swagger.json");
 });
+
+// JWT Authentication Middleware - validates token and attaches user to HttpContext
+app.UseJwtMiddleware();
+
+// Role Authorization Middleware - checks role requirements via [RequireRole] attribute
+app.UseRoleMiddleware();
 
 app.UseAuthorization();
 

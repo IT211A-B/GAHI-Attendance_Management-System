@@ -1,8 +1,6 @@
 namespace Donbosco_Attendance_Management_System.DTOs.Responses;
 
-/// <summary>
-/// Response returned after successful login
-/// </summary>
+// response returned after successful login
 public class AuthResponse
 {
     public string Token { get; set; } = string.Empty;
