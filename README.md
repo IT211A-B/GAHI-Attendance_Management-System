@@ -179,3 +179,11 @@ Non-sensitive settings in `appsettings.json`:
 ```
 
 Sensitive values (`ConnectionStrings:DefaultConnection`, `JwtSettings:SecretKey`) must be set via user secrets or environment variables.
+
+## Team
+
+| Role     | Member                 |
+| -------- | ---------------------- |
+| Backend  | Jake F. Sucgang        |
+| Frontend | John Paolo M. Cabaluna |
+| QA       | Clyde Z. Parba         |
