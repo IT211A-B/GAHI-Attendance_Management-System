@@ -10,17 +10,9 @@ import { APP_NAME } from "@/lib/constants";
 import {
   LayoutDashboard,
   Users,
-  UserCog,
-  ClipboardCheck,
   Building2,
   BookOpen,
-  GraduationCap,
-  Calendar,
-  BarChart3,
-  Settings,
-  DoorOpen,
   Shield,
-  ScrollText,
   ChevronLeft,
   ChevronRight,
   X,
@@ -37,25 +29,7 @@ interface NavItem {
 const navigation: NavItem[] = [
   { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   {
-    label: "Attendance",
-    href: "/attendance",
-    icon: ClipboardCheck,
-    roles: ["Admin", "Registrar", "DepartmentHead", "Guard"],
-  },
-  {
-    label: "Students",
-    href: "/students",
-    icon: GraduationCap,
-    roles: ["Admin", "Registrar"],
-  },
-  {
-    label: "Staff",
-    href: "/staff",
-    icon: UserCog,
-    roles: ["Admin", "DepartmentHead"],
-  },
-  {
-    label: "Departments",
+    label: "Classrooms",
     href: "/departments",
     icon: Building2,
   },
@@ -65,43 +39,9 @@ const navigation: NavItem[] = [
     icon: BookOpen,
   },
   {
-    label: "Programs",
-    href: "/programs",
-    icon: GraduationCap,
-  },
-  {
-    label: "Academic Periods",
-    href: "/academic-periods",
-    icon: Calendar,
-  },
-  {
-    label: "Reports",
-    href: "/reports",
-    icon: BarChart3,
-    roles: ["Admin", "DepartmentHead"],
-  },
-  {
-    label: "Gate Terminals",
-    href: "/gate-terminals",
-    icon: DoorOpen,
-    roles: ["Admin"],
-  },
-  {
     label: "Users",
     href: "/users",
     icon: Users,
-    roles: ["Admin"],
-  },
-  {
-    label: "Business Rules",
-    href: "/business-rules",
-    icon: Settings,
-    roles: ["Admin"],
-  },
-  {
-    label: "Audit Logs",
-    href: "/audit-logs",
-    icon: ScrollText,
     roles: ["Admin"],
   },
 ];

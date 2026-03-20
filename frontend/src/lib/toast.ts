@@ -66,6 +66,9 @@ export function extractErrorMessage(err: unknown): string {
     if (data?.errors && Array.isArray(data.errors) && data.errors.length > 0) {
       return data.errors[0];
     }
+    // New backend shape: { success, data, error: { code, message, details } }
+    if (data?.error?.message) return data.error.message;
+    if (data?.error?.code) return data.error.code;
     // Fallback HTTP status messages
     if (err.response?.status === 401) return "Session expired. Please sign in again.";
     if (err.response?.status === 403) return "You don't have permission for this action.";

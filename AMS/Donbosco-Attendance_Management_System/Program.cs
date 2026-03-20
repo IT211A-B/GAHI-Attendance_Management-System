@@ -9,6 +9,19 @@ var builder = WebApplication.CreateBuilder(args);
 // Add services to the container.
 builder.Services.AddControllersWithViews();
 
+// Allow local frontend apps to call the API during development.
+var frontendOrigin = builder.Configuration.GetValue<string>("FRONTEND_ORIGIN")
+    ?? "http://localhost:3000";
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("FrontendPolicy", policy =>
+    {
+        policy.WithOrigins(frontendOrigin, "http://localhost:3001")
+              .AllowAnyHeader()
+              .AllowAnyMethod();
+    });
+});
+
 // Configure PostgreSQL with EF Core
 // Supports environment variable override: DB_CONNECTION_STRING
 var connectionString = builder.Configuration.GetValue<string>("DB_CONNECTION_STRING")
@@ -74,6 +87,7 @@ if (!app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 app.UseRouting();
+app.UseCors("FrontendPolicy");
 
 // Enable OpenAPI document generation (Swagger JSON)
 app.UseSwagger();

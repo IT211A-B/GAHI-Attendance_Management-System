@@ -1,4 +1,10 @@
-export type UserRole = "Admin" | "Registrar" | "DepartmentHead" | "Guard";
+export type UserRole =
+  | "Admin"
+  | "Registrar"
+  | "DepartmentHead"
+  | "Guard"
+  | "admin"
+  | "teacher";
 
 export interface AuthUser {
   username: string;

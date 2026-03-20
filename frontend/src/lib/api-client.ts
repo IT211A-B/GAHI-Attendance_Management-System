@@ -1,7 +1,7 @@
 import axios, { AxiosError, InternalAxiosRequestConfig } from "axios";
 import { useAuthStore } from "@/stores/auth-store";
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5054";
 
 const apiClient = axios.create({
   baseURL: `${API_BASE_URL}/api`,
@@ -29,35 +29,14 @@ apiClient.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
-// Response interceptor — handle 401 and token refresh
+// Response interceptor — handle unauthorized responses
 apiClient.interceptors.response.use(
   (response) => response,
   async (error: AxiosError) => {
-    const originalRequest = error.config as InternalAxiosRequestConfig & {
-      _retry?: boolean;
-    };
-
-    if (error.response?.status === 401 && !originalRequest._retry) {
-      originalRequest._retry = true;
-
-      try {
-        const refreshToken = useAuthStore.getState().user?.refreshToken;
-        if (!refreshToken) throw new Error("No refresh token");
-
-        const res = await axios.post(`${API_BASE_URL}/api/Auth/refresh`, {
-          refreshToken,
-        });
-
-        if (res.data?.success && res.data?.data) {
-          useAuthStore.getState().setUser(res.data.data);
-          originalRequest.headers.Authorization = `Bearer ${res.data.data.token}`;
-          return apiClient(originalRequest);
-        }
-      } catch {
-        useAuthStore.getState().logout();
-        if (typeof window !== "undefined") {
-          window.location.href = "/login";
-        }
+    if (error.response?.status === 401) {
+      useAuthStore.getState().logout();
+      if (typeof window !== "undefined") {
+        window.location.href = "/login";
       }
     }
 

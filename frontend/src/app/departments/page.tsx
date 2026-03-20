@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { Plus, Pencil, Trash2 } from "lucide-react";
+import { animate, stagger } from "animejs";
 import {
   Card,
   Button,
@@ -11,100 +12,95 @@ import {
   Modal,
   Input,
 } from "@/components/ui";
-import { departmentService } from "@/services";
-import type { DepartmentResponse, PagedResult } from "@/types/api";
+import { useClassroomsController } from "@/controllers";
+import type { DepartmentResponse } from "@/types/api";
 import { formatDate } from "@/lib/utils";
-import { notify } from "@/lib/toast";
-import { DEFAULT_PAGE_SIZE } from "@/lib/constants";
 
 export default function DepartmentsPage() {
-  const [data, setData] = useState<PagedResult<DepartmentResponse> | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [page, setPage] = useState(1);
-  const [showForm, setShowForm] = useState(false);
-  const [editing, setEditing] = useState<DepartmentResponse | null>(null);
-  const [deletingId, setDeletingId] = useState<string | null>(null);
-  const [isDeleting, setIsDeleting] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
+  const {
+    data,
+    isLoading,
+    page,
+    setPage,
+    showForm,
+    setShowForm,
+    editing,
+    deletingId,
+    setDeletingId,
+    isDeleting,
+    isSaving,
+    form,
+    setForm,
+    errors,
+    openCreate,
+    openEdit,
+    handleSubmit,
+    handleDelete,
+  } = useClassroomsController();
+  const pageRef = useRef<HTMLDivElement>(null);
+  const headerRef = useRef<HTMLDivElement>(null);
+  const cardRef = useRef<HTMLDivElement>(null);
+  const createBtnRef = useRef<HTMLDivElement>(null);
+  const animsRef = useRef<ReturnType<typeof animate>[]>([]);
+  const hoverAnimRef = useRef<ReturnType<typeof animate> | null>(null);
 
-  const [form, setForm] = useState({ name: "", code: "", description: "" });
-  const [errors, setErrors] = useState<Record<string, string>>({});
+  useEffect(() => {
+    if (!pageRef.current || !headerRef.current || !cardRef.current) return;
 
-  const load = useCallback(async () => {
-    setIsLoading(true);
-    try {
-      const res = await departmentService.getAll({ page, pageSize: DEFAULT_PAGE_SIZE });
-      if (res.success && res.data) setData(res.data);
-    } catch {
-      notify.error("Failed to load departments");
-    } finally {
-      setIsLoading(false);
-    }
-  }, [page]);
+    animsRef.current.forEach((a) => a.pause());
+    animsRef.current = [];
 
-  useEffect(() => { load(); }, [load]);
+    animsRef.current.push(
+      animate(headerRef.current, {
+        opacity: [0, 1],
+        translateY: [-14, 0],
+        duration: 600,
+        ease: "outExpo",
+      })
+    );
 
-  const openCreate = () => {
-    setEditing(null);
-    setForm({ name: "", code: "", description: "" });
-    setErrors({});
-    setShowForm(true);
-  };
+    animsRef.current.push(
+      animate(cardRef.current, {
+        opacity: [0, 1],
+        translateY: [20, 0],
+        delay: 120,
+        duration: 700,
+        ease: "outExpo",
+      })
+    );
 
-  const openEdit = (d: DepartmentResponse) => {
-    setEditing(d);
-    setForm({ name: d.name, code: d.code, description: d.description ?? "" });
-    setErrors({});
-    setShowForm(true);
-  };
+    return () => {
+      animsRef.current.forEach((a) => a.pause());
+      animsRef.current = [];
+    };
+  }, []);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const errs: Record<string, string> = {};
-    if (!form.name.trim()) errs.name = "Name is required";
-    if (!form.code.trim()) errs.code = "Code is required";
-    setErrors(errs);
-    if (Object.keys(errs).length > 0) return;
+  useEffect(() => {
+    if (isLoading || !cardRef.current) return;
+    const rows = cardRef.current.querySelectorAll("tbody tr");
+    if (!rows.length) return;
 
-    setIsSaving(true);
-    try {
-      if (editing) {
-        await departmentService.update(editing.id, {
-          name: form.name,
-          code: form.code,
-          description: form.description || undefined,
-        });
-        notify.success("Department updated");
-      } else {
-        await departmentService.create({
-          name: form.name,
-          code: form.code,
-          description: form.description || undefined,
-        });
-        notify.success("Department created");
-      }
-      setShowForm(false);
-      load();
-    } catch {
-      notify.error("Operation failed");
-    } finally {
-      setIsSaving(false);
-    }
-  };
+    const rowAnim = animate(rows, {
+      opacity: [0, 1],
+      translateX: [-10, 0],
+      delay: stagger(45),
+      duration: 420,
+      ease: "outQuad",
+    });
+    animsRef.current.push(rowAnim);
+    return () => {
+      rowAnim.pause();
+    };
+  }, [isLoading, data?.items]);
 
-  const handleDelete = async () => {
-    if (!deletingId) return;
-    setIsDeleting(true);
-    try {
-      await departmentService.delete(deletingId);
-      notify.success("Department deleted");
-      setDeletingId(null);
-      load();
-    } catch {
-      notify.error("Failed to delete");
-    } finally {
-      setIsDeleting(false);
-    }
+  const handleCreateHover = (enter: boolean) => {
+    if (!createBtnRef.current) return;
+    if (hoverAnimRef.current) hoverAnimRef.current.pause();
+    hoverAnimRef.current = animate(createBtnRef.current, {
+      scale: enter ? [1, 1.04] : [1.04, 1],
+      duration: enter ? 180 : 220,
+      ease: enter ? "outBack(2)" : "outQuad",
+    });
   };
 
   const columns = [
@@ -126,27 +122,36 @@ export default function DepartmentsPage() {
   ];
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div ref={pageRef} className="space-y-6">
+      <div ref={headerRef} className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Departments</h1>
-          <p className="text-sm text-gray-500 mt-1">Manage academic departments</p>
+          <h1 className="text-2xl font-bold text-gray-900">Classrooms</h1>
+          <p className="text-sm text-gray-500 mt-1">Manage classrooms and room numbers</p>
         </div>
-        <Button onClick={openCreate}><Plus className="h-4 w-4" /> Add Department</Button>
+        <div ref={createBtnRef} className="inline-block">
+          <Button
+            onClick={openCreate}
+            onMouseEnter={() => handleCreateHover(true)}
+            onMouseLeave={() => handleCreateHover(false)}
+          >
+            <Plus className="h-4 w-4" /> Add Classroom
+          </Button>
+        </div>
       </div>
 
-      <Card>
-        <DataTable columns={columns} data={data?.items ?? []} keyExtractor={(d) => d.id} isLoading={isLoading} emptyMessage="No departments found." />
-        {data && data.totalPages > 1 && (
-          <Pagination page={data.page} totalPages={data.totalPages} hasPrevious={data.hasPrevious} hasNext={data.hasNext} totalCount={data.totalCount} pageSize={data.pageSize} onPageChange={setPage} />
-        )}
-      </Card>
+      <div ref={cardRef}>
+        <Card>
+          <DataTable columns={columns} data={data?.items ?? []} keyExtractor={(d) => d.id} isLoading={isLoading} emptyMessage="No classrooms found." />
+          {data && data.totalPages > 1 && (
+            <Pagination page={data.page} totalPages={data.totalPages} hasPrevious={data.hasPrevious} hasNext={data.hasNext} totalCount={data.totalCount} pageSize={data.pageSize} onPageChange={setPage} />
+          )}
+        </Card>
+      </div>
 
-      <Modal isOpen={showForm} onClose={() => setShowForm(false)} title={editing ? "Edit Department" : "Add Department"}>
+      <Modal isOpen={showForm} onClose={() => setShowForm(false)} title={editing ? "Edit Classroom" : "Add Classroom"}>
         <form onSubmit={handleSubmit} className="space-y-4">
-          <Input id="name" label="Name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} error={errors.name} placeholder="Department name" />
-          <Input id="code" label="Code" value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value })} error={errors.code} placeholder="e.g. BSIT" disabled={!!editing} />
-          <Input id="description" label="Description" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="Optional description" />
+          <Input id="name" label="Classroom Name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} error={errors.name} placeholder="Classroom name" />
+          <Input id="code" label="Room Number" value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value })} error={errors.code} placeholder="e.g. R-204" />
           <div className="flex justify-end gap-3 pt-4 border-t">
             <Button variant="outline" type="button" onClick={() => setShowForm(false)}>Cancel</Button>
             <Button type="submit" isLoading={isSaving}>{editing ? "Update" : "Create"}</Button>
@@ -154,7 +159,7 @@ export default function DepartmentsPage() {
         </form>
       </Modal>
 
-      <ConfirmDialog isOpen={!!deletingId} onClose={() => setDeletingId(null)} onConfirm={handleDelete} title="Delete Department" message="This will permanently delete this department." isLoading={isDeleting} />
+      <ConfirmDialog isOpen={!!deletingId} onClose={() => setDeletingId(null)} onConfirm={handleDelete} title="Delete Classroom" message="This will permanently delete this classroom." isLoading={isDeleting} />
     </div>
   );
 }

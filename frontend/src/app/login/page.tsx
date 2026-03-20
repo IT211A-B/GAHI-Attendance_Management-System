@@ -14,10 +14,8 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { Shield, Eye, EyeOff, Lock, User, ChevronRight } from "lucide-react";
-import { authService } from "@/services";
-import { useAuthStore } from "@/stores/auth-store";
-import { notify, extractErrorMessage } from "@/lib/toast";
+import { Shield, Lock, User, ChevronRight } from "lucide-react";
+import { useLoginController } from "@/controllers";
 import { APP_NAME, APP_ORG, APP_FULL_NAME } from "@/lib/constants";
 import { animate, stagger } from "animejs";
 
@@ -58,13 +56,7 @@ function generateEdges(
 /* ─────────────────────── component ─────────────────────── */
 
 export default function LoginPage() {
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState("");
   const router = useRouter();
-  const setUser = useAuthStore((s) => s.setUser);
 
   /* refs */
   const formRef = useRef<HTMLFormElement>(null);
@@ -73,10 +65,36 @@ export default function LoginPage() {
   const svgRef = useRef<SVGSVGElement>(null);
   const taglineRef = useRef<HTMLParagraphElement>(null);
   const leftPanelRef = useRef<HTMLDivElement>(null);
+  const rightPanelRef = useRef<HTMLDivElement>(null);
+  const haloRef = useRef<HTMLDivElement>(null);
   const animsRef = useRef<ReturnType<typeof animate>[]>([]);
   const hasAnimated = useRef(false);
   const hoverAnimRef = useRef<ReturnType<typeof animate> | null>(null);
   const mountedRef = useRef(true);
+
+  const onLoginSuccess = useCallback(() => {
+    if (cardRef.current) {
+      animate(cardRef.current, {
+        scale: [1, 0.96],
+        opacity: [1, 0],
+        duration: 350,
+        ease: "inQuad",
+      });
+    }
+    setTimeout(() => {
+      if (mountedRef.current) router.push("/dashboard");
+    }, 380);
+  }, [router]);
+
+  const {
+    email,
+    setEmail,
+    password,
+    setPassword,
+    isLoading,
+    error,
+    handleSubmit,
+  } = useLoginController({ onSuccess: onLoginSuccess });
 
   /* ── constellation data (deferred to avoid SSR hydration mismatch) ── */
   const [constellationData, setConstellationData] = useState<{
@@ -203,6 +221,21 @@ export default function LoginPage() {
         );
       }
 
+      /* — right panel ambient motion — */
+      if (haloRef.current) {
+        animsRef.current.push(
+          animate(haloRef.current, {
+            translateX: [-16, 16],
+            translateY: [10, -14],
+            scale: [0.96, 1.06],
+            duration: 5200,
+            ease: "inOutSine",
+            loop: true,
+            alternate: true,
+          })
+        );
+      }
+
       /* — form fields stagger in — */
       if (formRef.current) {
         const fields = formRef.current.querySelectorAll("[data-field]");
@@ -238,43 +271,6 @@ export default function LoginPage() {
     animsRef.current.push(shakeAnim);
     return () => { shakeAnim.pause(); };
   }, [error]);
-
-  /* ── form submit ── */
-  const handleSubmit = useCallback(
-    async (e: React.FormEvent) => {
-      e.preventDefault();
-      setError("");
-      setIsLoading(true);
-
-      try {
-        const res = await authService.login({ username, password });
-        if (res.success && res.data) {
-          setUser(res.data);
-          notify.success("Welcome back!");
-
-          /* success — quick scale-down before navigate */
-          if (cardRef.current) {
-            animate(cardRef.current, {
-              scale: [1, 0.96],
-              opacity: [1, 0],
-              duration: 350,
-              ease: "inQuad",
-            });
-          }
-          setTimeout(() => {
-            if (mountedRef.current) router.push("/dashboard");
-          }, 380);
-        } else {
-          setError(res.message || "Login failed");
-        }
-      } catch (err: unknown) {
-        setError(extractErrorMessage(err));
-      } finally {
-        setIsLoading(false);
-      }
-    },
-    [username, password, setUser, router]
-  );
 
   /* ── button hover scale ── */
   const handleBtnEnter = useCallback(
@@ -400,7 +396,14 @@ export default function LoginPage() {
       </div>
 
       {/* ──────── RIGHT PANEL ──────── */}
-      <div className="flex-1 flex items-center justify-center p-6 sm:p-12 bg-gradient-to-br from-gray-50 via-white to-blue-50/30">
+      <div
+        ref={rightPanelRef}
+        className="flex-1 flex items-center justify-center p-6 sm:p-12 bg-gradient-to-br from-gray-50 via-white to-blue-50/30 relative overflow-hidden"
+      >
+        <div
+          ref={haloRef}
+          className="pointer-events-none absolute -top-10 -right-10 w-72 h-72 rounded-full bg-blue-300/20 blur-3xl"
+        />
         <div className="w-full max-w-[420px]">
           {/* Mobile logo (shown only on small screens) */}
           <div className="lg:hidden text-center mb-8">
@@ -438,13 +441,13 @@ export default function LoginPage() {
 
             {/* Form */}
             <form ref={formRef} onSubmit={handleSubmit} className="space-y-5">
-              {/* Username */}
+              {/* Email */}
               <div data-field className="opacity-0">
                 <label
                   htmlFor="username"
                   className="block text-sm font-semibold text-gray-700 mb-1.5"
                 >
-                  Username
+                  Email
                 </label>
                 <div className="relative group">
                   <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-blue-500 transition-colors">
@@ -453,11 +456,11 @@ export default function LoginPage() {
                   <input
                     id="username"
                     type="text"
-                    placeholder="Enter your username"
-                    value={username}
-                    onChange={(e) => setUsername(e.target.value)}
+                    placeholder="Enter your email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
                     required
-                    autoComplete="username"
+                    autoComplete="email"
                     className="w-full pl-10 pr-4 py-3 rounded-xl border border-gray-200 bg-gray-50/50 text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all"
                   />
                 </div>
@@ -477,28 +480,14 @@ export default function LoginPage() {
                   </div>
                   <input
                     id="password"
-                    type={showPassword ? "text" : "password"}
+                    type="password"
                     placeholder="Enter your password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     required
                     autoComplete="current-password"
-                    className="w-full pl-10 pr-12 py-3 rounded-xl border border-gray-200 bg-gray-50/50 text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all"
+                    className="w-full pl-10 pr-4 py-3 rounded-xl border border-gray-200 bg-gray-50/50 text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all"
                   />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
-                    aria-label={
-                      showPassword ? "Hide password" : "Show password"
-                    }
-                  >
-                    {showPassword ? (
-                      <EyeOff className="w-4 h-4" />
-                    ) : (
-                      <Eye className="w-4 h-4" />
-                    )}
-                  </button>
                 </div>
               </div>
 

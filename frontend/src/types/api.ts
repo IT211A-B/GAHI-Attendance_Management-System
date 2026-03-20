@@ -7,6 +7,11 @@ export interface ApiResponse<T = void> {
   message: string;
   data?: T;
   errors?: string[];
+  error?: {
+    code?: string;
+    message?: string;
+    details?: unknown;
+  };
 }
 
 export interface PagedResult<T> {

@@ -36,13 +36,15 @@ export const useAuthStore = create<AuthState>()(
       },
 
       hasRole: (role: UserRole) => {
-        return get().user?.roles.includes(role) ?? false;
+        const roleNeedle = role.toLowerCase();
+        return get().user?.roles.some((r) => r.toLowerCase() === roleNeedle) ?? false;
       },
 
       hasAnyRole: (roles: UserRole[]) => {
         const userRoles = get().user?.roles;
         if (!userRoles) return false;
-        return roles.some((r) => userRoles.includes(r));
+        const normalized = userRoles.map((r) => r.toLowerCase());
+        return roles.some((r) => normalized.includes(r.toLowerCase()));
       },
 
       isTokenExpired: () => {
