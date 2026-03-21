@@ -81,6 +81,8 @@ public static class DependencyInjection
         // Register services
         services.AddScoped<ITokenService, TokenService>();
         services.AddScoped<IAuthService, AuthService>();
+        services.AddScoped<IAttendanceService, AttendanceService>();
+        services.AddScoped<IEnrollmentService, EnrollmentService>();
 
         // Configure authorization policies
         services.AddAuthorization(options =>

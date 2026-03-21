@@ -9,6 +9,9 @@ public class Enrollment : EntityBase
     public int AcademicYearId { get; set; }
     public string Status { get; set; } = "pending";
     public DateTimeOffset? DroppedAt { get; set; }
+    public DateTimeOffset? ProcessedAt { get; set; }
+    public int? ProcessedBy { get; set; }
+    public string? RejectionReason { get; set; }
 
     [ForeignKey(nameof(StudentId))]
     public Student? Student { get; set; }
@@ -18,4 +21,7 @@ public class Enrollment : EntityBase
 
     [ForeignKey(nameof(AcademicYearId))]
     public AcademicYear? AcademicYear { get; set; }
+
+    [ForeignKey(nameof(ProcessedBy))]
+    public User? Processor { get; set; }
 }

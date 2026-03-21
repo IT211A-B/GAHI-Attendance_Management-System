@@ -247,6 +247,11 @@ public class AppDbContext : IdentityDbContext<User, IdentityRole<int>, int>
                 .WithMany()
                 .HasForeignKey(e => e.AcademicYearId)
                 .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(e => e.Processor)
+                .WithMany()
+                .HasForeignKey(e => e.ProcessedBy)
+                .OnDelete(DeleteBehavior.Restrict);
         });
 
         // AttendanceReport configuration

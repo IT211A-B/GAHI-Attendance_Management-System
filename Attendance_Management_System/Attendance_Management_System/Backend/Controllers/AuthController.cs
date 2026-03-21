@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace Attendance_Management_System.Backend.Controllers;
 
+// API controller for authentication operations (login, register, logout)
 [ApiController]
 [Route("api/[controller]")]
 public class AuthController : ControllerBase
@@ -20,9 +21,7 @@ public class AuthController : ControllerBase
         _logger = logger;
     }
 
-    /// <summary>
-    /// Login with email and password
-    /// </summary>
+    // Authenticates a user with email and password
     [HttpPost("login")]
     [AllowAnonymous]
     public async Task<ActionResult<ApiResponse<AuthResponse>>> Login([FromBody] LoginRequest request)
@@ -37,9 +36,7 @@ public class AuthController : ControllerBase
         return Ok(ApiResponse<AuthResponse>.SuccessResponse(result));
     }
 
-    /// <summary>
-    /// Register a new student account
-    /// </summary>
+    // Registers a new student account
     [HttpPost("register/student")]
     [AllowAnonymous]
     public async Task<ActionResult<ApiResponse<AuthResponse>>> RegisterStudent([FromBody] RegisterRequest request)
@@ -63,9 +60,7 @@ public class AuthController : ControllerBase
         );
     }
 
-    /// <summary>
-    /// Register a new teacher account
-    /// </summary>
+    // Registers a new teacher account
     [HttpPost("register/teacher")]
     [AllowAnonymous]
     public async Task<ActionResult<ApiResponse<AuthResponse>>> RegisterTeacher([FromBody] TeacherRegisterRequest request)
@@ -89,13 +84,12 @@ public class AuthController : ControllerBase
         );
     }
 
-    /// <summary>
-    /// Get current user profile
-    /// </summary>
+    // Gets the current authenticated user's profile information
     [HttpGet("me")]
     [Authorize]
     public async Task<ActionResult<ApiResponse<UserDto>>> GetProfile()
     {
+        // Extract user ID from JWT token claims
         var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)
                           ?? User.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub);
 
@@ -114,9 +108,8 @@ public class AuthController : ControllerBase
         return Ok(ApiResponse<UserDto>.SuccessResponse(profile));
     }
 
-    /// <summary>
-    /// Logout (client-side token invalidation)
-    /// </summary>
+    // Logs out the current user (client-side token invalidation)
+    // JWT is stateless, so actual token invalidation requires a blacklist (out of MVP scope)
     [HttpPost("logout")]
     [Authorize]
     public ActionResult<ApiResponse<string>> Logout()
@@ -126,9 +119,7 @@ public class AuthController : ControllerBase
         return Ok(ApiResponse<string>.SuccessResponse("Logged out successfully. Please discard your token on the client side."));
     }
 
-    /// <summary>
-    /// Creates a validation error response from ModelState
-    /// </summary>
+    // Creates a validation error response from ModelState errors
     private ActionResult<ApiResponse<T>> ValidationError<T>()
     {
         var errors = string.Join(", ", ModelState.Values
