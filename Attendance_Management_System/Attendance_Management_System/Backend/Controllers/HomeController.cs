@@ -1,8 +1,8 @@
-using Attendance_Management_System.Models;
+using Attendance_Management_System.Backend.Models;
 using Microsoft.AspNetCore.Mvc;
 using System.Diagnostics;
 
-namespace Attendance_Management_System.Controllers
+namespace Attendance_Management_System.Backend.Controllers
 {
     public class HomeController : Controller
     {

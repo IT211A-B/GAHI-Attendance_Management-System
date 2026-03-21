@@ -1,4 +1,4 @@
-namespace Attendance_Management_System.Models
+namespace Attendance_Management_System.Backend.Models
 {
     public class ErrorViewModel
     {
