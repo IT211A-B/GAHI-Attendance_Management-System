@@ -29,4 +29,13 @@ public static class ErrorCodes
 
     // Attempted to create a duplicate assignment relationship
     public const string DuplicateAssignment = "DUPLICATE_ASSIGNMENT";
+
+    // Schedule conflict: Section already has a schedule at this time
+    public const string ConflictSectionSlot = "CONFLICT_SECTION_SLOT";
+
+    // Schedule conflict: Classroom is already booked at this time
+    public const string ConflictClassroom = "CONFLICT_CLASSROOM";
+
+    // Schedule conflict: Teacher has overlapping schedule in another section
+    public const string ConflictTeacher = "CONFLICT_TEACHER";
 }

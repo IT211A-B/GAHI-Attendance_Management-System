@@ -33,4 +33,15 @@ public class ApiResponse<T>
             Error = new ErrorDetails { Code = code, Message = message }
         };
     }
+
+    // Factory method for creating error responses with additional details
+    public static ApiResponse<T> ErrorResponse(string code, string message, object? details)
+    {
+        return new ApiResponse<T>
+        {
+            Success = false,
+            Data = default,
+            Error = new ErrorDetails { Code = code, Message = message, Details = details }
+        };
+    }
 }

@@ -186,6 +186,9 @@ public class AppDbContext : IdentityDbContext<User, IdentityRole<int>, int>
                 .HasForeignKey(s => s.SubjectId)
                 .OnDelete(DeleteBehavior.Restrict);
 
+            // Index for efficient conflict detection queries
+            entity.HasIndex(s => new { s.SectionId, s.DayOfWeek });
+
             entity.ToTable(t => t.HasCheckConstraint(
                 "CK_Schedule_EndTime",
                 "\"EndTime\" > \"StartTime\""));
