@@ -31,6 +31,43 @@ public class TeachersController : BaseController
         return Ok(result);
     }
 
+    // Get all teachers with their assigned sections - Admin only access
+    [HttpGet("with-sections")]
+    [Authorize(Policy = "AdminOnly")]
+    public async Task<ActionResult<ApiResponse<List<TeacherListDto>>>> GetAllTeachersWithSections()
+    {
+        var result = await _teachersService.GetAllTeachersWithSectionsAsync();
+        return Ok(result);
+    }
+
+    // Create a new teacher profile for an existing user with teacher role - Admin only
+    [HttpPost]
+    [Authorize(Policy = "AdminOnly")]
+    public async Task<ActionResult<ApiResponse<TeacherDto>>> CreateTeacher([FromBody] CreateTeacherRequest request)
+    {
+        if (!ModelState.IsValid)
+        {
+            return ValidationError<TeacherDto>();
+        }
+
+        var result = await _teachersService.CreateTeacherAsync(request);
+
+        if (!result.Success)
+        {
+            if (result.Error?.Code == ErrorCodes.NotFound)
+            {
+                return NotFound(result);
+            }
+            if (result.Error?.Code == ErrorCodes.AlreadyExists || result.Error?.Code == ErrorCodes.Conflict)
+            {
+                return Conflict(result);
+            }
+            return BadRequest(result);
+        }
+
+        return CreatedAtAction(nameof(GetTeacherById), new { id = result.Data!.Id }, result);
+    }
+
     // Get a specific teacher by ID
     [HttpGet("{id}")]
     [Authorize(Policy = "AdminOnly")]

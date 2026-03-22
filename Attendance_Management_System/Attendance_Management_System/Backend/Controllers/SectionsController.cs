@@ -22,9 +22,9 @@ public class SectionsController : BaseController
         _logger = logger;
     }
 
-    // Get all sections - Admin only access
+    // Get all sections - Admin or Teacher access
     [HttpGet]
-    [Authorize(Policy = "AdminOnly")]
+    [Authorize(Policy = "AdminOrTeacher")]
     public async Task<ActionResult<ApiResponse<List<SectionDto>>>> GetAllSections()
     {
         var result = await _sectionsService.GetAllSectionsAsync();
@@ -33,7 +33,7 @@ public class SectionsController : BaseController
 
     // Get a specific section by ID
     [HttpGet("{id}")]
-    [Authorize(Policy = "AdminOnly")]
+    [Authorize(Policy = "AdminOrTeacher")]
     public async Task<ActionResult<ApiResponse<SectionDto>>> GetSectionById(int id)
     {
         var result = await _sectionsService.GetSectionByIdAsync(id);
@@ -49,12 +49,86 @@ public class SectionsController : BaseController
 
     // Get all sections for a specific academic year
     [HttpGet("academic-year/{academicYearId}")]
-    [Authorize(Policy = "AdminOnly")]
+    [Authorize(Policy = "AdminOrTeacher")]
     public async Task<ActionResult<ApiResponse<List<SectionDto>>>> GetSectionsByAcademicYear(int academicYearId)
     {
         var result = await _sectionsService.GetSectionsByAcademicYearIdAsync(academicYearId);
 
         // Return 404 if academic year not found or has no sections
+        if (!result.Success)
+        {
+            return NotFound(result);
+        }
+
+        return Ok(result);
+    }
+
+    // Get timetable for a section - Admin or Teacher access
+    [HttpGet("{id}/timetable")]
+    [Authorize(Policy = "AdminOrTeacher")]
+    public async Task<ActionResult<ApiResponse<TimetableResponse>>> GetTimetable(int id)
+    {
+        var currentUserId = GetCurrentUserId();
+        var result = await _sectionsService.GetTimetableAsync(id, currentUserId);
+
+        if (!result.Success)
+        {
+            return NotFound(result);
+        }
+
+        return Ok(result);
+    }
+
+    // Get all teachers assigned to a section - Admin only
+    [HttpGet("{id}/teachers")]
+    [Authorize(Policy = "AdminOnly")]
+    public async Task<ActionResult<ApiResponse<List<SectionTeacherDto>>>> GetSectionTeachers(int id)
+    {
+        var result = await _sectionsService.GetSectionTeachersAsync(id);
+
+        if (!result.Success)
+        {
+            return NotFound(result);
+        }
+
+        return Ok(result);
+    }
+
+    // Assign a teacher to a section - Admin only
+    [HttpPost("{id}/teachers")]
+    [Authorize(Policy = "AdminOnly")]
+    public async Task<ActionResult<ApiResponse<SectionTeacherDto>>> AssignTeacherToSection(int id, [FromBody] AssignTeacherRequest request)
+    {
+        if (!ModelState.IsValid)
+        {
+            return ValidationError<SectionTeacherDto>();
+        }
+
+        var result = await _sectionsService.AssignTeacherToSectionAsync(id, request);
+
+        if (!result.Success)
+        {
+            if (result.Error?.Code == ErrorCodes.NotFound)
+            {
+                return NotFound(result);
+            }
+            if (result.Error?.Code == ErrorCodes.DuplicateAssignment)
+            {
+                return Conflict(result);
+            }
+            return BadRequest(result);
+        }
+
+        return CreatedAtAction(nameof(GetSectionTeachers), new { id = id }, result);
+    }
+
+    // Remove a teacher from a section - Admin only
+    [HttpDelete("{id}/teachers/{teacherId}")]
+    [Authorize(Policy = "AdminOnly")]
+    public async Task<ActionResult<ApiResponse<bool>>> RemoveTeacherFromSection(int id, int teacherId)
+    {
+        var result = await _sectionsService.RemoveTeacherFromSectionAsync(id, teacherId);
+
         if (!result.Success)
         {
             return NotFound(result);

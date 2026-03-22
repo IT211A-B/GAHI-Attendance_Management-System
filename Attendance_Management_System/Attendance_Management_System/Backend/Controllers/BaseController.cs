@@ -1,25 +1,31 @@
 using Attendance_Management_System.Backend.Constants;
 using Attendance_Management_System.Backend.DTOs.Responses;
 using Microsoft.AspNetCore.Mvc;
+using System.Security.Claims;
 
 namespace Attendance_Management_System.Backend.Controllers;
 
-/// <summary>
-/// Base controller providing common functionality for all API controllers.
-/// </summary>
+// Base controller providing common functionality for all API controllers
 [ApiController]
 public abstract class BaseController : ControllerBase
 {
-    /// <summary>
-    /// Helper method to format validation errors into a standardized API response.
-    /// </summary>
-    /// <typeparam name="T">The type of data expected in the response</typeparam>
-    /// <returns>BadRequest with formatted validation error response</returns>
+    // Formats model validation errors into a standardized API error response
     protected ActionResult<ApiResponse<T>> ValidationError<T>()
     {
+        // Combine all validation error messages into a single string
         var errors = string.Join(", ", ModelState.Values
             .SelectMany(v => v.Errors)
             .Select(e => e.ErrorMessage));
         return BadRequest(ApiResponse<T>.ErrorResponse(ErrorCodes.ValidationError, errors));
+    }
+
+    // Extracts the current authenticated user's ID from JWT token claims
+    protected int? GetCurrentUserId()
+    {
+        // Look for the user ID claim in the token
+        var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier);
+        return userIdClaim != null && int.TryParse(userIdClaim.Value, out var userId)
+            ? userId
+            : null;
     }
 }

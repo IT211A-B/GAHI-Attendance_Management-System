@@ -7,6 +7,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Attendance_Management_System.Backend.Services;
 
+// Service for managing physical classrooms: rooms where classes are held
 public class ClassroomsService : IClassroomsService
 {
     private readonly AppDbContext _context;
@@ -16,6 +17,7 @@ public class ClassroomsService : IClassroomsService
         _context = context;
     }
 
+    // Retrieves all classrooms ordered by name
     public async Task<ApiResponse<List<ClassroomDto>>> GetAllClassroomsAsync()
     {
         var classrooms = await _context.Classrooms
@@ -32,6 +34,7 @@ public class ClassroomsService : IClassroomsService
         return ApiResponse<List<ClassroomDto>>.SuccessResponse(classrooms);
     }
 
+    // Retrieves a single classroom by ID
     public async Task<ApiResponse<ClassroomDto>> GetClassroomByIdAsync(int id)
     {
         var classroom = await _context.Classrooms.FindAsync(id);
@@ -52,6 +55,7 @@ public class ClassroomsService : IClassroomsService
         return ApiResponse<ClassroomDto>.SuccessResponse(dto);
     }
 
+    // Creates a new classroom
     public async Task<ApiResponse<ClassroomDto>> CreateClassroomAsync(CreateClassroomRequest request)
     {
         var classroom = new Classroom
@@ -74,6 +78,7 @@ public class ClassroomsService : IClassroomsService
         return ApiResponse<ClassroomDto>.SuccessResponse(dto);
     }
 
+    // Updates an existing classroom
     public async Task<ApiResponse<ClassroomDto>> UpdateClassroomAsync(int id, UpdateClassroomRequest request)
     {
         var classroom = await _context.Classrooms.FindAsync(id);
@@ -101,6 +106,7 @@ public class ClassroomsService : IClassroomsService
         return ApiResponse<ClassroomDto>.SuccessResponse(dto);
     }
 
+    // Deletes a classroom if not assigned to any sections
     public async Task<ApiResponse<bool>> DeleteClassroomAsync(int id)
     {
         var classroom = await _context.Classrooms.FindAsync(id);
@@ -110,7 +116,7 @@ public class ClassroomsService : IClassroomsService
             return ApiResponse<bool>.ErrorResponse("NOT_FOUND", "Classroom not found.");
         }
 
-        // Check if classroom is in use by any section
+        // Prevent deletion if classroom is in use by sections
         var isInUse = await _context.Sections.AnyAsync(s => s.ClassroomId == id);
         if (isInUse)
         {

@@ -8,6 +8,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Attendance_Management_System.Backend.Services;
 
+// Handles authentication operations: login, registration, and user profile retrieval
 public class AuthService : IAuthService
 {
     private readonly UserManager<User> _userManager;

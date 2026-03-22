@@ -9,6 +9,7 @@ using Microsoft.IdentityModel.Tokens;
 
 namespace Attendance_Management_System.Backend.Services;
 
+// Service for generating and validating JWT tokens for authentication
 public class TokenService : ITokenService
 {
     private readonly JwtSettings _jwtSettings;
@@ -18,11 +19,13 @@ public class TokenService : ITokenService
     {
         _jwtSettings = jwtSettings.Value;
 
+        // Ensure secret key is configured
         if (string.IsNullOrWhiteSpace(_jwtSettings.SecretKey))
         {
             throw new InvalidOperationException("JWT SecretKey is not configured.");
         }
 
+        // Minimum key length for HMAC-SHA256 security
         if (_jwtSettings.SecretKey.Length < 32)
         {
             throw new InvalidOperationException("JWT SecretKey must be at least 32 characters long.");
@@ -31,8 +34,10 @@ public class TokenService : ITokenService
         _signingKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_jwtSettings.SecretKey));
     }
 
+    // Generates a JWT token for an authenticated user
     public string GenerateToken(User user)
     {
+        // Build claims for the token payload
         var claims = new List<Claim>
         {
             new(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
@@ -45,6 +50,7 @@ public class TokenService : ITokenService
 
         var credentials = new SigningCredentials(_signingKey, SecurityAlgorithms.HmacSha256);
 
+        // Create the token with issuer, audience, claims, and expiration
         var token = new JwtSecurityToken(
             issuer: _jwtSettings.Issuer,
             audience: _jwtSettings.Audience,
@@ -56,6 +62,7 @@ public class TokenService : ITokenService
         return new JwtSecurityTokenHandler().WriteToken(token);
     }
 
+    // Validates a JWT token and returns the claims principal if valid
     public ClaimsPrincipal? ValidateToken(string token)
     {
         try
@@ -82,6 +89,7 @@ public class TokenService : ITokenService
         }
     }
 
+    // Extracts the user ID from a validated claims principal
     public int? GetUserIdFromToken(ClaimsPrincipal principal)
     {
         var userIdClaim = principal.FindFirst(ClaimTypes.NameIdentifier)

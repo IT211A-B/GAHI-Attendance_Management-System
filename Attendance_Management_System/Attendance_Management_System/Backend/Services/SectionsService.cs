@@ -1,3 +1,4 @@
+using Attendance_Management_System.Backend.Constants;
 using Attendance_Management_System.Backend.DTOs.Requests;
 using Attendance_Management_System.Backend.DTOs.Responses;
 using Attendance_Management_System.Backend.Entities;
@@ -7,15 +8,18 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Attendance_Management_System.Backend.Services;
 
+// Service handling all section-related business logic
 public class SectionsService : ISectionsService
 {
     private readonly AppDbContext _context;
 
+    // Inject database context through constructor
     public SectionsService(AppDbContext context)
     {
         _context = context;
     }
 
+    // Retrieves all sections with related entity names (academic year, course, subject, classroom)
     public async Task<ApiResponse<List<SectionDto>>> GetAllSectionsAsync()
     {
         var sections = await _context.Sections
@@ -43,6 +47,7 @@ public class SectionsService : ISectionsService
         return ApiResponse<List<SectionDto>>.SuccessResponse(sections);
     }
 
+    // Retrieves a single section by ID with related entity details
     public async Task<ApiResponse<SectionDto>> GetSectionByIdAsync(int id)
     {
         var section = await _context.Sections
@@ -52,6 +57,7 @@ public class SectionsService : ISectionsService
             .Include(s => s.Classroom)
             .FirstOrDefaultAsync(s => s.Id == id);
 
+        // Return error if section doesn't exist
         if (section == null)
         {
             return ApiResponse<SectionDto>.ErrorResponse("NOT_FOUND", "Section not found.");
@@ -75,8 +81,10 @@ public class SectionsService : ISectionsService
         return ApiResponse<SectionDto>.SuccessResponse(dto);
     }
 
+    // Retrieves all sections for a specific academic year
     public async Task<ApiResponse<List<SectionDto>>> GetSectionsByAcademicYearIdAsync(int academicYearId)
     {
+        // Validate academic year exists before querying sections
         var academicYearExists = await _context.AcademicYears.AnyAsync(ay => ay.Id == academicYearId);
         if (!academicYearExists)
         {
@@ -266,5 +274,199 @@ public class SectionsService : ISectionsService
             ClassroomName = classroom?.Name,
             CreatedAt = section.CreatedAt
         };
+    }
+
+    private static readonly string[] DayNames = { "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat" };
+
+    public async Task<ApiResponse<TimetableResponse>> GetTimetableAsync(int sectionId, int? currentUserId = null)
+    {
+        // Check if section exists
+        var section = await _context.Sections
+            .Include(s => s.Classroom)
+            .FirstOrDefaultAsync(s => s.Id == sectionId);
+
+        if (section == null)
+        {
+            return ApiResponse<TimetableResponse>.ErrorResponse(ErrorCodes.NotFound, "Section not found.");
+        }
+
+        // Get all teachers assigned to this section
+        var assignedTeacherIds = await _context.SectionTeachers
+            .Where(st => st.SectionId == sectionId)
+            .Select(st => st.TeacherId)
+            .ToListAsync();
+
+        // Determine current teacher ID if user is a teacher
+        int? currentTeacherId = null;
+        if (currentUserId.HasValue)
+        {
+            currentTeacherId = await _context.Teachers
+                .Where(t => t.UserId == currentUserId.Value)
+                .Select(t => t.Id)
+                .FirstOrDefaultAsync();
+        }
+
+        // Get all schedules for this section
+        var schedules = await _context.Schedules
+            .Include(s => s.Subject)
+            .Where(s => s.SectionId == sectionId)
+            .ToListAsync();
+
+        // Get all teachers assigned to this section with their details
+        var assignedTeachers = await _context.SectionTeachers
+            .Include(st => st.Teacher)
+            .Where(st => st.SectionId == sectionId)
+            .Select(st => st.Teacher)
+            .ToListAsync();
+
+        // Build teacher name string (comma-separated)
+        var teacherNames = assignedTeachers
+            .Where(t => t != null)
+            .Select(t => $"{t!.FirstName} {t.LastName}")
+            .ToList();
+        var teacherNameString = string.Join(", ", teacherNames);
+
+        // Check if current teacher is assigned to this section
+        var isCurrentUserAssigned = currentTeacherId.HasValue && assignedTeacherIds.Contains(currentTeacherId.Value);
+
+        // Build timetable dictionary with all 7 days
+        var timetable = new Dictionary<string, List<ScheduleSlotDto>>();
+        foreach (var dayName in DayNames)
+        {
+            timetable[dayName] = new List<ScheduleSlotDto>();
+        }
+
+        // Populate with schedules
+        foreach (var schedule in schedules)
+        {
+            var dayIndex = schedule.DayOfWeek;
+            if (dayIndex >= 0 && dayIndex < 7)
+            {
+                var dayName = DayNames[dayIndex];
+                var slot = new ScheduleSlotDto
+                {
+                    ScheduleId = schedule.Id,
+                    SubjectName = schedule.Subject?.Name ?? string.Empty,
+                    TeacherName = teacherNameString,
+                    Classroom = section.Classroom?.Name ?? string.Empty,
+                    StartTime = schedule.StartTime.ToString("HH:mm"),
+                    EndTime = schedule.EndTime.ToString("HH:mm"),
+                    IsMine = isCurrentUserAssigned
+                };
+                timetable[dayName].Add(slot);
+            }
+        }
+
+        // Sort each day's slots by start time
+        foreach (var dayName in DayNames)
+        {
+            timetable[dayName] = timetable[dayName].OrderBy(s => s.StartTime).ToList();
+        }
+
+        var response = new TimetableResponse
+        {
+            SectionId = sectionId,
+            SectionName = section.Name,
+            Timetable = timetable
+        };
+
+        return ApiResponse<TimetableResponse>.SuccessResponse(response);
+    }
+
+    public async Task<ApiResponse<List<SectionTeacherDto>>> GetSectionTeachersAsync(int sectionId)
+    {
+        // Check if section exists
+        var sectionExists = await _context.Sections.AnyAsync(s => s.Id == sectionId);
+        if (!sectionExists)
+        {
+            return ApiResponse<List<SectionTeacherDto>>.ErrorResponse(ErrorCodes.NotFound, "Section not found.");
+        }
+
+        var teachers = await _context.SectionTeachers
+            .Include(st => st.Teacher)
+            .Where(st => st.SectionId == sectionId)
+            .Select(st => new SectionTeacherDto
+            {
+                TeacherId = st.TeacherId,
+                EmployeeNumber = st.Teacher != null ? st.Teacher.EmployeeNumber : string.Empty,
+                FirstName = st.Teacher != null ? st.Teacher.FirstName : string.Empty,
+                LastName = st.Teacher != null ? st.Teacher.LastName : string.Empty,
+                MiddleName = st.Teacher != null ? st.Teacher.MiddleName : null,
+                Department = st.Teacher != null ? st.Teacher.Department : string.Empty,
+                AssignedAt = st.AssignedAt
+            })
+            .ToListAsync();
+
+        return ApiResponse<List<SectionTeacherDto>>.SuccessResponse(teachers);
+    }
+
+    public async Task<ApiResponse<SectionTeacherDto>> AssignTeacherToSectionAsync(int sectionId, AssignTeacherRequest request)
+    {
+        // Check if section exists
+        var section = await _context.Sections.FindAsync(sectionId);
+        if (section == null)
+        {
+            return ApiResponse<SectionTeacherDto>.ErrorResponse(ErrorCodes.NotFound, "Section not found.");
+        }
+
+        // Check if teacher exists and is active
+        var teacher = await _context.Teachers.FindAsync(request.TeacherId);
+        if (teacher == null)
+        {
+            return ApiResponse<SectionTeacherDto>.ErrorResponse(ErrorCodes.NotFound, "Teacher not found.");
+        }
+
+        if (!teacher.IsActive)
+        {
+            return ApiResponse<SectionTeacherDto>.ErrorResponse(ErrorCodes.ValidationError, "Cannot assign an inactive teacher.");
+        }
+
+        // Check if assignment already exists
+        var existingAssignment = await _context.SectionTeachers
+            .AnyAsync(st => st.SectionId == sectionId && st.TeacherId == request.TeacherId);
+
+        if (existingAssignment)
+        {
+            return ApiResponse<SectionTeacherDto>.ErrorResponse(ErrorCodes.DuplicateAssignment, "Teacher is already assigned to this section.");
+        }
+
+        var sectionTeacher = new SectionTeacher
+        {
+            SectionId = sectionId,
+            TeacherId = request.TeacherId,
+            AssignedAt = DateTimeOffset.UtcNow
+        };
+
+        _context.SectionTeachers.Add(sectionTeacher);
+        await _context.SaveChangesAsync();
+
+        var dto = new SectionTeacherDto
+        {
+            TeacherId = teacher.Id,
+            EmployeeNumber = teacher.EmployeeNumber,
+            FirstName = teacher.FirstName,
+            LastName = teacher.LastName,
+            MiddleName = teacher.MiddleName,
+            Department = teacher.Department,
+            AssignedAt = sectionTeacher.AssignedAt
+        };
+
+        return ApiResponse<SectionTeacherDto>.SuccessResponse(dto);
+    }
+
+    public async Task<ApiResponse<bool>> RemoveTeacherFromSectionAsync(int sectionId, int teacherId)
+    {
+        var sectionTeacher = await _context.SectionTeachers
+            .FirstOrDefaultAsync(st => st.SectionId == sectionId && st.TeacherId == teacherId);
+
+        if (sectionTeacher == null)
+        {
+            return ApiResponse<bool>.ErrorResponse(ErrorCodes.NotFound, "Teacher assignment not found.");
+        }
+
+        _context.SectionTeachers.Remove(sectionTeacher);
+        await _context.SaveChangesAsync();
+
+        return ApiResponse<bool>.SuccessResponse(true);
     }
 }

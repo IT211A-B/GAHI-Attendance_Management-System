@@ -3,60 +3,70 @@ using Attendance_Management_System.Backend.Data;
 using Attendance_Management_System.Backend.Persistence;
 using Microsoft.EntityFrameworkCore;
 
+// Create the web application builder with default configuration
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
+// Add MVC controllers with views for handling web and API requests
 builder.Services.AddControllersWithViews();
+
+// Register all backend services (database, auth, repositories, services)
 builder.Services.AddBackend(builder.Configuration);
 
-// Add health checks
+// Add health checks to monitor database connectivity
 builder.Services.AddHealthChecks()
     .AddNpgSql(builder.Configuration.GetConnectionString("Default")!);
 
-// Add Swagger/OpenAPI
+// Add Swagger for API documentation in development
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
+// Build the application from configured services
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
+// Enable Swagger UI only in development environment
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
     app.UseSwaggerUI();
 }
 
+// Configure production-specific error handling and security
 if (!app.Environment.IsDevelopment())
 {
     app.UseExceptionHandler("/Home/Error");
-    // The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
     app.UseHsts();
 }
 
+// Force HTTPS redirection for secure connections
 app.UseHttpsRedirection();
 app.UseRouting();
 
+// Enable authentication and authorization middleware
 app.UseAuthentication();
 app.UseAuthorization();
 
+// Serve static files (CSS, JS, images)
 app.MapStaticAssets();
 
+// Configure default MVC route pattern
 app.MapControllerRoute(
     name: "default",
     pattern: "{controller=Home}/{action=Index}/{id?}")
     .WithStaticAssets();
 
-// Map health check endpoint
+// Expose health check endpoint for monitoring
 app.MapHealthChecks("/health");
 
-// Seed data on startup
+// Run database migrations and seed initial data on startup
 using (var scope = app.Services.CreateScope())
 {
     var services = scope.ServiceProvider;
     try
     {
         var context = services.GetRequiredService<AppDbContext>();
+        // Apply any pending database migrations
         await context.Database.MigrateAsync();
+        // Populate initial seed data (roles, admin user, etc.)
         await SeedData.InitializeAsync(services);
     }
     catch (Exception ex)
@@ -66,4 +76,5 @@ using (var scope = app.Services.CreateScope())
     }
 }
 
+// Start the web application
 app.Run();

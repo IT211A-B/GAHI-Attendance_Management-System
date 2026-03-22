@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Attendance_Management_System.Backend.Persistence;
 
+// Main database context for the application using Identity for authentication
 public class AppDbContext : IdentityDbContext<User, IdentityRole<int>, int>
 {
     public AppDbContext(DbContextOptions<AppDbContext> options)
@@ -12,7 +13,7 @@ public class AppDbContext : IdentityDbContext<User, IdentityRole<int>, int>
     {
     }
 
-    // DbSets
+    // DbSets - represent database tables for each entity
     public DbSet<Classroom> Classrooms { get; set; } = null!;
     public DbSet<AcademicYear> AcademicYears { get; set; } = null!;
     public DbSet<Course> Courses { get; set; } = null!;
