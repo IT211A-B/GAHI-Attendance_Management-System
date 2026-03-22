@@ -244,7 +244,7 @@ public class SectionsService : ISectionsService
         var hasEnrollments = await _context.Enrollments.AnyAsync(e => e.SectionId == id);
         if (hasEnrollments)
         {
-            return ApiResponse<bool>.ErrorResponse("IN_USE", "Cannot delete section that has enrollments.");
+            return ApiResponse<bool>.ErrorResponse(ErrorCodes.InUse, "Cannot delete section that has enrollments.");
         }
 
         _context.Sections.Remove(section);
@@ -454,7 +454,7 @@ public class SectionsService : ISectionsService
         return ApiResponse<SectionTeacherDto>.SuccessResponse(dto);
     }
 
-    public async Task<ApiResponse<bool>> RemoveTeacherFromSectionAsync(int sectionId, int teacherId)
+    public async Task<ApiResponse<bool>> RemoveTeacherFromSectionAsync(int sectionId, int teacherId, bool isAdmin = false)
     {
         var sectionTeacher = await _context.SectionTeachers
             .FirstOrDefaultAsync(st => st.SectionId == sectionId && st.TeacherId == teacherId);
@@ -462,6 +462,16 @@ public class SectionsService : ISectionsService
         if (sectionTeacher == null)
         {
             return ApiResponse<bool>.ErrorResponse(ErrorCodes.NotFound, "Teacher assignment not found.");
+        }
+
+        // Non-admin users cannot remove teachers from sections that have schedules
+        if (!isAdmin)
+        {
+            var hasSchedules = await _context.Schedules.AnyAsync(s => s.SectionId == sectionId);
+            if (hasSchedules)
+            {
+                return ApiResponse<bool>.ErrorResponse(ErrorCodes.TeacherHasSchedules, "Cannot remove teacher from section with existing schedules.");
+            }
         }
 
         _context.SectionTeachers.Remove(sectionTeacher);

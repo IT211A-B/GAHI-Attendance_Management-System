@@ -16,5 +16,5 @@ public interface ISectionsService
     Task<ApiResponse<TimetableResponse>> GetTimetableAsync(int sectionId, int? currentUserId = null);
     Task<ApiResponse<List<SectionTeacherDto>>> GetSectionTeachersAsync(int sectionId);
     Task<ApiResponse<SectionTeacherDto>> AssignTeacherToSectionAsync(int sectionId, AssignTeacherRequest request);
-    Task<ApiResponse<bool>> RemoveTeacherFromSectionAsync(int sectionId, int teacherId);
+    Task<ApiResponse<bool>> RemoveTeacherFromSectionAsync(int sectionId, int teacherId, bool isAdmin = false);
 }

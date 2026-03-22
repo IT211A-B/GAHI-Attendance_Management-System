@@ -4,6 +4,7 @@ using Attendance_Management_System.Backend.DTOs.Responses;
 using Attendance_Management_System.Backend.Interfaces.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using System.Security.Claims;
 
 namespace Attendance_Management_System.Backend.Controllers;
 
@@ -122,15 +123,22 @@ public class SectionsController : BaseController
         return CreatedAtAction(nameof(GetSectionTeachers), new { id = id }, result);
     }
 
-    // Remove a teacher from a section - Admin only
+    // Remove a teacher from a section - Admin or Teacher access
     [HttpDelete("{id}/teachers/{teacherId}")]
-    [Authorize(Policy = "AdminOnly")]
+    [Authorize(Policy = "AdminOrTeacher")]
     public async Task<ActionResult<ApiResponse<bool>>> RemoveTeacherFromSection(int id, int teacherId)
     {
-        var result = await _sectionsService.RemoveTeacherFromSectionAsync(id, teacherId);
+        var userRole = User.FindFirst(ClaimTypes.Role)?.Value ?? string.Empty;
+        var isAdmin = userRole == "admin";
+
+        var result = await _sectionsService.RemoveTeacherFromSectionAsync(id, teacherId, isAdmin);
 
         if (!result.Success)
         {
+            if (result.Error?.Code == ErrorCodes.TeacherHasSchedules)
+            {
+                return BadRequest(result);
+            }
             return NotFound(result);
         }
 

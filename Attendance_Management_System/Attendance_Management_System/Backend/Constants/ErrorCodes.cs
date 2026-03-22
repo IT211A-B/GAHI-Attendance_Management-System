@@ -38,4 +38,10 @@ public static class ErrorCodes
 
     // Schedule conflict: Teacher has overlapping schedule in another section
     public const string ConflictTeacher = "CONFLICT_TEACHER";
+
+    // Teacher cannot be removed from section because section has existing schedules
+    public const string TeacherHasSchedules = "TEACHER_HAS_SCHEDULES";
+
+    // Resource is in use and cannot be deleted
+    public const string InUse = "IN_USE";
 }
