@@ -98,6 +98,7 @@ public static class DependencyInjection
         services.AddScoped<IUsersService, UsersService>();
         services.AddScoped<ISchedulesService, SchedulesService>();
         services.AddScoped<IConflictService, ConflictService>();
+        services.AddScoped<ITeacherHistoryService, TeacherHistoryService>();
 
         // Define role-based authorization policies for access control
         services.AddAuthorization(options =>
