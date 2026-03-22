@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using Attendance_Management_System.Backend.Constants;
 using Attendance_Management_System.Backend.DTOs.Requests;
 using Attendance_Management_System.Backend.DTOs.Responses;
 using Attendance_Management_System.Backend.Interfaces.Services;
@@ -8,9 +9,8 @@ using Microsoft.AspNetCore.Mvc;
 namespace Attendance_Management_System.Backend.Controllers;
 
 // API controller for authentication operations (login, register, logout)
-[ApiController]
 [Route("api/[controller]")]
-public class AuthController : ControllerBase
+public class AuthController : BaseController
 {
     private readonly IAuthService _authService;
     private readonly ILogger<AuthController> _logger;
@@ -30,7 +30,7 @@ public class AuthController : ControllerBase
 
         if (!result.Success)
         {
-            return Unauthorized(ApiResponse<AuthResponse>.ErrorResponse("UNAUTHORIZED", result.Message ?? "Login failed"));
+            return Unauthorized(ApiResponse<AuthResponse>.ErrorResponse(ErrorCodes.Unauthorized, result.Message ?? "Login failed"));
         }
 
         return Ok(ApiResponse<AuthResponse>.SuccessResponse(result));
@@ -95,14 +95,14 @@ public class AuthController : ControllerBase
 
         if (userIdClaim == null || !int.TryParse(userIdClaim.Value, out var userId))
         {
-            return Unauthorized(ApiResponse<UserDto>.ErrorResponse("UNAUTHORIZED", "Invalid token"));
+            return Unauthorized(ApiResponse<UserDto>.ErrorResponse(ErrorCodes.Unauthorized, "Invalid token"));
         }
 
         var profile = await _authService.GetUserProfileAsync(userId);
 
         if (profile == null)
         {
-            return NotFound(ApiResponse<UserDto>.ErrorResponse("NOT_FOUND", "User profile not found"));
+            return NotFound(ApiResponse<UserDto>.ErrorResponse(ErrorCodes.NotFound, "User profile not found"));
         }
 
         return Ok(ApiResponse<UserDto>.SuccessResponse(profile));
@@ -117,14 +117,5 @@ public class AuthController : ControllerBase
         // JWT is stateless, so we just return a success message
         // Token invalidation would require a token blacklist (out of MVP scope)
         return Ok(ApiResponse<string>.SuccessResponse("Logged out successfully. Please discard your token on the client side."));
-    }
-
-    // Creates a validation error response from ModelState errors
-    private ActionResult<ApiResponse<T>> ValidationError<T>()
-    {
-        var errors = string.Join(", ", ModelState.Values
-            .SelectMany(v => v.Errors)
-            .Select(e => e.ErrorMessage));
-        return BadRequest(ApiResponse<T>.ErrorResponse("VALIDATION_ERROR", errors));
     }
 }

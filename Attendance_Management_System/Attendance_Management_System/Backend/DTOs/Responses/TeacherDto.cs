@@ -1,18 +1,16 @@
-using System.ComponentModel.DataAnnotations.Schema;
+namespace Attendance_Management_System.Backend.DTOs.Responses;
 
-namespace Attendance_Management_System.Backend.Entities;
-
-public class Teacher : EntityBase
+public class TeacherDto
 {
+    public int Id { get; set; }
     public int UserId { get; set; }
+    public string Email { get; set; } = string.Empty;
     public string EmployeeNumber { get; set; } = string.Empty;
     public string FirstName { get; set; } = string.Empty;
     public string LastName { get; set; } = string.Empty;
     public string? MiddleName { get; set; }
     public string Department { get; set; } = string.Empty;
     public string? Specialization { get; set; }
-    public bool IsActive { get; set; } = true;
-
-    [ForeignKey(nameof(UserId))]
-    public User? User { get; set; }
+    public bool IsActive { get; set; }
+    public DateTimeOffset CreatedAt { get; set; }
 }
