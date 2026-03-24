@@ -12,23 +12,23 @@ namespace Attendance_Management_System.Backend.Services;
 public class AuthService : IAuthService
 {
     private readonly UserManager<User> _userManager;
-    private readonly ITokenService _tokenService;
     private readonly AppDbContext _context;
 
     public AuthService(
         UserManager<User> userManager,
-        ITokenService tokenService,
         AppDbContext context)
     {
         _userManager = userManager;
-        _tokenService = tokenService;
         _context = context;
     }
 
+    // Authenticates user by verifying email and password
     public async Task<AuthResponse> LoginAsync(LoginRequest request)
     {
+        // Find user by email address
         var user = await _userManager.FindByEmailAsync(request.Email);
 
+        // Return generic error to prevent email enumeration attacks
         if (user == null)
         {
             return new AuthResponse
@@ -38,6 +38,7 @@ public class AuthService : IAuthService
             };
         }
 
+        // Check if account is active
         if (!user.IsActive)
         {
             return new AuthResponse
@@ -47,6 +48,7 @@ public class AuthService : IAuthService
             };
         }
 
+        // Verify password against stored hash
         var isPasswordValid = await _userManager.CheckPasswordAsync(user, request.Password);
 
         if (!isPasswordValid)
@@ -58,18 +60,18 @@ public class AuthService : IAuthService
             };
         }
 
-        var token = _tokenService.GenerateToken(user);
+        // Build user DTO with role-specific details
         var userDto = await BuildUserDtoAsync(user);
 
         return new AuthResponse
         {
             Success = true,
             Message = "Login successful.",
-            Token = token,
             User = userDto
         };
     }
 
+    // Registers a new student and creates pending enrollment request
     public async Task<AuthResponse> RegisterStudentAsync(RegisterRequest request)
     {
         // Check if email already exists
@@ -184,19 +186,17 @@ public class AuthService : IAuthService
         _context.Enrollments.Add(enrollment);
         await _context.SaveChangesAsync();
 
-        // Generate token and response
-        var token = _tokenService.GenerateToken(user);
         var userDto = await BuildUserDtoAsync(user);
 
         return new AuthResponse
         {
             Success = true,
             Message = "Registration successful. Your enrollment is pending approval.",
-            Token = token,
             User = userDto
         };
     }
 
+    // Registers a new teacher with auto-generated employee number
     public async Task<AuthResponse> RegisterTeacherAsync(TeacherRegisterRequest request)
     {
         // Check if email already exists
@@ -250,19 +250,17 @@ public class AuthService : IAuthService
         _context.Teachers.Add(teacher);
         await _context.SaveChangesAsync();
 
-        // Generate token and response
-        var token = _tokenService.GenerateToken(user);
         var userDto = await BuildUserDtoAsync(user);
 
         return new AuthResponse
         {
             Success = true,
             Message = "Teacher registration successful.",
-            Token = token,
             User = userDto
         };
     }
 
+    // Retrieves user profile with role-specific information
     public async Task<UserDto?> GetUserProfileAsync(int userId)
     {
         var user = await _userManager.FindByIdAsync(userId.ToString());
@@ -274,6 +272,7 @@ public class AuthService : IAuthService
         return await BuildUserDtoAsync(user);
     }
 
+    // Constructs UserDto with student or teacher details based on role
     private async Task<UserDto> BuildUserDtoAsync(User user)
     {
         var userDto = new UserDto

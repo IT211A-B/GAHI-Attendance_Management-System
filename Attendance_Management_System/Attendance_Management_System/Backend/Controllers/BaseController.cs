@@ -19,7 +19,7 @@ public abstract class BaseController : ControllerBase
         return BadRequest(ApiResponse<T>.ErrorResponse(ErrorCodes.ValidationError, errors));
     }
 
-    // Extracts the current authenticated user's ID from JWT token claims
+    // Extracts the current authenticated user's ID from identity claims
     protected int? GetCurrentUserId()
     {
         // Look for the user ID claim in the token
