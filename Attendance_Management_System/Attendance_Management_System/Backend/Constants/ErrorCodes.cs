@@ -44,4 +44,16 @@ public static class ErrorCodes
 
     // Resource is in use and cannot be deleted
     public const string InUse = "IN_USE";
+
+    // No available sections for enrollment
+    public const string NoAvailableSections = "NO_AVAILABLE_SECTIONS";
+
+    // Student already has an enrollment for this course and academic year
+    public const string EnrollmentExists = "ENROLLMENT_EXISTS";
+
+    // Section has reached over-capacity limit
+    public const string SectionOverCapacity = "SECTION_OVER_CAPACITY";
+
+    // Invalid capacity settings configuration
+    public const string InvalidCapacitySettings = "INVALID_CAPACITY_SETTINGS";
 }

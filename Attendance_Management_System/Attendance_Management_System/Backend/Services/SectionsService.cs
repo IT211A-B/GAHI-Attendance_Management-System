@@ -1,10 +1,13 @@
 using Attendance_Management_System.Backend.Constants;
+using Attendance_Management_System.Backend.Configuration;
 using Attendance_Management_System.Backend.DTOs.Requests;
 using Attendance_Management_System.Backend.DTOs.Responses;
 using Attendance_Management_System.Backend.Entities;
+using Attendance_Management_System.Backend.Enums;
 using Attendance_Management_System.Backend.Interfaces.Services;
 using Attendance_Management_System.Backend.Persistence;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 
 namespace Attendance_Management_System.Backend.Services;
 
@@ -12,11 +15,15 @@ namespace Attendance_Management_System.Backend.Services;
 public class SectionsService : ISectionsService
 {
     private readonly AppDbContext _context;
+    private readonly EnrollmentSettings _enrollmentSettings;
 
-    // Inject database context through constructor
-    public SectionsService(AppDbContext context)
+    // Inject database context and enrollment settings through constructor
+    public SectionsService(AppDbContext context, IOptions<EnrollmentSettings> enrollmentSettings)
     {
         _context = context;
+        _enrollmentSettings = enrollmentSettings.Value?.IsValid() == true
+            ? enrollmentSettings.Value
+            : EnrollmentSettings.Default;
     }
 
     // Retrieves all sections with related entity names (academic year, course, subject, classroom)
@@ -150,6 +157,7 @@ public class SectionsService : ISectionsService
         var section = new Section
         {
             Name = request.Name,
+            YearLevel = request.YearLevel,
             AcademicYearId = request.AcademicYearId,
             CourseId = request.CourseId,
             SubjectId = request.SubjectId,
@@ -215,6 +223,8 @@ public class SectionsService : ISectionsService
 
         if (!string.IsNullOrEmpty(request.Name))
             section.Name = request.Name;
+        if (request.YearLevel.HasValue)
+            section.YearLevel = request.YearLevel.Value;
         if (request.AcademicYearId.HasValue)
             section.AcademicYearId = request.AcademicYearId.Value;
         if (request.CourseId.HasValue)
@@ -260,10 +270,17 @@ public class SectionsService : ISectionsService
         var subject = await _context.Subjects.FindAsync(section.SubjectId);
         var classroom = await _context.Classrooms.FindAsync(section.ClassroomId);
 
+        // Get enrollment count for capacity status
+        var enrollmentCount = await _context.Enrollments
+            .CountAsync(e => e.SectionId == section.Id && e.Status == "approved");
+
+        var capacityStatus = CalculateCapacityStatus(enrollmentCount);
+
         return new SectionDto
         {
             Id = section.Id,
             Name = section.Name,
+            YearLevel = section.YearLevel,
             AcademicYearId = section.AcademicYearId,
             AcademicYearLabel = academicYear?.YearLabel,
             CourseId = section.CourseId,
@@ -272,6 +289,8 @@ public class SectionsService : ISectionsService
             SubjectName = subject?.Name,
             ClassroomId = section.ClassroomId,
             ClassroomName = classroom?.Name,
+            CurrentEnrollmentCount = enrollmentCount,
+            CapacityStatus = capacityStatus.ToString(),
             CreatedAt = section.CreatedAt
         };
     }
@@ -478,5 +497,48 @@ public class SectionsService : ISectionsService
         await _context.SaveChangesAsync();
 
         return ApiResponse<bool>.SuccessResponse(true);
+    }
+
+    // Retrieves sections filtered by course and year level for enrollment purposes
+    public async Task<ApiResponse<List<SectionDto>>> GetSectionsByCourseAndYearLevelAsync(int courseId, int yearLevel, int? academicYearId = null)
+    {
+        var query = _context.Sections
+            .Include(s => s.AcademicYear)
+            .Include(s => s.Course)
+            .Include(s => s.Subject)
+            .Include(s => s.Classroom)
+            .Where(s => s.CourseId == courseId && s.YearLevel == yearLevel);
+
+        if (academicYearId.HasValue)
+        {
+            query = query.Where(s => s.AcademicYearId == academicYearId.Value);
+        }
+
+        var sections = await query
+            .OrderBy(s => s.Name)
+            .ToListAsync();
+
+        var dtos = new List<SectionDto>();
+        foreach (var section in sections)
+        {
+            var dto = await BuildSectionDtoAsync(section);
+            dtos.Add(dto);
+        }
+
+        return ApiResponse<List<SectionDto>>.SuccessResponse(dtos);
+    }
+
+    // Calculates the capacity status based on enrollment count
+    private SectionCapacityStatus CalculateCapacityStatus(int currentCount)
+    {
+        if (currentCount >= _enrollmentSettings.OverCapacityLimit)
+        {
+            return SectionCapacityStatus.OverCapacity;
+        }
+        else if (currentCount >= _enrollmentSettings.WarningThreshold)
+        {
+            return SectionCapacityStatus.AtWarning;
+        }
+        return SectionCapacityStatus.Available;
     }
 }

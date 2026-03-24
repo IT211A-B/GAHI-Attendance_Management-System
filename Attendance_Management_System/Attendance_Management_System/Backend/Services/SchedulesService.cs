@@ -123,15 +123,6 @@ public class SchedulesService : ISchedulesService
             return ApiResponse<ScheduleDto>.ErrorResponse(ErrorCodes.NotFound, "Subject not found.");
         }
 
-        // Check if teacher is assigned to this section
-        var isAssigned = await _context.SectionTeachers
-            .AnyAsync(st => st.SectionId == request.SectionId && st.TeacherId == teacherId.Value);
-
-        if (!isAssigned)
-        {
-            return ApiResponse<ScheduleDto>.ErrorResponse(ErrorCodes.Forbidden, "You are not assigned to this section.");
-        }
-
         // Run conflict checks
         var conflictResult = await _conflictService.CheckConflictsAsync(
             request.SectionId,
@@ -149,6 +140,9 @@ public class SchedulesService : ISchedulesService
                 errorDetails.Message,
                 errorDetails);
         }
+
+        // Auto-assign teacher to section if not already assigned
+        await EnsureTeacherAssignedToSectionAsync(teacherId.Value, request.SectionId);
 
         // Create the schedule
         var schedule = new Schedule
@@ -411,6 +405,26 @@ public class SchedulesService : ISchedulesService
             .Where(t => t.UserId == userId)
             .Select(t => (int?)t.Id)
             .FirstOrDefaultAsync();
+    }
+
+    // Helper: Ensure teacher is assigned to section (auto-assign if not)
+    // This enables teachers to self-assign to sections when creating schedules
+    private async Task EnsureTeacherAssignedToSectionAsync(int teacherId, int sectionId)
+    {
+        var isAssigned = await _context.SectionTeachers
+            .AnyAsync(st => st.SectionId == sectionId && st.TeacherId == teacherId);
+
+        if (!isAssigned)
+        {
+            var sectionTeacher = new SectionTeacher
+            {
+                SectionId = sectionId,
+                TeacherId = teacherId,
+                AssignedAt = DateTimeOffset.UtcNow
+            };
+
+            _context.SectionTeachers.Add(sectionTeacher);
+        }
     }
 
     // Helper: Build a single schedule DTO

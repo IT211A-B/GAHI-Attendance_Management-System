@@ -8,10 +8,9 @@ using Microsoft.AspNetCore.Mvc;
 namespace Attendance_Management_System.Backend.Controllers;
 
 // API controller for managing student enrollments
-// Requires Admin role to access
 [ApiController]
 [Route("api/[controller]")]
-[Authorize(Policy = "AdminOnly")]
+[Authorize]
 public class EnrollmentController : ControllerBase
 {
     private readonly IEnrollmentService _enrollmentService;
@@ -23,8 +22,30 @@ public class EnrollmentController : ControllerBase
         _logger = logger;
     }
 
-    // Gets all pending enrollments with optional academic year filter
+    // Student self-enrollment - creates enrollment request for matching section
+    [HttpPost]
+    [Authorize(Policy = "StudentOnly")]
+    public async Task<ActionResult<ApiResponse<EnrollmentResultDto>>> CreateEnrollment([FromBody] CreateEnrollmentRequest request)
+    {
+        var studentUserId = GetCurrentUserId();
+        if (studentUserId == null)
+        {
+            return Unauthorized(ApiResponse<EnrollmentResultDto>.ErrorResponse("UNAUTHORIZED", "Invalid token."));
+        }
+
+        var result = await _enrollmentService.CreateEnrollmentAsync(request, studentUserId.Value);
+
+        if (!result.Success)
+        {
+            return BadRequest(result);
+        }
+
+        return Ok(result);
+    }
+
+    // Gets all pending enrollments with optional academic year filter - Admin only
     [HttpGet("pending")]
+    [Authorize(Policy = "AdminOnly")]
     public async Task<ActionResult<EnrollmentListDto>> GetPendingEnrollments(
         [FromQuery] int? academicYearId,
         [FromQuery] int page = 1,
@@ -34,8 +55,9 @@ public class EnrollmentController : ControllerBase
         return Ok(result);
     }
 
-    // Gets all enrollments with optional filtering by status and academic year
+    // Gets all enrollments with optional filtering by status and academic year - Admin only
     [HttpGet]
+    [Authorize(Policy = "AdminOnly")]
     public async Task<ActionResult<EnrollmentListDto>> GetAllEnrollments(
         [FromQuery] string? status,
         [FromQuery] int? academicYearId,
@@ -62,6 +84,7 @@ public class EnrollmentController : ControllerBase
 
     // Updates enrollment status (approve or reject) - admin only operation
     [HttpPut("{id}/status")]
+    [Authorize(Policy = "AdminOnly")]
     public async Task<ActionResult<ApiResponse<EnrollmentDto>>> UpdateEnrollmentStatus(
         int id,
         [FromBody] UpdateEnrollmentStatusRequest request)
@@ -79,6 +102,56 @@ public class EnrollmentController : ControllerBase
             return BadRequest(result);
         }
 
+        return Ok(result);
+    }
+
+    // Admin reassigns student to different section
+    [HttpPut("{id}/reassign")]
+    [Authorize(Policy = "AdminOnly")]
+    public async Task<ActionResult<ApiResponse<EnrollmentDto>>> ReassignSection(
+        int id,
+        [FromBody] ReassignSectionRequest request)
+    {
+        var adminId = GetCurrentUserId();
+        if (adminId == null)
+        {
+            return Unauthorized(ApiResponse<EnrollmentDto>.ErrorResponse("UNAUTHORIZED", "Invalid token."));
+        }
+
+        var result = await _enrollmentService.ReassignSectionAsync(id, request, adminId.Value);
+
+        if (!result.Success)
+        {
+            return BadRequest(result);
+        }
+
+        return Ok(result);
+    }
+
+    // Gets capacity information for a specific section - Admin/Teacher only
+    [HttpGet("capacity/{sectionId}")]
+    [Authorize(Policy = "AdminOrTeacher")]
+    public async Task<ActionResult<SectionCapacityDto>> GetSectionCapacity(int sectionId)
+    {
+        var result = await _enrollmentService.GetSectionCapacityAsync(sectionId);
+
+        if (result == null)
+        {
+            return NotFound(ApiResponse<SectionCapacityDto>.ErrorResponse("NOT_FOUND", "Section not found."));
+        }
+
+        return Ok(result);
+    }
+
+    // Gets available sections for student based on course and year level
+    [HttpGet("available-sections")]
+    [Authorize(Policy = "StudentOnly")]
+    public async Task<ActionResult<List<SectionCapacityDto>>> GetAvailableSections(
+        [FromQuery] int courseId,
+        [FromQuery] int yearLevel,
+        [FromQuery] int academicYearId)
+    {
+        var result = await _enrollmentService.GetAvailableSectionsForStudentAsync(courseId, yearLevel, academicYearId);
         return Ok(result);
     }
 

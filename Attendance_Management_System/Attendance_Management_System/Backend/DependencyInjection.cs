@@ -31,6 +31,9 @@ public static class DependencyInjection
         // Bind cookie settings from configuration to strongly-typed class
         services.Configure<CookieSettings>(configuration.GetSection(CookieSettings.SectionName));
 
+        // Bind enrollment settings from configuration to strongly-typed class
+        services.Configure<EnrollmentSettings>(configuration.GetSection(EnrollmentSettings.SectionName));
+
         // Configure ASP.NET Core Identity with password requirements
         services.AddIdentity<User, IdentityRole<int>>(options =>
         {

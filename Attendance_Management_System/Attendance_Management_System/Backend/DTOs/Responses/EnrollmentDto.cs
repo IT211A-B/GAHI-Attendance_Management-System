@@ -16,4 +16,6 @@ public class EnrollmentDto
     public int? ProcessedBy { get; set; }
     public string? ProcessorName { get; set; }
     public string? RejectionReason { get; set; }
+    public bool HasWarning { get; set; }
+    public string? WarningMessage { get; set; }
 }
