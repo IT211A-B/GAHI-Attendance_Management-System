@@ -1,4 +1,3 @@
-using System.Text;
 using Attendance_Management_System.Backend.Configuration;
 using Attendance_Management_System.Backend.Entities;
 using Attendance_Management_System.Backend.Interfaces.Repositories;
@@ -6,12 +5,13 @@ using Attendance_Management_System.Backend.Interfaces.Services;
 using Attendance_Management_System.Backend.Persistence;
 using Attendance_Management_System.Backend.Repositories;
 using Attendance_Management_System.Backend.Services;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Attendance_Management_System.Backend.Security;
+using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.IdentityModel.Tokens;
 
 namespace Attendance_Management_System.Backend;
 
@@ -28,22 +28,8 @@ public static class DependencyInjection
         services.AddDbContext<AppDbContext>(options =>
             options.UseNpgsql(connectionString));
 
-        // Bind JWT settings from configuration to strongly-typed class
-        services.Configure<JwtSettings>(configuration.GetSection(JwtSettings.SectionName));
-
-        var jwtSettings = configuration.GetSection(JwtSettings.SectionName).Get<JwtSettings>();
-
-        // Validate that JWT secret key is configured
-        if (jwtSettings == null || string.IsNullOrWhiteSpace(jwtSettings.SecretKey))
-        {
-            throw new InvalidOperationException("JWT SecretKey is not configured in appsettings.json or environment variables.");
-        }
-
-        // Ensure secret key meets minimum length for security
-        if (jwtSettings.SecretKey.Length < 32)
-        {
-            throw new InvalidOperationException("JWT SecretKey must be at least 32 characters long.");
-        }
+        // Bind cookie settings from configuration to strongly-typed class
+        services.Configure<CookieSettings>(configuration.GetSection(CookieSettings.SectionName));
 
         // Configure ASP.NET Core Identity with password requirements
         services.AddIdentity<User, IdentityRole<int>>(options =>
@@ -57,26 +43,43 @@ public static class DependencyInjection
             .AddEntityFrameworkStores<AppDbContext>()
             .AddDefaultTokenProviders();
 
-        // Configure JWT Bearer as the default authentication scheme
-        services.AddAuthentication(options =>
+        // Configure Identity cookie authentication
+        services.ConfigureApplicationCookie(options =>
         {
-            options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
-            options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
-            options.DefaultScheme = JwtBearerDefaults.AuthenticationScheme;
-        })
-        .AddJwtBearer(options =>
-        {
-            // Define token validation parameters for security
-            options.TokenValidationParameters = new TokenValidationParameters
+            var cookieSettings = configuration.GetSection(CookieSettings.SectionName).Get<CookieSettings>()
+                                 ?? new CookieSettings();
+
+            options.ExpireTimeSpan = TimeSpan.FromHours(cookieSettings.ExpirationHours);
+            options.SlidingExpiration = cookieSettings.SlidingExpiration;
+            options.Cookie.HttpOnly = cookieSettings.HttpOnly;
+            options.Cookie.SameSite = ParseSameSite(cookieSettings.SameSite);
+            options.Cookie.SecurePolicy = ParseSecurePolicy(cookieSettings.SecurePolicy);
+
+            // Return 401/403 for API endpoints instead of redirecting to login/access denied pages
+            options.Events = new CookieAuthenticationEvents
             {
-                ValidateIssuer = true,
-                ValidateAudience = true,
-                ValidateLifetime = true,
-                ValidateIssuerSigningKey = true,
-                ValidIssuer = jwtSettings.Issuer,
-                ValidAudience = jwtSettings.Audience,
-                IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSettings.SecretKey)),
-                ClockSkew = TimeSpan.Zero
+                OnRedirectToLogin = context =>
+                {
+                    if (IsApiRequest(context.Request.Path))
+                    {
+                        context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+                        return Task.CompletedTask;
+                    }
+
+                    context.Response.Redirect(context.RedirectUri);
+                    return Task.CompletedTask;
+                },
+                OnRedirectToAccessDenied = context =>
+                {
+                    if (IsApiRequest(context.Request.Path))
+                    {
+                        context.Response.StatusCode = StatusCodes.Status403Forbidden;
+                        return Task.CompletedTask;
+                    }
+
+                    context.Response.Redirect(context.RedirectUri);
+                    return Task.CompletedTask;
+                }
             };
         });
 
@@ -85,7 +88,6 @@ public static class DependencyInjection
         services.AddScoped<IUnitOfWork, UnitOfWork>();
 
         // Register application services for business logic
-        services.AddScoped<ITokenService, TokenService>();
         services.AddScoped<IAuthService, AuthService>();
         services.AddScoped<IAttendanceService, AttendanceService>();
         services.AddScoped<IEnrollmentService, EnrollmentService>();
@@ -100,6 +102,9 @@ public static class DependencyInjection
         services.AddScoped<IConflictService, ConflictService>();
         services.AddScoped<ITeacherHistoryService, TeacherHistoryService>();
 
+        // Add custom claims factory to include User.Role as ClaimTypes.Role
+        services.AddScoped<IUserClaimsPrincipalFactory<User>, UserClaimsPrincipalFactory>();
+
         // Define role-based authorization policies for access control
         services.AddAuthorization(options =>
         {
@@ -111,5 +116,35 @@ public static class DependencyInjection
         });
 
         return services;
+    }
+
+    // Checks if the request path targets an API endpoint
+    private static bool IsApiRequest(PathString path)
+    {
+        return path.StartsWithSegments("/api");
+    }
+
+    // Converts string configuration value to SameSiteMode enum
+    private static SameSiteMode ParseSameSite(string value)
+    {
+        return value?.Trim().ToLowerInvariant() switch
+        {
+            "none" => SameSiteMode.None,
+            "strict" => SameSiteMode.Strict,
+            "lax" => SameSiteMode.Lax,
+            _ => SameSiteMode.Lax
+        };
+    }
+
+    // Converts string configuration value to CookieSecurePolicy enum
+    private static CookieSecurePolicy ParseSecurePolicy(string value)
+    {
+        return value?.Trim().ToLowerInvariant() switch
+        {
+            "always" => CookieSecurePolicy.Always,
+            "none" => CookieSecurePolicy.None,
+            "sameasrequest" => CookieSecurePolicy.SameAsRequest,
+            _ => CookieSecurePolicy.SameAsRequest
+        };
     }
 }

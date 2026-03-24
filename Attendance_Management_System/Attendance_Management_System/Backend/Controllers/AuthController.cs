@@ -2,7 +2,10 @@ using System.Security.Claims;
 using Attendance_Management_System.Backend.Constants;
 using Attendance_Management_System.Backend.DTOs.Requests;
 using Attendance_Management_System.Backend.DTOs.Responses;
+using Attendance_Management_System.Backend.Entities;
 using Attendance_Management_System.Backend.Interfaces.Services;
+using Microsoft.AspNetCore.Antiforgery;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -13,17 +16,35 @@ namespace Attendance_Management_System.Backend.Controllers;
 public class AuthController : BaseController
 {
     private readonly IAuthService _authService;
+    private readonly SignInManager<User> _signInManager;
     private readonly ILogger<AuthController> _logger;
+    private readonly IAntiforgery _antiforgery;
 
-    public AuthController(IAuthService authService, ILogger<AuthController> logger)
+    public AuthController(
+        IAuthService authService,
+        SignInManager<User> signInManager,
+        ILogger<AuthController> logger,
+        IAntiforgery antiforgery)
     {
         _authService = authService;
+        _signInManager = signInManager;
         _logger = logger;
+        _antiforgery = antiforgery;
+    }
+
+    // Gets an antiforgery token for CSRF protection in API requests
+    [HttpGet("antiforgery-token")]
+    [AllowAnonymous]
+    public IActionResult GetAntiforgeryToken()
+    {
+        var tokens = _antiforgery.GetAndStoreTokens(HttpContext);
+        return Ok(new { token = tokens.RequestToken });
     }
 
     // Authenticates a user with email and password
     [HttpPost("login")]
     [AllowAnonymous]
+    [ValidateAntiForgeryToken]
     public async Task<ActionResult<ApiResponse<AuthResponse>>> Login([FromBody] LoginRequest request)
     {
         var result = await _authService.LoginAsync(request);
@@ -33,12 +54,25 @@ public class AuthController : BaseController
             return Unauthorized(ApiResponse<AuthResponse>.ErrorResponse(ErrorCodes.Unauthorized, result.Message ?? "Login failed"));
         }
 
+        var signInResult = await _signInManager.PasswordSignInAsync(
+            request.Email,
+            request.Password,
+            isPersistent: false,
+            lockoutOnFailure: false);
+
+        if (!signInResult.Succeeded)
+        {
+            _logger.LogWarning("Login succeeded in AuthService but cookie sign-in failed for {Email}.", request.Email);
+            return Unauthorized(ApiResponse<AuthResponse>.ErrorResponse(ErrorCodes.Unauthorized, "Login failed"));
+        }
+
         return Ok(ApiResponse<AuthResponse>.SuccessResponse(result));
     }
 
     // Registers a new student account
     [HttpPost("register/student")]
     [AllowAnonymous]
+    [ValidateAntiForgeryToken]
     public async Task<ActionResult<ApiResponse<AuthResponse>>> RegisterStudent([FromBody] RegisterRequest request)
     {
         if (ModelState.IsValid is false)
@@ -53,6 +87,16 @@ public class AuthController : BaseController
             return BadRequest(ApiResponse<AuthResponse>.ErrorResponse("REGISTRATION_FAILED", result.Message ?? "Registration failed"));
         }
 
+        var signInUser = await _signInManager.UserManager.FindByEmailAsync(request.Email);
+        if (signInUser != null)
+        {
+            await _signInManager.SignInAsync(signInUser, isPersistent: false);
+        }
+        else
+        {
+            _logger.LogWarning("Registration succeeded but user lookup failed for auto sign-in: {Email}.", request.Email);
+        }
+
         return CreatedAtAction(
             nameof(GetProfile),
             null,
@@ -63,6 +107,7 @@ public class AuthController : BaseController
     // Registers a new teacher account
     [HttpPost("register/teacher")]
     [AllowAnonymous]
+    [ValidateAntiForgeryToken]
     public async Task<ActionResult<ApiResponse<AuthResponse>>> RegisterTeacher([FromBody] TeacherRegisterRequest request)
     {
         if (ModelState.IsValid is false)
@@ -77,6 +122,16 @@ public class AuthController : BaseController
             return BadRequest(ApiResponse<AuthResponse>.ErrorResponse("REGISTRATION_FAILED", result.Message ?? "Registration failed"));
         }
 
+        var signInUser = await _signInManager.UserManager.FindByEmailAsync(request.Email);
+        if (signInUser != null)
+        {
+            await _signInManager.SignInAsync(signInUser, isPersistent: false);
+        }
+        else
+        {
+            _logger.LogWarning("Registration succeeded but user lookup failed for auto sign-in: {Email}.", request.Email);
+        }
+
         return CreatedAtAction(
             nameof(GetProfile),
             null,
@@ -89,13 +144,11 @@ public class AuthController : BaseController
     [Authorize]
     public async Task<ActionResult<ApiResponse<UserDto>>> GetProfile()
     {
-        // Extract user ID from JWT token claims
-        var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)
-                          ?? User.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub);
-
-        if (userIdClaim == null || !int.TryParse(userIdClaim.Value, out var userId))
+        // Extract user ID from Identity claims
+        var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (string.IsNullOrWhiteSpace(userIdClaim) || !int.TryParse(userIdClaim, out var userId))
         {
-            return Unauthorized(ApiResponse<UserDto>.ErrorResponse(ErrorCodes.Unauthorized, "Invalid token"));
+            return Unauthorized(ApiResponse<UserDto>.ErrorResponse(ErrorCodes.Unauthorized, "Unable to identify user"));
         }
 
         var profile = await _authService.GetUserProfileAsync(userId);
@@ -108,14 +161,13 @@ public class AuthController : BaseController
         return Ok(ApiResponse<UserDto>.SuccessResponse(profile));
     }
 
-    // Logs out the current user (client-side token invalidation)
-    // JWT is stateless, so actual token invalidation requires a blacklist (out of MVP scope)
+    // Logs out the current user by clearing the auth cookie
     [HttpPost("logout")]
     [Authorize]
-    public ActionResult<ApiResponse<string>> Logout()
+    [ValidateAntiForgeryToken]
+    public async Task<ActionResult<ApiResponse<string>>> Logout()
     {
-        // JWT is stateless, so we just return a success message
-        // Token invalidation would require a token blacklist (out of MVP scope)
-        return Ok(ApiResponse<string>.SuccessResponse("Logged out successfully. Please discard your token on the client side."));
+        await _signInManager.SignOutAsync();
+        return Ok(ApiResponse<string>.SuccessResponse("Logged out successfully."));
     }
 }

@@ -9,6 +9,12 @@ var builder = WebApplication.CreateBuilder(args);
 // Add MVC controllers with views for handling web and API requests
 builder.Services.AddControllersWithViews();
 
+// Configure antiforgery to use a custom header for API requests
+builder.Services.AddAntiforgery(options =>
+{
+    options.HeaderName = "X-CSRF-TOKEN";
+});
+
 // Register all backend services (database, auth, repositories, services)
 builder.Services.AddBackend(builder.Configuration);
 
