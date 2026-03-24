@@ -7,6 +7,10 @@ public class CreateSectionRequest
     [Required(ErrorMessage = "Name is required")]
     public string Name { get; set; } = string.Empty;
 
+    [Required(ErrorMessage = "Year Level is required")]
+    [Range(1, int.MaxValue, ErrorMessage = "Year Level must be at least 1")]
+    public int YearLevel { get; set; }
+
     [Required(ErrorMessage = "Academic Year ID is required")]
     public int AcademicYearId { get; set; }
 

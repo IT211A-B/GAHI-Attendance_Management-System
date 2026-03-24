@@ -17,4 +17,16 @@ public interface IEnrollmentService
 
     // Gets detailed information about a specific enrollment by its ID
     Task<EnrollmentDto?> GetEnrollmentByIdAsync(int enrollmentId);
+
+    // Student self-enrollment - finds matching sections by course and year level, randomly assigns
+    Task<ApiResponse<EnrollmentResultDto>> CreateEnrollmentAsync(CreateEnrollmentRequest request, int studentUserId);
+
+    // Admin reassigns student to different section with capacity checks
+    Task<ApiResponse<EnrollmentDto>> ReassignSectionAsync(int enrollmentId, ReassignSectionRequest request, int adminId);
+
+    // Returns current enrollment count and capacity status for a section
+    Task<SectionCapacityDto> GetSectionCapacityAsync(int sectionId);
+
+    // Gets sections matching student's course and year level with capacity info
+    Task<List<SectionCapacityDto>> GetAvailableSectionsForStudentAsync(int courseId, int yearLevel, int academicYearId);
 }

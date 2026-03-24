@@ -29,6 +29,12 @@ public class Enrollment : EntityBase
     // Reason for rejection if the enrollment was rejected
     public string? RejectionReason { get; set; }
 
+    // Warning flag for capacity-related warnings
+    public bool HasWarning { get; set; } = false;
+
+    // Warning message when enrolled in section near or over capacity
+    public string? WarningMessage { get; set; }
+
     // Navigation property to the student
     [ForeignKey(nameof(StudentId))]
     public Student? Student { get; set; }

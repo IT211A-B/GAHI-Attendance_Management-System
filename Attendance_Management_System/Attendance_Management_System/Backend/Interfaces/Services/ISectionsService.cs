@@ -17,4 +17,7 @@ public interface ISectionsService
     Task<ApiResponse<List<SectionTeacherDto>>> GetSectionTeachersAsync(int sectionId);
     Task<ApiResponse<SectionTeacherDto>> AssignTeacherToSectionAsync(int sectionId, AssignTeacherRequest request);
     Task<ApiResponse<bool>> RemoveTeacherFromSectionAsync(int sectionId, int teacherId, bool isAdmin = false);
+
+    // Filter sections by course and year level for enrollment
+    Task<ApiResponse<List<SectionDto>>> GetSectionsByCourseAndYearLevelAsync(int courseId, int yearLevel, int? academicYearId = null);
 }
