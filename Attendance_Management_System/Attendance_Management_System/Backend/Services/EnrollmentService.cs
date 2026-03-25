@@ -349,19 +349,13 @@ public class EnrollmentService : IEnrollmentService
         // Select a random section for the student
         var section = await SelectRandomSectionAsync(request.CourseId, yearLevel, request.AcademicYearId);
 
-        if (section == null)
-        {
-            return ApiResponse<EnrollmentResultDto>.ErrorResponse(
-                ErrorCodes.NoAvailableSections,
-                "No available sections found for your course and year level. Please contact an administrator.");
-        }
-
-        // Check if we need to auto-create a section
-        if (_enrollmentSettings.AutoCreateSections && section == null)
+        // If no section found, try to auto-create one if enabled
+        if (section == null && _enrollmentSettings.AutoCreateSections)
         {
             section = await AutoCreateSectionIfNeededAsync(request.CourseId, yearLevel, request.AcademicYearId);
         }
 
+        // If still no section available, return error
         if (section == null)
         {
             return ApiResponse<EnrollmentResultDto>.ErrorResponse(
