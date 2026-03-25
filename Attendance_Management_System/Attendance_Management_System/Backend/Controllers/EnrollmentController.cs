@@ -3,6 +3,7 @@ using Attendance_Management_System.Backend.DTOs.Requests;
 using Attendance_Management_System.Backend.DTOs.Responses;
 using Attendance_Management_System.Backend.Interfaces.Services;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Attendance_Management_System.Backend.Controllers;
@@ -25,6 +26,9 @@ public class EnrollmentController : ControllerBase
     // Student self-enrollment - creates enrollment request for matching section
     [HttpPost]
     [Authorize(Policy = "StudentOnly")]
+    [ProducesResponseType(typeof(ApiResponse<EnrollmentResultDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse<EnrollmentResultDto>), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ApiResponse<EnrollmentResultDto>), StatusCodes.Status401Unauthorized)]
     public async Task<ActionResult<ApiResponse<EnrollmentResultDto>>> CreateEnrollment([FromBody] CreateEnrollmentRequest request)
     {
         var studentUserId = GetCurrentUserId();
@@ -46,6 +50,9 @@ public class EnrollmentController : ControllerBase
     // Gets all pending enrollments with optional academic year filter - Admin only
     [HttpGet("pending")]
     [Authorize(Policy = "AdminOnly")]
+    [ProducesResponseType(typeof(EnrollmentListDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(EnrollmentListDto), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(EnrollmentListDto), StatusCodes.Status403Forbidden)]
     public async Task<ActionResult<EnrollmentListDto>> GetPendingEnrollments(
         [FromQuery] int? academicYearId,
         [FromQuery] int page = 1,
@@ -58,6 +65,9 @@ public class EnrollmentController : ControllerBase
     // Gets all enrollments with optional filtering by status and academic year - Admin only
     [HttpGet]
     [Authorize(Policy = "AdminOnly")]
+    [ProducesResponseType(typeof(EnrollmentListDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(EnrollmentListDto), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(EnrollmentListDto), StatusCodes.Status403Forbidden)]
     public async Task<ActionResult<EnrollmentListDto>> GetAllEnrollments(
         [FromQuery] string? status,
         [FromQuery] int? academicYearId,
@@ -70,6 +80,9 @@ public class EnrollmentController : ControllerBase
 
     // Gets a specific enrollment by its ID
     [HttpGet("{id}")]
+    [ProducesResponseType(typeof(ApiResponse<EnrollmentDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse<EnrollmentDto>), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ApiResponse<EnrollmentDto>), StatusCodes.Status404NotFound)]
     public async Task<ActionResult<ApiResponse<EnrollmentDto>>> GetEnrollment(int id)
     {
         var result = await _enrollmentService.GetEnrollmentByIdAsync(id);
@@ -85,6 +98,11 @@ public class EnrollmentController : ControllerBase
     // Updates enrollment status (approve or reject) - admin only operation
     [HttpPut("{id}/status")]
     [Authorize(Policy = "AdminOnly")]
+    [ProducesResponseType(typeof(ApiResponse<EnrollmentDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse<EnrollmentDto>), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ApiResponse<EnrollmentDto>), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ApiResponse<EnrollmentDto>), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ApiResponse<EnrollmentDto>), StatusCodes.Status404NotFound)]
     public async Task<ActionResult<ApiResponse<EnrollmentDto>>> UpdateEnrollmentStatus(
         int id,
         [FromBody] UpdateEnrollmentStatusRequest request)
@@ -108,6 +126,11 @@ public class EnrollmentController : ControllerBase
     // Admin reassigns student to different section
     [HttpPut("{id}/reassign")]
     [Authorize(Policy = "AdminOnly")]
+    [ProducesResponseType(typeof(ApiResponse<EnrollmentDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse<EnrollmentDto>), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ApiResponse<EnrollmentDto>), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ApiResponse<EnrollmentDto>), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ApiResponse<EnrollmentDto>), StatusCodes.Status404NotFound)]
     public async Task<ActionResult<ApiResponse<EnrollmentDto>>> ReassignSection(
         int id,
         [FromBody] ReassignSectionRequest request)
@@ -131,6 +154,10 @@ public class EnrollmentController : ControllerBase
     // Gets capacity information for a specific section - Admin/Teacher only
     [HttpGet("capacity/{sectionId}")]
     [Authorize(Policy = "AdminOrTeacher")]
+    [ProducesResponseType(typeof(SectionCapacityDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(SectionCapacityDto), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(SectionCapacityDto), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(SectionCapacityDto), StatusCodes.Status404NotFound)]
     public async Task<ActionResult<SectionCapacityDto>> GetSectionCapacity(int sectionId)
     {
         var result = await _enrollmentService.GetSectionCapacityAsync(sectionId);
@@ -146,6 +173,9 @@ public class EnrollmentController : ControllerBase
     // Gets available sections for student based on course and year level
     [HttpGet("available-sections")]
     [Authorize(Policy = "StudentOnly")]
+    [ProducesResponseType(typeof(List<SectionCapacityDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(List<SectionCapacityDto>), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(List<SectionCapacityDto>), StatusCodes.Status403Forbidden)]
     public async Task<ActionResult<List<SectionCapacityDto>>> GetAvailableSections(
         [FromQuery] int courseId,
         [FromQuery] int yearLevel,

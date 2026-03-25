@@ -3,6 +3,7 @@ using Attendance_Management_System.Backend.DTOs.Requests;
 using Attendance_Management_System.Backend.DTOs.Responses;
 using Attendance_Management_System.Backend.Interfaces.Services;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Attendance_Management_System.Backend.Controllers;
@@ -25,6 +26,9 @@ public class SubjectsController : BaseController
     // Get all subjects - Admin only access
     [HttpGet]
     [Authorize(Policy = "AdminOnly")]
+    [ProducesResponseType(typeof(ApiResponse<List<SubjectDto>>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse<List<SubjectDto>>), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ApiResponse<List<SubjectDto>>), StatusCodes.Status403Forbidden)]
     public async Task<ActionResult<ApiResponse<List<SubjectDto>>>> GetAllSubjects()
     {
         var result = await _subjectsService.GetAllSubjectsAsync();
@@ -34,6 +38,10 @@ public class SubjectsController : BaseController
     // Get a specific subject by ID
     [HttpGet("{id}")]
     [Authorize(Policy = "AdminOnly")]
+    [ProducesResponseType(typeof(ApiResponse<SubjectDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse<SubjectDto>), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ApiResponse<SubjectDto>), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ApiResponse<SubjectDto>), StatusCodes.Status404NotFound)]
     public async Task<ActionResult<ApiResponse<SubjectDto>>> GetSubjectById(int id)
     {
         var result = await _subjectsService.GetSubjectByIdAsync(id);
@@ -66,6 +74,10 @@ public class SubjectsController : BaseController
     // Create a new subject
     [HttpPost]
     [Authorize(Policy = "AdminOnly")]
+    [ProducesResponseType(typeof(ApiResponse<SubjectDto>), StatusCodes.Status201Created)]
+    [ProducesResponseType(typeof(ApiResponse<SubjectDto>), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ApiResponse<SubjectDto>), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ApiResponse<SubjectDto>), StatusCodes.Status403Forbidden)]
     public async Task<ActionResult<ApiResponse<SubjectDto>>> CreateSubject([FromBody] CreateSubjectRequest request)
     {
         // Validate request model before processing
@@ -89,6 +101,11 @@ public class SubjectsController : BaseController
     // Update an existing subject
     [HttpPut("{id}")]
     [Authorize(Policy = "AdminOnly")]
+    [ProducesResponseType(typeof(ApiResponse<SubjectDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse<SubjectDto>), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ApiResponse<SubjectDto>), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ApiResponse<SubjectDto>), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ApiResponse<SubjectDto>), StatusCodes.Status404NotFound)]
     public async Task<ActionResult<ApiResponse<SubjectDto>>> UpdateSubject(int id, [FromBody] UpdateSubjectRequest request)
     {
         // Validate request model before processing
@@ -116,6 +133,11 @@ public class SubjectsController : BaseController
     // Delete a subject by ID
     [HttpDelete("{id}")]
     [Authorize(Policy = "AdminOnly")]
+    [ProducesResponseType(typeof(ApiResponse<bool>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse<bool>), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ApiResponse<bool>), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ApiResponse<bool>), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ApiResponse<bool>), StatusCodes.Status404NotFound)]
     public async Task<ActionResult<ApiResponse<bool>>> DeleteSubject(int id)
     {
         var result = await _subjectsService.DeleteSubjectAsync(id);

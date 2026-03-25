@@ -3,6 +3,7 @@ using Attendance_Management_System.Backend.DTOs.Requests;
 using Attendance_Management_System.Backend.DTOs.Responses;
 using Attendance_Management_System.Backend.Interfaces.Services;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
 
@@ -26,6 +27,9 @@ public class SectionsController : BaseController
     // Get all sections - Admin or Teacher access
     [HttpGet]
     [Authorize(Policy = "AdminOrTeacher")]
+    [ProducesResponseType(typeof(ApiResponse<List<SectionDto>>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse<List<SectionDto>>), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ApiResponse<List<SectionDto>>), StatusCodes.Status403Forbidden)]
     public async Task<ActionResult<ApiResponse<List<SectionDto>>>> GetAllSections()
     {
         var result = await _sectionsService.GetAllSectionsAsync();
@@ -35,6 +39,10 @@ public class SectionsController : BaseController
     // Get a specific section by ID
     [HttpGet("{id}")]
     [Authorize(Policy = "AdminOrTeacher")]
+    [ProducesResponseType(typeof(ApiResponse<SectionDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse<SectionDto>), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ApiResponse<SectionDto>), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ApiResponse<SectionDto>), StatusCodes.Status404NotFound)]
     public async Task<ActionResult<ApiResponse<SectionDto>>> GetSectionById(int id)
     {
         var result = await _sectionsService.GetSectionByIdAsync(id);
@@ -51,6 +59,10 @@ public class SectionsController : BaseController
     // Get all sections for a specific academic year
     [HttpGet("academic-year/{academicYearId}")]
     [Authorize(Policy = "AdminOrTeacher")]
+    [ProducesResponseType(typeof(ApiResponse<List<SectionDto>>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse<List<SectionDto>>), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ApiResponse<List<SectionDto>>), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ApiResponse<List<SectionDto>>), StatusCodes.Status404NotFound)]
     public async Task<ActionResult<ApiResponse<List<SectionDto>>>> GetSectionsByAcademicYear(int academicYearId)
     {
         var result = await _sectionsService.GetSectionsByAcademicYearIdAsync(academicYearId);
@@ -67,6 +79,10 @@ public class SectionsController : BaseController
     // Get timetable for a section - Admin or Teacher access
     [HttpGet("{id}/timetable")]
     [Authorize(Policy = "AdminOrTeacher")]
+    [ProducesResponseType(typeof(ApiResponse<TimetableResponse>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse<TimetableResponse>), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ApiResponse<TimetableResponse>), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ApiResponse<TimetableResponse>), StatusCodes.Status404NotFound)]
     public async Task<ActionResult<ApiResponse<TimetableResponse>>> GetTimetable(int id)
     {
         var currentUserId = GetCurrentUserId();
@@ -83,6 +99,10 @@ public class SectionsController : BaseController
     // Get all teachers assigned to a section - Admin only
     [HttpGet("{id}/teachers")]
     [Authorize(Policy = "AdminOnly")]
+    [ProducesResponseType(typeof(ApiResponse<List<SectionTeacherDto>>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse<List<SectionTeacherDto>>), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ApiResponse<List<SectionTeacherDto>>), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ApiResponse<List<SectionTeacherDto>>), StatusCodes.Status404NotFound)]
     public async Task<ActionResult<ApiResponse<List<SectionTeacherDto>>>> GetSectionTeachers(int id)
     {
         var result = await _sectionsService.GetSectionTeachersAsync(id);
@@ -98,6 +118,12 @@ public class SectionsController : BaseController
     // Assign a teacher to a section - Admin only
     [HttpPost("{id}/teachers")]
     [Authorize(Policy = "AdminOnly")]
+    [ProducesResponseType(typeof(ApiResponse<SectionTeacherDto>), StatusCodes.Status201Created)]
+    [ProducesResponseType(typeof(ApiResponse<SectionTeacherDto>), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ApiResponse<SectionTeacherDto>), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ApiResponse<SectionTeacherDto>), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ApiResponse<SectionTeacherDto>), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ApiResponse<SectionTeacherDto>), StatusCodes.Status409Conflict)]
     public async Task<ActionResult<ApiResponse<SectionTeacherDto>>> AssignTeacherToSection(int id, [FromBody] AssignTeacherRequest request)
     {
         if (!ModelState.IsValid)
@@ -126,6 +152,11 @@ public class SectionsController : BaseController
     // Remove a teacher from a section - Admin or Teacher access
     [HttpDelete("{id}/teachers/{teacherId}")]
     [Authorize(Policy = "AdminOrTeacher")]
+    [ProducesResponseType(typeof(ApiResponse<bool>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse<bool>), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ApiResponse<bool>), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ApiResponse<bool>), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ApiResponse<bool>), StatusCodes.Status404NotFound)]
     public async Task<ActionResult<ApiResponse<bool>>> RemoveTeacherFromSection(int id, int teacherId)
     {
         var userRole = User.FindFirst(ClaimTypes.Role)?.Value ?? string.Empty;
@@ -148,6 +179,10 @@ public class SectionsController : BaseController
     // Create a new section
     [HttpPost]
     [Authorize(Policy = "AdminOnly")]
+    [ProducesResponseType(typeof(ApiResponse<SectionDto>), StatusCodes.Status201Created)]
+    [ProducesResponseType(typeof(ApiResponse<SectionDto>), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ApiResponse<SectionDto>), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ApiResponse<SectionDto>), StatusCodes.Status403Forbidden)]
     public async Task<ActionResult<ApiResponse<SectionDto>>> CreateSection([FromBody] CreateSectionRequest request)
     {
         // Validate request model before processing
@@ -171,6 +206,11 @@ public class SectionsController : BaseController
     // Update an existing section
     [HttpPut("{id}")]
     [Authorize(Policy = "AdminOnly")]
+    [ProducesResponseType(typeof(ApiResponse<SectionDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse<SectionDto>), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ApiResponse<SectionDto>), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ApiResponse<SectionDto>), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ApiResponse<SectionDto>), StatusCodes.Status404NotFound)]
     public async Task<ActionResult<ApiResponse<SectionDto>>> UpdateSection(int id, [FromBody] UpdateSectionRequest request)
     {
         // Validate request model before processing
@@ -198,6 +238,11 @@ public class SectionsController : BaseController
     // Delete a section by ID
     [HttpDelete("{id}")]
     [Authorize(Policy = "AdminOnly")]
+    [ProducesResponseType(typeof(ApiResponse<bool>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse<bool>), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ApiResponse<bool>), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ApiResponse<bool>), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ApiResponse<bool>), StatusCodes.Status404NotFound)]
     public async Task<ActionResult<ApiResponse<bool>>> DeleteSection(int id)
     {
         var result = await _sectionsService.DeleteSectionAsync(id);
