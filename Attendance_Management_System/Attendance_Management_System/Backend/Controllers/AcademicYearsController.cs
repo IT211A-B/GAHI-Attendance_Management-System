@@ -3,6 +3,7 @@ using Attendance_Management_System.Backend.DTOs.Requests;
 using Attendance_Management_System.Backend.DTOs.Responses;
 using Attendance_Management_System.Backend.Interfaces.Services;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Attendance_Management_System.Backend.Controllers;
@@ -25,6 +26,9 @@ public class AcademicYearsController : BaseController
     // Get all academic years - Admin only access
     [HttpGet]
     [Authorize(Policy = "AdminOnly")]
+    [ProducesResponseType(typeof(ApiResponse<List<AcademicYearDto>>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse<List<AcademicYearDto>>), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ApiResponse<List<AcademicYearDto>>), StatusCodes.Status403Forbidden)]
     public async Task<ActionResult<ApiResponse<List<AcademicYearDto>>>> GetAllAcademicYears()
     {
         var result = await _academicYearsService.GetAllAcademicYearsAsync();
@@ -34,6 +38,10 @@ public class AcademicYearsController : BaseController
     // Get a specific academic year by ID
     [HttpGet("{id}")]
     [Authorize(Policy = "AdminOnly")]
+    [ProducesResponseType(typeof(ApiResponse<AcademicYearDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse<AcademicYearDto>), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ApiResponse<AcademicYearDto>), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ApiResponse<AcademicYearDto>), StatusCodes.Status404NotFound)]
     public async Task<ActionResult<ApiResponse<AcademicYearDto>>> GetAcademicYearById(int id)
     {
         var result = await _academicYearsService.GetAcademicYearByIdAsync(id);
@@ -50,6 +58,10 @@ public class AcademicYearsController : BaseController
     // Create a new academic year
     [HttpPost]
     [Authorize(Policy = "AdminOnly")]
+    [ProducesResponseType(typeof(ApiResponse<AcademicYearDto>), StatusCodes.Status201Created)]
+    [ProducesResponseType(typeof(ApiResponse<AcademicYearDto>), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ApiResponse<AcademicYearDto>), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ApiResponse<AcademicYearDto>), StatusCodes.Status403Forbidden)]
     public async Task<ActionResult<ApiResponse<AcademicYearDto>>> CreateAcademicYear([FromBody] CreateAcademicYearRequest request)
     {
         // Validate request model before processing
@@ -73,6 +85,11 @@ public class AcademicYearsController : BaseController
     // Update an existing academic year
     [HttpPut("{id}")]
     [Authorize(Policy = "AdminOnly")]
+    [ProducesResponseType(typeof(ApiResponse<AcademicYearDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse<AcademicYearDto>), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ApiResponse<AcademicYearDto>), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ApiResponse<AcademicYearDto>), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ApiResponse<AcademicYearDto>), StatusCodes.Status404NotFound)]
     public async Task<ActionResult<ApiResponse<AcademicYearDto>>> UpdateAcademicYear(int id, [FromBody] UpdateAcademicYearRequest request)
     {
         // Validate request model before processing
@@ -100,6 +117,11 @@ public class AcademicYearsController : BaseController
     // Delete an academic year by ID
     [HttpDelete("{id}")]
     [Authorize(Policy = "AdminOnly")]
+    [ProducesResponseType(typeof(ApiResponse<bool>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse<bool>), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ApiResponse<bool>), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ApiResponse<bool>), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ApiResponse<bool>), StatusCodes.Status404NotFound)]
     public async Task<ActionResult<ApiResponse<bool>>> DeleteAcademicYear(int id)
     {
         var result = await _academicYearsService.DeleteAcademicYearAsync(id);
@@ -121,6 +143,10 @@ public class AcademicYearsController : BaseController
     // Activate an academic year (set as current active year)
     [HttpPost("{id}/activate")]
     [Authorize(Policy = "AdminOnly")]
+    [ProducesResponseType(typeof(ApiResponse<AcademicYearDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse<AcademicYearDto>), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ApiResponse<AcademicYearDto>), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ApiResponse<AcademicYearDto>), StatusCodes.Status404NotFound)]
     public async Task<ActionResult<ApiResponse<AcademicYearDto>>> ActivateAcademicYear(int id)
     {
         var result = await _academicYearsService.ActivateAcademicYearAsync(id);

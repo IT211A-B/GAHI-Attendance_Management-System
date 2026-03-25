@@ -3,6 +3,7 @@ using Attendance_Management_System.Backend.DTOs.Requests;
 using Attendance_Management_System.Backend.DTOs.Responses;
 using Attendance_Management_System.Backend.Interfaces.Services;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Attendance_Management_System.Backend.Controllers;
@@ -25,6 +26,9 @@ public class ClassroomsController : BaseController
     // Get all classrooms - Admin only access
     [HttpGet]
     [Authorize(Policy = "AdminOnly")]
+    [ProducesResponseType(typeof(ApiResponse<List<ClassroomDto>>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse<List<ClassroomDto>>), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ApiResponse<List<ClassroomDto>>), StatusCodes.Status403Forbidden)]
     public async Task<ActionResult<ApiResponse<List<ClassroomDto>>>> GetAllClassrooms()
     {
         var result = await _classroomsService.GetAllClassroomsAsync();
@@ -34,6 +38,10 @@ public class ClassroomsController : BaseController
     // Get a specific classroom by ID
     [HttpGet("{id}")]
     [Authorize(Policy = "AdminOnly")]
+    [ProducesResponseType(typeof(ApiResponse<ClassroomDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse<ClassroomDto>), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ApiResponse<ClassroomDto>), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ApiResponse<ClassroomDto>), StatusCodes.Status404NotFound)]
     public async Task<ActionResult<ApiResponse<ClassroomDto>>> GetClassroomById(int id)
     {
         var result = await _classroomsService.GetClassroomByIdAsync(id);
@@ -50,6 +58,10 @@ public class ClassroomsController : BaseController
     // Create a new classroom
     [HttpPost]
     [Authorize(Policy = "AdminOnly")]
+    [ProducesResponseType(typeof(ApiResponse<ClassroomDto>), StatusCodes.Status201Created)]
+    [ProducesResponseType(typeof(ApiResponse<ClassroomDto>), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ApiResponse<ClassroomDto>), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ApiResponse<ClassroomDto>), StatusCodes.Status403Forbidden)]
     public async Task<ActionResult<ApiResponse<ClassroomDto>>> CreateClassroom([FromBody] CreateClassroomRequest request)
     {
         // Validate request model before processing
@@ -73,6 +85,11 @@ public class ClassroomsController : BaseController
     // Update an existing classroom
     [HttpPut("{id}")]
     [Authorize(Policy = "AdminOnly")]
+    [ProducesResponseType(typeof(ApiResponse<ClassroomDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse<ClassroomDto>), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ApiResponse<ClassroomDto>), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ApiResponse<ClassroomDto>), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ApiResponse<ClassroomDto>), StatusCodes.Status404NotFound)]
     public async Task<ActionResult<ApiResponse<ClassroomDto>>> UpdateClassroom(int id, [FromBody] UpdateClassroomRequest request)
     {
         // Validate request model before processing
@@ -100,6 +117,11 @@ public class ClassroomsController : BaseController
     // Delete a classroom by ID
     [HttpDelete("{id}")]
     [Authorize(Policy = "AdminOnly")]
+    [ProducesResponseType(typeof(ApiResponse<bool>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse<bool>), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ApiResponse<bool>), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ApiResponse<bool>), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ApiResponse<bool>), StatusCodes.Status404NotFound)]
     public async Task<ActionResult<ApiResponse<bool>>> DeleteClassroom(int id)
     {
         var result = await _classroomsService.DeleteClassroomAsync(id);

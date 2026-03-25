@@ -5,6 +5,7 @@ using Attendance_Management_System.Backend.Interfaces.Services;
 using Attendance_Management_System.Backend.Persistence;
 using Attendance_Management_System.Backend.ValueObjects;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -33,6 +34,10 @@ public class AttendanceController : ControllerBase
 
     // Marks attendance for a single student
     [HttpPost("mark")]
+    [ProducesResponseType(typeof(ApiResponse<AttendanceDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse<AttendanceDto>), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ApiResponse<AttendanceDto>), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ApiResponse<AttendanceDto>), StatusCodes.Status403Forbidden)]
     public async Task<ActionResult<ApiResponse<AttendanceDto>>> MarkAttendance([FromBody] MarkAttendanceRequest request)
     {
         // Get the current user's teacher context for authorization
@@ -54,6 +59,10 @@ public class AttendanceController : ControllerBase
 
     // Marks attendance for multiple students in a single request (bulk operation)
     [HttpPost("bulk")]
+    [ProducesResponseType(typeof(ApiResponse<List<AttendanceDto>>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse<List<AttendanceDto>>), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ApiResponse<List<AttendanceDto>>), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ApiResponse<List<AttendanceDto>>), StatusCodes.Status403Forbidden)]
     public async Task<ActionResult<ApiResponse<List<AttendanceDto>>>> MarkBulkAttendance([FromBody] BulkAttendanceRequest request)
     {
         // Get the current user's teacher context for authorization
@@ -75,6 +84,10 @@ public class AttendanceController : ControllerBase
 
     // Gets attendance records for all students in a section on a specific date
     [HttpGet("section/{sectionId}/date/{date}")]
+    [ProducesResponseType(typeof(ApiResponse<AttendanceSummaryDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse<AttendanceSummaryDto>), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ApiResponse<AttendanceSummaryDto>), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ApiResponse<AttendanceSummaryDto>), StatusCodes.Status404NotFound)]
     public async Task<ActionResult<ApiResponse<AttendanceSummaryDto>>> GetSectionAttendance(
         int sectionId,
         DateOnly date,
@@ -94,6 +107,9 @@ public class AttendanceController : ControllerBase
     // Students can view their own attendance, while admins and teachers can view any student
     [HttpGet("student/{studentId}")]
     [Authorize(Policy = "AllRoles")]
+    [ProducesResponseType(typeof(ApiResponse<List<AttendanceDto>>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse<List<AttendanceDto>>), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ApiResponse<List<AttendanceDto>>), StatusCodes.Status403Forbidden)]
     public async Task<ActionResult<ApiResponse<List<AttendanceDto>>>> GetStudentAttendance(
         int studentId,
         [FromQuery] int? sectionId,

@@ -3,6 +3,7 @@ using Attendance_Management_System.Backend.DTOs.Requests;
 using Attendance_Management_System.Backend.DTOs.Responses;
 using Attendance_Management_System.Backend.Interfaces.Services;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
 
@@ -25,6 +26,9 @@ public class SchedulesController : BaseController
     // Get all schedules - Teacher sees their assigned sections, Admin sees all
     [HttpGet]
     [Authorize(Policy = "AdminOrTeacher")]
+    [ProducesResponseType(typeof(ApiResponse<List<ScheduleDto>>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse<List<ScheduleDto>>), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ApiResponse<List<ScheduleDto>>), StatusCodes.Status403Forbidden)]
     public async Task<ActionResult<ApiResponse<List<ScheduleDto>>>> GetSchedules()
     {
         var currentUserId = GetCurrentUserId();
@@ -42,6 +46,10 @@ public class SchedulesController : BaseController
     // Get a specific schedule by ID
     [HttpGet("{id}")]
     [Authorize(Policy = "AdminOrTeacher")]
+    [ProducesResponseType(typeof(ApiResponse<ScheduleDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse<ScheduleDto>), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ApiResponse<ScheduleDto>), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ApiResponse<ScheduleDto>), StatusCodes.Status404NotFound)]
     public async Task<ActionResult<ApiResponse<ScheduleDto>>> GetScheduleById(int id)
     {
         var currentUserId = GetCurrentUserId();
@@ -63,6 +71,11 @@ public class SchedulesController : BaseController
     // Create a new schedule slot - Teachers only (must be assigned to section)
     [HttpPost]
     [Authorize(Policy = "TeacherOnly")]
+    [ProducesResponseType(typeof(ApiResponse<ScheduleDto>), StatusCodes.Status201Created)]
+    [ProducesResponseType(typeof(ApiResponse<ScheduleDto>), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ApiResponse<ScheduleDto>), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ApiResponse<ScheduleDto>), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ApiResponse<ScheduleDto>), StatusCodes.Status409Conflict)]
     public async Task<ActionResult<ApiResponse<ScheduleDto>>> CreateSchedule([FromBody] CreateScheduleRequest request)
     {
         if (!ModelState.IsValid)
@@ -103,6 +116,12 @@ public class SchedulesController : BaseController
     // Update an existing schedule - Teachers only (must be assigned to section)
     [HttpPut("{id}")]
     [Authorize(Policy = "TeacherOnly")]
+    [ProducesResponseType(typeof(ApiResponse<ScheduleDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse<ScheduleDto>), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ApiResponse<ScheduleDto>), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ApiResponse<ScheduleDto>), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ApiResponse<ScheduleDto>), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ApiResponse<ScheduleDto>), StatusCodes.Status409Conflict)]
     public async Task<ActionResult<ApiResponse<ScheduleDto>>> UpdateSchedule(int id, [FromBody] UpdateScheduleRequest request)
     {
         if (!ModelState.IsValid)
@@ -149,6 +168,12 @@ public class SchedulesController : BaseController
     // Delete a schedule - Teachers (assigned to section) or Admin
     [HttpDelete("{id}")]
     [Authorize(Policy = "AdminOrTeacher")]
+    [ProducesResponseType(typeof(ApiResponse<bool>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse<bool>), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ApiResponse<bool>), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ApiResponse<bool>), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ApiResponse<bool>), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ApiResponse<bool>), StatusCodes.Status409Conflict)]
     public async Task<ActionResult<ApiResponse<bool>>> DeleteSchedule(int id)
     {
         var currentUserId = GetCurrentUserId();
@@ -192,6 +217,11 @@ public class SchedulesController : BaseController
     // Get available time slots for a classroom on a specific day
     [HttpGet("available")]
     [Authorize(Policy = "AdminOrTeacher")]
+    [ProducesResponseType(typeof(ApiResponse<List<AvailableSlotDto>>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse<List<AvailableSlotDto>>), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ApiResponse<List<AvailableSlotDto>>), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ApiResponse<List<AvailableSlotDto>>), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ApiResponse<List<AvailableSlotDto>>), StatusCodes.Status404NotFound)]
     public async Task<ActionResult<ApiResponse<List<AvailableSlotDto>>>> GetAvailableSlots(
         [FromQuery] int classroomId,
         [FromQuery] int dayOfWeek)

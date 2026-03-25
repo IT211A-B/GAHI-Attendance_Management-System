@@ -3,6 +3,7 @@ using Attendance_Management_System.Backend.DTOs.Requests;
 using Attendance_Management_System.Backend.DTOs.Responses;
 using Attendance_Management_System.Backend.Interfaces.Services;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Attendance_Management_System.Backend.Controllers;
@@ -25,6 +26,9 @@ public class TeachersController : BaseController
     // Get all teachers - Admin only access
     [HttpGet]
     [Authorize(Policy = "AdminOnly")]
+    [ProducesResponseType(typeof(ApiResponse<List<TeacherDto>>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse<List<TeacherDto>>), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ApiResponse<List<TeacherDto>>), StatusCodes.Status403Forbidden)]
     public async Task<ActionResult<ApiResponse<List<TeacherDto>>>> GetAllTeachers()
     {
         var result = await _teachersService.GetAllTeachersAsync();
@@ -34,6 +38,9 @@ public class TeachersController : BaseController
     // Get all teachers with their assigned sections - Admin only access
     [HttpGet("with-sections")]
     [Authorize(Policy = "AdminOnly")]
+    [ProducesResponseType(typeof(ApiResponse<List<TeacherListDto>>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse<List<TeacherListDto>>), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ApiResponse<List<TeacherListDto>>), StatusCodes.Status403Forbidden)]
     public async Task<ActionResult<ApiResponse<List<TeacherListDto>>>> GetAllTeachersWithSections()
     {
         var result = await _teachersService.GetAllTeachersWithSectionsAsync();
@@ -43,6 +50,12 @@ public class TeachersController : BaseController
     // Create a new teacher profile for an existing user with teacher role - Admin only
     [HttpPost]
     [Authorize(Policy = "AdminOnly")]
+    [ProducesResponseType(typeof(ApiResponse<TeacherDto>), StatusCodes.Status201Created)]
+    [ProducesResponseType(typeof(ApiResponse<TeacherDto>), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ApiResponse<TeacherDto>), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ApiResponse<TeacherDto>), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ApiResponse<TeacherDto>), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ApiResponse<TeacherDto>), StatusCodes.Status409Conflict)]
     public async Task<ActionResult<ApiResponse<TeacherDto>>> CreateTeacher([FromBody] CreateTeacherRequest request)
     {
         if (!ModelState.IsValid)
@@ -71,6 +84,10 @@ public class TeachersController : BaseController
     // Get a specific teacher by ID
     [HttpGet("{id}")]
     [Authorize(Policy = "AdminOnly")]
+    [ProducesResponseType(typeof(ApiResponse<TeacherDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse<TeacherDto>), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ApiResponse<TeacherDto>), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ApiResponse<TeacherDto>), StatusCodes.Status404NotFound)]
     public async Task<ActionResult<ApiResponse<TeacherDto>>> GetTeacherById(int id)
     {
         var result = await _teachersService.GetTeacherByIdAsync(id);
@@ -87,6 +104,11 @@ public class TeachersController : BaseController
     // Update an existing teacher's information
     [HttpPut("{id}")]
     [Authorize(Policy = "AdminOnly")]
+    [ProducesResponseType(typeof(ApiResponse<TeacherDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse<TeacherDto>), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ApiResponse<TeacherDto>), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ApiResponse<TeacherDto>), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ApiResponse<TeacherDto>), StatusCodes.Status404NotFound)]
     public async Task<ActionResult<ApiResponse<TeacherDto>>> UpdateTeacher(int id, [FromBody] UpdateTeacherRequest request)
     {
         // Validate request model before processing
@@ -114,6 +136,10 @@ public class TeachersController : BaseController
     // Deactivate a teacher (soft delete - marks teacher as inactive)
     [HttpPost("{id}/deactivate")]
     [Authorize(Policy = "AdminOnly")]
+    [ProducesResponseType(typeof(ApiResponse<bool>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse<bool>), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ApiResponse<bool>), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ApiResponse<bool>), StatusCodes.Status404NotFound)]
     public async Task<ActionResult<ApiResponse<bool>>> DeactivateTeacher(int id)
     {
         var result = await _teachersService.DeactivateTeacherAsync(id);
@@ -130,6 +156,10 @@ public class TeachersController : BaseController
     // Activate a teacher (restore inactive teacher to active status)
     [HttpPost("{id}/activate")]
     [Authorize(Policy = "AdminOnly")]
+    [ProducesResponseType(typeof(ApiResponse<bool>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse<bool>), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ApiResponse<bool>), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ApiResponse<bool>), StatusCodes.Status404NotFound)]
     public async Task<ActionResult<ApiResponse<bool>>> ActivateTeacher(int id)
     {
         var result = await _teachersService.ActivateTeacherAsync(id);

@@ -3,6 +3,7 @@ using Attendance_Management_System.Backend.Constants;
 using Attendance_Management_System.Backend.DTOs.Responses;
 using Attendance_Management_System.Backend.Interfaces.Services;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Attendance_Management_System.Backend.Controllers;
@@ -24,6 +25,9 @@ public class StudentsController : BaseController
     // Get the authenticated student's own profile (students only)
     [HttpGet("profile")]
     [Authorize(Policy = "StudentOnly")]
+    [ProducesResponseType(typeof(ApiResponse<StudentProfileDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse<StudentProfileDto>), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ApiResponse<StudentProfileDto>), StatusCodes.Status404NotFound)]
     public async Task<ActionResult<ApiResponse<StudentProfileDto>>> GetMyProfile()
     {
         var userId = GetCurrentUserId();
@@ -47,6 +51,11 @@ public class StudentsController : BaseController
     // Get a specific student by ID (role-based data filtering applied)
     [HttpGet("{id}")]
     [Authorize(Policy = "AllRoles")]
+    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status404NotFound)]
     public async Task<ActionResult<ApiResponse<object>>> GetStudentById(int id)
     {
         var userId = GetCurrentUserId();
@@ -81,6 +90,11 @@ public class StudentsController : BaseController
     // Get all students in a section (admin and teachers only)
     [HttpGet("section/{sectionId}")]
     [Authorize(Policy = "AdminOrTeacher")]
+    [ProducesResponseType(typeof(ApiResponse<List<StudentBasicProfileDto>>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse<List<StudentBasicProfileDto>>), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ApiResponse<List<StudentBasicProfileDto>>), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ApiResponse<List<StudentBasicProfileDto>>), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ApiResponse<List<StudentBasicProfileDto>>), StatusCodes.Status404NotFound)]
     public async Task<ActionResult<ApiResponse<List<StudentBasicProfileDto>>>> GetStudentsBySection(int sectionId)
     {
         var userId = GetCurrentUserId();

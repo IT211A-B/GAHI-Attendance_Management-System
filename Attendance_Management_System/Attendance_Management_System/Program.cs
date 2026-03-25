@@ -2,6 +2,7 @@ using Attendance_Management_System.Backend;
 using Attendance_Management_System.Backend.Data;
 using Attendance_Management_System.Backend.Persistence;
 using Microsoft.EntityFrameworkCore;
+using Scalar.AspNetCore;
 
 // Create the web application builder with default configuration
 var builder = WebApplication.CreateBuilder(args);
@@ -22,18 +23,17 @@ builder.Services.AddBackend(builder.Configuration);
 builder.Services.AddHealthChecks()
     .AddNpgSql(builder.Configuration.GetConnectionString("Default")!);
 
-// Add Swagger for API documentation in development
-builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
+// Add OpenAPI for API documentation (used by Scalar)
+builder.Services.AddOpenApi();
 
 // Build the application from configured services
 var app = builder.Build();
 
-// Enable Swagger UI only in development environment
+// Enable Scalar API documentation in development environment
 if (app.Environment.IsDevelopment())
 {
-    app.UseSwagger();
-    app.UseSwaggerUI();
+    app.MapOpenApi();
+    app.MapScalarApiReference();
 }
 
 // Configure production-specific error handling and security
