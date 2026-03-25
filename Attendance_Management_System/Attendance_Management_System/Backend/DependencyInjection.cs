@@ -104,6 +104,7 @@ public static class DependencyInjection
         services.AddScoped<ISchedulesService, SchedulesService>();
         services.AddScoped<IConflictService, ConflictService>();
         services.AddScoped<ITeacherHistoryService, TeacherHistoryService>();
+        services.AddScoped<IStudentsService, StudentsService>();
 
         // Add custom claims factory to include User.Role as ClaimTypes.Role
         services.AddScoped<IUserClaimsPrincipalFactory<User>, UserClaimsPrincipalFactory>();

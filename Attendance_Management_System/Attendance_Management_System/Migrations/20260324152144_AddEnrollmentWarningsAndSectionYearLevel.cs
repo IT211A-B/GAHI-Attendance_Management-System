@@ -18,24 +18,8 @@ namespace Attendance_Management_System.Migrations
                 name: "IX_Schedules_SectionId",
                 table: "Schedules");
 
-            migrationBuilder.AddColumn<bool>(
-                name: "IsActive",
-                table: "Teachers",
-                type: "boolean",
-                nullable: false,
-                defaultValue: false);
-
-            migrationBuilder.AddColumn<int>(
-                name: "SectionId1",
-                table: "SectionTeachers",
-                type: "integer",
-                nullable: true);
-
-            migrationBuilder.AddColumn<int>(
-                name: "TeacherId1",
-                table: "SectionTeachers",
-                type: "integer",
-                nullable: true);
+            // IsActive already exists in Teachers table from previous migration
+            // SectionId1 and TeacherId1 already exist in SectionTeachers from previous migration
 
             migrationBuilder.AddColumn<int>(
                 name: "YearLevel",
@@ -51,11 +35,7 @@ namespace Attendance_Management_System.Migrations
                 nullable: false,
                 defaultValue: false);
 
-            migrationBuilder.AddColumn<int>(
-                name: "SectionId1",
-                table: "Enrollments",
-                type: "integer",
-                nullable: true);
+            // SectionId1 already exists in Enrollments from previous migration
 
             migrationBuilder.AddColumn<string>(
                 name: "WarningMessage",
@@ -63,25 +43,27 @@ namespace Attendance_Management_System.Migrations
                 type: "text",
                 nullable: true);
 
-            migrationBuilder.CreateIndex(
-                name: "IX_SectionTeachers_SectionId1",
-                table: "SectionTeachers",
-                column: "SectionId1");
+            // Indexes already exist from previous migration
+            // migrationBuilder.CreateIndex(
+            //     name: "IX_SectionTeachers_SectionId1",
+            //     table: "SectionTeachers",
+            //     column: "SectionId1");
 
-            migrationBuilder.CreateIndex(
-                name: "IX_SectionTeachers_TeacherId1",
-                table: "SectionTeachers",
-                column: "TeacherId1");
+            // migrationBuilder.CreateIndex(
+            //     name: "IX_SectionTeachers_TeacherId1",
+            //     table: "SectionTeachers",
+            //     column: "TeacherId1");
 
             migrationBuilder.CreateIndex(
                 name: "IX_Schedules_SectionId_DayOfWeek",
                 table: "Schedules",
                 columns: new[] { "SectionId", "DayOfWeek" });
 
-            migrationBuilder.CreateIndex(
-                name: "IX_Enrollments_SectionId1",
-                table: "Enrollments",
-                column: "SectionId1");
+            // Index already exists from previous migration
+            // migrationBuilder.CreateIndex(
+            //     name: "IX_Enrollments_SectionId1",
+            //     table: "Enrollments",
+            //     column: "SectionId1");
 
             migrationBuilder.AddForeignKey(
                 name: "FK_Enrollments_AspNetUsers_ProcessedBy",
@@ -91,26 +73,27 @@ namespace Attendance_Management_System.Migrations
                 principalColumn: "Id",
                 onDelete: ReferentialAction.Restrict);
 
-            migrationBuilder.AddForeignKey(
-                name: "FK_Enrollments_Sections_SectionId1",
-                table: "Enrollments",
-                column: "SectionId1",
-                principalTable: "Sections",
-                principalColumn: "Id");
+            // FK already exists from previous migration
+            // migrationBuilder.AddForeignKey(
+            //     name: "FK_Enrollments_Sections_SectionId1",
+            //     table: "Enrollments",
+            //     column: "SectionId1",
+            //     principalTable: "Sections",
+            //     principalColumn: "Id");
 
-            migrationBuilder.AddForeignKey(
-                name: "FK_SectionTeachers_Sections_SectionId1",
-                table: "SectionTeachers",
-                column: "SectionId1",
-                principalTable: "Sections",
-                principalColumn: "Id");
+            // migrationBuilder.AddForeignKey(
+            //     name: "FK_SectionTeachers_Sections_SectionId1",
+            //     table: "SectionTeachers",
+            //     column: "SectionId1",
+            //     principalTable: "Sections",
+            //     principalColumn: "Id");
 
-            migrationBuilder.AddForeignKey(
-                name: "FK_SectionTeachers_Teachers_TeacherId1",
-                table: "SectionTeachers",
-                column: "TeacherId1",
-                principalTable: "Teachers",
-                principalColumn: "Id");
+            // migrationBuilder.AddForeignKey(
+            //     name: "FK_SectionTeachers_Teachers_TeacherId1",
+            //     table: "SectionTeachers",
+            //     column: "TeacherId1",
+            //     principalTable: "Teachers",
+            //     principalColumn: "Id");
         }
 
         /// <inheritdoc />
