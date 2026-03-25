@@ -106,8 +106,15 @@ public class AttendanceController : ControllerBase
 
         if (userRole == "student")
         {
-            // TODO: Verify the student belongs to the current user
-            // For simplicity, we allow the request through
+            // Verify the student belongs to the current user
+            var student = await _context.Students
+                .AsNoTracking()
+                .FirstOrDefaultAsync(s => s.UserId == currentUserId);
+
+            if (student == null || student.Id != studentId)
+            {
+                return Unauthorized(ApiResponse<List<AttendanceDto>>.ErrorResponse("UNAUTHORIZED", "You can only view your own attendance records."));
+            }
         }
 
         var result = await _attendanceService.GetStudentAttendanceAsync(studentId, sectionId, from, to);
