@@ -4,7 +4,6 @@ using Attendance_Management_System.Backend.DTOs.Requests;
 using Attendance_Management_System.Backend.DTOs.Responses;
 using Attendance_Management_System.Backend.Entities;
 using Attendance_Management_System.Backend.Interfaces.Services;
-using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
@@ -19,34 +18,20 @@ public class AuthController : BaseController
     private readonly IAuthService _authService;
     private readonly SignInManager<User> _signInManager;
     private readonly ILogger<AuthController> _logger;
-    private readonly IAntiforgery _antiforgery;
 
     public AuthController(
         IAuthService authService,
         SignInManager<User> signInManager,
-        ILogger<AuthController> logger,
-        IAntiforgery antiforgery)
+        ILogger<AuthController> logger)
     {
         _authService = authService;
         _signInManager = signInManager;
         _logger = logger;
-        _antiforgery = antiforgery;
-    }
-
-    // Gets an antiforgery token for CSRF protection in API requests
-    [HttpGet("antiforgery-token")]
-    [AllowAnonymous]
-    [ProducesResponseType(StatusCodes.Status200OK)]
-    public IActionResult GetAntiforgeryToken()
-    {
-        var tokens = _antiforgery.GetAndStoreTokens(HttpContext);
-        return Ok(new { token = tokens.RequestToken });
     }
 
     // Authenticates a user with email and password
     [HttpPost("login")]
     [AllowAnonymous]
-    [ValidateAntiForgeryToken]
     [ProducesResponseType(typeof(ApiResponse<AuthResponse>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponse<AuthResponse>), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ApiResponse<AuthResponse>), StatusCodes.Status401Unauthorized)]
@@ -77,7 +62,6 @@ public class AuthController : BaseController
     // Registers a new student account
     [HttpPost("register/student")]
     [AllowAnonymous]
-    [ValidateAntiForgeryToken]
     [ProducesResponseType(typeof(ApiResponse<AuthResponse>), StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(ApiResponse<AuthResponse>), StatusCodes.Status400BadRequest)]
     public async Task<ActionResult<ApiResponse<AuthResponse>>> RegisterStudent([FromBody] RegisterRequest request)
@@ -114,7 +98,6 @@ public class AuthController : BaseController
     // Registers a new teacher account
     [HttpPost("register/teacher")]
     [AllowAnonymous]
-    [ValidateAntiForgeryToken]
     [ProducesResponseType(typeof(ApiResponse<AuthResponse>), StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(ApiResponse<AuthResponse>), StatusCodes.Status400BadRequest)]
     public async Task<ActionResult<ApiResponse<AuthResponse>>> RegisterTeacher([FromBody] TeacherRegisterRequest request)
@@ -176,7 +159,6 @@ public class AuthController : BaseController
     // Logs out the current user by clearing the auth cookie
     [HttpPost("logout")]
     [Authorize]
-    [ValidateAntiForgeryToken]
     [ProducesResponseType(typeof(ApiResponse<string>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponse<string>), StatusCodes.Status401Unauthorized)]
     public async Task<ActionResult<ApiResponse<string>>> Logout()
