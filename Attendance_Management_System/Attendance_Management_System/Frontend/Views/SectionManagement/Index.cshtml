@@ -1,0 +1,48 @@
+@model Attendance_Management_System.Backend.ViewModels.Sections.SectionsIndexViewModel
+@{
+    ViewData["Title"] = "Sections";
+}
+
+<section class="panel">
+    <h3>Section Management</h3>
+    <p class="muted">Server-rendered C# MVC list of available sections.</p>
+
+    @if (!string.IsNullOrWhiteSpace(Model.ErrorMessage))
+    {
+        <p class="form-validation">@Model.ErrorMessage</p>
+    }
+    else if (!Model.Sections.Any())
+    {
+        <p class="footer-note">No sections found.</p>
+    }
+    else
+    {
+        <div class="table-wrap">
+            <table class="app-table">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Year</th>
+                        <th>Course</th>
+                        <th>Subject</th>
+                        <th>Classroom</th>
+                        <th>Enrolled</th>
+                    </tr>
+                </thead>
+                <tbody>
+                @foreach (var item in Model.Sections)
+                {
+                    <tr>
+                        <td>@item.Name</td>
+                        <td>@item.YearLevel</td>
+                        <td>@item.CourseName</td>
+                        <td>@item.SubjectName</td>
+                        <td>@item.ClassroomName</td>
+                        <td>@item.CurrentEnrollmentCount</td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        </div>
+    }
+</section>

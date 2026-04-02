@@ -1,0 +1,42 @@
+@model Attendance_Management_System.Backend.ViewModels.Classrooms.ClassroomsIndexViewModel
+@{
+    ViewData["Title"] = "Classrooms";
+}
+
+<section class="panel">
+    <h3>Classroom Management</h3>
+    <p class="muted">Server-rendered C# MVC list of classrooms.</p>
+
+    @if (!string.IsNullOrWhiteSpace(Model.ErrorMessage))
+    {
+        <p class="form-validation">@Model.ErrorMessage</p>
+    }
+    else if (!Model.Classrooms.Any())
+    {
+        <p class="footer-note">No classrooms found.</p>
+    }
+    else
+    {
+        <div class="table-wrap">
+            <table class="app-table">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Name</th>
+                        <th>Description</th>
+                    </tr>
+                </thead>
+                <tbody>
+                @foreach (var item in Model.Classrooms)
+                {
+                    <tr>
+                        <td>@item.Id</td>
+                        <td>@item.Name</td>
+                        <td>@item.Description</td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        </div>
+    }
+</section>

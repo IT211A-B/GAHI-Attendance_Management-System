@@ -52,6 +52,9 @@ public static class DependencyInjection
             var cookieSettings = configuration.GetSection(CookieSettings.SectionName).Get<CookieSettings>()
                                  ?? new CookieSettings();
 
+            options.LoginPath = "/login";
+            options.AccessDeniedPath = "/login";
+
             options.ExpireTimeSpan = TimeSpan.FromHours(cookieSettings.ExpirationHours);
             options.SlidingExpiration = cookieSettings.SlidingExpiration;
             options.Cookie.HttpOnly = cookieSettings.HttpOnly;
