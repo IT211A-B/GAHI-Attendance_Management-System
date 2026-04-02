@@ -1,53 +1,130 @@
-## Visual Studio
+# .gitignore for an ASP.NET Core / .NET 9 project
+# Generated with best practices for this repository
+
+# Visual Studio / Rider / IDE files
 .vs/
+.vscode/
 *.suo
 *.user
 *.userosscache
 *.sln.docstates
 
-## Build results
-[Dd]ebug/
-[Rr]elease/
-x64/
-x86/
-[Ww][Ii][Nn]32/
-[Aa][Rr][Mm]/
-[Aa][Rr][Mm]64/
-bld/
+# Build results
 [Bb]in/
 [Oo]bj/
-[Ll]og/
-[Ll]ogs/
+out/
 
-## NuGet
+# NuGet packages
 *.nupkg
 *.snupkg
-**/[Pp]ackages/*
-!**/[Pp]ackages/build/
-*.nuget.props
-*.nuget.targets
+project.lock.json
+project.fragment.lock.json
+artifacts/
+**/packages/*
+!**/packages/build/
 
-## User-specific files
+# ASP.NET Scaffolding
+ScaffoldingReadMe.txt
+
+# User-specific files
 *.rsuser
-*.suo
-*.user
-*.userosscache
-*.sln.docstates
-
-## Rider
+*.ipr
+*.iws
 .idea/
 
-## OS files
+# IntelliJ and Rider
+*.iml
+*.iws
+.idea/
+
+# Log files
+*.log
+
+# OS files
 Thumbs.db
-ehthumbs.db
 Desktop.ini
+ehthumbs.db
+Icon?
 .DS_Store
 
-## dotnet tool
-.dotnet/
+# npm / node
+node_modules/
+pnpm-lock.yaml
+yarn.lock
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 
-## Build/test output logs
-*.txt
-
-## User secrets
+# secret config / local settings
+appsettings.*.json
 secrets.json
+
+# runtime
+*.pid
+*.seed
+
+# Rider-specific things
+.idea/
+*.sln.iml
+
+# JetBrains Rider caches
+.idea/*
+*.sln.iml
+
+# User-specific ASP.NET files
+*.dotCover
+*.lcov
+
+# Azure publish settings
+PublishProfiles/
+
+# Visual Studio temporary files
+*.tmp
+~$*
+*.log
+*.vspscc
+*.vssscc
+
+# Coverage & test results
+TestResults/
+coverage*
+*.coverage
+*.coveragexml
+*.testresults
+
+# Package outputs
+*.dll
+*.exe
+*.appx
+*.msi
+*.zip
+
+# Built website
+wwwroot/lib/
+
+# Local debug and profiling files
+*.pdb
+*.cache
+
+# macOS
+*.DS_Store
+
+# Windows
+Thumbs.db
+
+# Always ignore generated project assets
+**/obj/**
+**/bin/**
+
+# Ensure facilities for local storage keys / secrets not committed
+**/appsettings.Development.json
+
+# Optional: keep lock file if you want deterministic NuGet restore
+# Uncomment if you commit package-lock style files for reproducible builds
+# packages.lock.json
+
+# Recommended:
+# - Track source files, csproj, .sln
+# - Ignore generated artifacts and local machine-specific configs
+# - Avoid committing secrets / local environment files
+implementation_plan.md
