@@ -430,13 +430,13 @@ a {
   width: min(1050px, calc(100% - 2rem));
   margin: 2rem auto;
   display: grid;
+  /* Split hero storytelling and sign-in form into a 2-column auth canvas. */
   grid-template-columns: 1.15fr 0.85fr;
   gap: 1rem;
 }
 
 .auth-hero,
 .auth-card {
-  border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   background: rgba(255, 255, 255, 0.84);
   backdrop-filter: blur(8px);
@@ -445,6 +445,7 @@ a {
 
 .auth-hero {
   padding: 1.4rem;
+  /* Layered gradients keep the login hero bright without clashing with the logo image. */
   background:
     radial-gradient(600px 280px at 15% 10%, rgba(37, 99, 235, 0.24) 0%, transparent 70%),
     linear-gradient(145deg, #ffffff 0%, #eff6ff 100%);
@@ -468,6 +469,56 @@ a {
 .auth-hero p {
   margin: 0.75rem 0 0;
   color: #374151;
+}
+
+.auth-lead {
+  max-width: 54ch;
+  line-height: 1.55;
+}
+
+.auth-values {
+  margin: 0.95rem 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  /* Value chips wrap on small screens to preserve readability. */
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.auth-values li {
+  border-radius: 999px;
+  padding: 0.35rem 0.62rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: #0f172a;
+  background: linear-gradient(140deg, #e0f2fe 0%, #dbeafe 100%);
+  box-shadow: inset 0 0 0 1px rgba(37, 99, 235, 0.18);
+}
+
+.auth-hero-media {
+  margin: 1rem 0 0;
+  border-radius: 14px;
+  overflow: hidden;
+  width: min(100%, 360px);
+  margin-inline: auto;
+  min-height: 240px;
+  display: grid;
+  place-items: center;
+  /* Neutral panel prevents color conflict with transparent/trimmed PNG edges. */
+  background: linear-gradient(155deg, #f8fafc 0%, #eef2ff 55%, #ecfeff 100%);
+}
+
+.auth-hero-media img {
+  display: block;
+  width: auto;
+  max-width: 100%;
+  max-height: 220px;
+  height: auto;
+  /* contain ensures the full crest is visible with no cropping. */
+  object-fit: contain;
+  object-position: center;
 }
 
 .auth-card {
@@ -555,6 +606,14 @@ a {
 
   .auth-wrapper {
     grid-template-columns: 1fr;
+  }
+
+  .auth-hero-media {
+    max-width: 640px;
+  }
+
+  .auth-values {
+    gap: 0.4rem;
   }
 
   .filters-grid.three {
