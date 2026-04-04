@@ -5,7 +5,45 @@
 
 <section class="panel">
     <h3>User Management</h3>
-    <p class="muted">Server-rendered C# MVC list of registered users.</p>
+    <p class="muted">Server-rendered C# MVC user administration with form-based write actions.</p>
+
+    @if (TempData["UsersSuccess"] is string successMessage)
+    {
+        <p class="status-pill active">@successMessage</p>
+    }
+
+    @if (TempData["UsersError"] is string errorMessage)
+    {
+        <p class="form-validation">@errorMessage</p>
+    }
+
+    <article class="panel">
+        <h3>Create User</h3>
+        <form asp-controller="UserManagement" asp-action="Create" method="post" class="filters-grid three">
+            @Html.AntiForgeryToken()
+            <div>
+                <label asp-for="CreateForm.Email"></label>
+                <input asp-for="CreateForm.Email" class="input-select" autocomplete="email" />
+                <span asp-validation-for="CreateForm.Email" class="field-validation"></span>
+            </div>
+            <div>
+                <label asp-for="CreateForm.Password"></label>
+                <input asp-for="CreateForm.Password" class="input-select" autocomplete="new-password" />
+                <span asp-validation-for="CreateForm.Password" class="field-validation"></span>
+            </div>
+            <div>
+                <label asp-for="CreateForm.Role"></label>
+                <select asp-for="CreateForm.Role" class="input-select">
+                    @foreach (var role in Model.AvailableRoles)
+                    {
+                        <option value="@role">@role</option>
+                    }
+                </select>
+                <span asp-validation-for="CreateForm.Role" class="field-validation"></span>
+            </div>
+            <button type="submit" class="btn-primary btn-inline">Create User</button>
+        </form>
+    </article>
 
     @if (!string.IsNullOrWhiteSpace(Model.ErrorMessage))
     {
@@ -25,6 +63,7 @@
                         <th>Email</th>
                         <th>Role</th>
                         <th>Status</th>
+                        <th>Actions</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -44,6 +83,20 @@
                                 <span class="status-pill inactive">Inactive</span>
                             }
                         </td>
+                        <td>
+                            <form asp-controller="UserManagement" asp-action="SetStatus" asp-route-id="@user.Id" method="post" class="inline-form">
+                                @Html.AntiForgeryToken()
+                                <input type="hidden" name="isActive" value="@(!user.IsActive)" />
+                                @if (user.IsActive)
+                                {
+                                    <button type="submit" class="btn-secondary">Deactivate</button>
+                                }
+                                else
+                                {
+                                    <button type="submit" class="btn-primary">Activate</button>
+                                }
+                            </form>
+                        </td>
                     </tr>
                 }
                 </tbody>
@@ -51,3 +104,7 @@
         </div>
     }
 </section>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

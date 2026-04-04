@@ -5,7 +5,71 @@
 
 <section class="panel">
     <h3>Schedule Management</h3>
-    <p class="muted">Server-rendered C# MVC view of class schedules.</p>
+    <p class="muted">Server-rendered C# MVC schedule CRUD operations.</p>
+
+    @if (TempData["SchedulesSuccess"] is string successMessage)
+    {
+        <p class="status-pill active">@successMessage</p>
+    }
+
+    @if (TempData["SchedulesError"] is string errorMessage)
+    {
+        <p class="form-validation">@errorMessage</p>
+    }
+
+    <article class="panel">
+        <h3>Create Schedule</h3>
+        <form asp-controller="ScheduleManagement" asp-action="Create" method="post" class="filters-grid three">
+            @Html.AntiForgeryToken()
+            <div asp-validation-summary="ModelOnly" class="form-validation"></div>
+
+            <div>
+                <label asp-for="CreateForm.SectionId"></label>
+                <input asp-for="CreateForm.SectionId" class="input-select" type="number" min="1" />
+                <span asp-validation-for="CreateForm.SectionId" class="field-validation"></span>
+            </div>
+            <div>
+                <label asp-for="CreateForm.SubjectId"></label>
+                <input asp-for="CreateForm.SubjectId" class="input-select" type="number" min="1" />
+                <span asp-validation-for="CreateForm.SubjectId" class="field-validation"></span>
+            </div>
+            <div>
+                <label asp-for="CreateForm.DayOfWeek"></label>
+                <select asp-for="CreateForm.DayOfWeek" class="input-select">
+                    <option value="0">Sunday</option>
+                    <option value="1">Monday</option>
+                    <option value="2">Tuesday</option>
+                    <option value="3">Wednesday</option>
+                    <option value="4">Thursday</option>
+                    <option value="5">Friday</option>
+                    <option value="6">Saturday</option>
+                </select>
+                <span asp-validation-for="CreateForm.DayOfWeek" class="field-validation"></span>
+            </div>
+            <div>
+                <label asp-for="CreateForm.StartTime"></label>
+                <input asp-for="CreateForm.StartTime" class="input-select" type="time" />
+                <span asp-validation-for="CreateForm.StartTime" class="field-validation"></span>
+            </div>
+            <div>
+                <label asp-for="CreateForm.EndTime"></label>
+                <input asp-for="CreateForm.EndTime" class="input-select" type="time" />
+                <span asp-validation-for="CreateForm.EndTime" class="field-validation"></span>
+            </div>
+            <div>
+                <label asp-for="CreateForm.EffectiveFrom"></label>
+                <input asp-for="CreateForm.EffectiveFrom" class="input-select" type="date" />
+                <span asp-validation-for="CreateForm.EffectiveFrom" class="field-validation"></span>
+            </div>
+            <div>
+                <label asp-for="CreateForm.EffectiveTo"></label>
+                <input asp-for="CreateForm.EffectiveTo" class="input-select" type="date" />
+                <span asp-validation-for="CreateForm.EffectiveTo" class="field-validation"></span>
+            </div>
+
+            <button type="submit" class="btn-primary btn-inline">Create Schedule</button>
+        </form>
+    </article>
 
     @if (!string.IsNullOrWhiteSpace(Model.ErrorMessage))
     {
@@ -27,6 +91,7 @@
                         <th>Day</th>
                         <th>Time</th>
                         <th>Owner</th>
+                        <th>Actions</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -48,6 +113,33 @@
                                 <span class="muted">Shared</span>
                             }
                         </td>
+                        <td>
+                            <div class="action-stack">
+                                <form asp-controller="ScheduleManagement" asp-action="Update" asp-route-id="@item.Id" method="post" class="stack-form">
+                                    @Html.AntiForgeryToken()
+                                    <input type="number" name="UpdateForm.SubjectId" min="1" class="input-select compact-input" placeholder="Subject ID" />
+                                    <select name="UpdateForm.DayOfWeek" class="input-select compact-input">
+                                        <option value="0">Sunday</option>
+                                        <option value="1">Monday</option>
+                                        <option value="2">Tuesday</option>
+                                        <option value="3">Wednesday</option>
+                                        <option value="4">Thursday</option>
+                                        <option value="5">Friday</option>
+                                        <option value="6">Saturday</option>
+                                    </select>
+                                    <input type="time" name="UpdateForm.StartTime" class="input-select compact-input" />
+                                    <input type="time" name="UpdateForm.EndTime" class="input-select compact-input" />
+                                    <input type="date" name="UpdateForm.EffectiveFrom" class="input-select compact-input" />
+                                    <input type="date" name="UpdateForm.EffectiveTo" class="input-select compact-input" />
+                                    <button type="submit" class="btn-secondary">Save</button>
+                                </form>
+
+                                <form asp-controller="ScheduleManagement" asp-action="Delete" asp-route-id="@item.Id" method="post" class="inline-form">
+                                    @Html.AntiForgeryToken()
+                                    <button type="submit" class="btn-danger">Delete</button>
+                                </form>
+                            </div>
+                        </td>
                     </tr>
                 }
                 </tbody>
@@ -55,3 +147,7 @@
         </div>
     }
 </section>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

@@ -5,7 +5,12 @@
 
 <section class="panel">
     <h3>Settings</h3>
-    <p class="muted">Account profile details from current sign-in identity.</p>
+    <p class="muted">Manage your profile and password using server-side MVC forms.</p>
+
+    @if (TempData["SettingsSuccess"] is string successMessage)
+    {
+        <p class="status-pill active">@successMessage</p>
+    }
 
     <div class="info-grid">
         <article class="info-card">
@@ -26,5 +31,55 @@
         </article>
     </div>
 
-    <p class="footer-note">Password change UI is deferred in this frontend-only slice because the backend API contract for changing password is not currently exposed in this project.</p>
+    <div class="grid-2">
+        <article class="panel">
+            <h3>Update Profile</h3>
+            <form asp-controller="Settings" asp-action="UpdateProfile" method="post" class="auth-form">
+                @Html.AntiForgeryToken()
+                <div asp-validation-summary="ModelOnly" class="form-validation"></div>
+
+                <label asp-for="ProfileForm.FirstName"></label>
+                <input asp-for="ProfileForm.FirstName" class="input-select" autocomplete="given-name" />
+                <span asp-validation-for="ProfileForm.FirstName" class="field-validation"></span>
+
+                <label asp-for="ProfileForm.MiddleName"></label>
+                <input asp-for="ProfileForm.MiddleName" class="input-select" autocomplete="additional-name" />
+                <span asp-validation-for="ProfileForm.MiddleName" class="field-validation"></span>
+
+                <label asp-for="ProfileForm.LastName"></label>
+                <input asp-for="ProfileForm.LastName" class="input-select" autocomplete="family-name" />
+                <span asp-validation-for="ProfileForm.LastName" class="field-validation"></span>
+
+                <button type="submit" class="btn-primary">Save Profile</button>
+            </form>
+        </article>
+
+        <article class="panel">
+            <h3>Change Password</h3>
+            <form asp-controller="Settings" asp-action="ChangePassword" method="post" class="auth-form">
+                @Html.AntiForgeryToken()
+                <div asp-validation-summary="ModelOnly" class="form-validation"></div>
+
+                <label asp-for="PasswordForm.CurrentPassword"></label>
+                <input asp-for="PasswordForm.CurrentPassword" class="input-select" autocomplete="current-password" />
+                <span asp-validation-for="PasswordForm.CurrentPassword" class="field-validation"></span>
+
+                <label asp-for="PasswordForm.NewPassword"></label>
+                <input asp-for="PasswordForm.NewPassword" class="input-select" autocomplete="new-password" />
+                <span asp-validation-for="PasswordForm.NewPassword" class="field-validation"></span>
+
+                <label asp-for="PasswordForm.ConfirmPassword"></label>
+                <input asp-for="PasswordForm.ConfirmPassword" class="input-select" autocomplete="new-password" />
+                <span asp-validation-for="PasswordForm.ConfirmPassword" class="field-validation"></span>
+
+                <button type="submit" class="btn-primary">Change Password</button>
+            </form>
+        </article>
+    </div>
+
+    <p class="footer-note">Changes are validated on the server, protected by anti-forgery tokens, and completed with Post-Redirect-Get flow.</p>
 </section>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

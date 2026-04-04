@@ -25,7 +25,7 @@ public interface IEnrollmentService
     Task<ApiResponse<EnrollmentDto>> ReassignSectionAsync(int enrollmentId, ReassignSectionRequest request, int adminId);
 
     // Returns current enrollment count and capacity status for a section
-    Task<SectionCapacityDto> GetSectionCapacityAsync(int sectionId);
+    Task<SectionCapacityDto?> GetSectionCapacityAsync(int sectionId);
 
     // Gets sections matching student's course and year level with capacity info
     Task<List<SectionCapacityDto>> GetAvailableSectionsForStudentAsync(int courseId, int yearLevel, int academicYearId);

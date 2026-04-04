@@ -1,0 +1,349 @@
+@using System
+@model Attendance_Management_System.Backend.ViewModels.Enrollments.EnrollmentsIndexViewModel
+@{
+    ViewData["Title"] = "Enrollments";
+}
+
+<section class="panel">
+    <h3>Enrollments</h3>
+    <p class="muted">Server-rendered enrollment workflows for student requests and admin approvals.</p>
+
+    @if (TempData["EnrollmentsSuccess"] is string successMessage)
+    {
+        <p class="status-pill active">@successMessage</p>
+    }
+
+    @if (TempData["EnrollmentsError"] is string tempErrorMessage)
+    {
+        <p class="form-validation">@tempErrorMessage</p>
+    }
+
+    @if (!string.IsNullOrWhiteSpace(Model.ErrorMessage))
+    {
+        <p class="form-validation">@Model.ErrorMessage</p>
+    }
+
+    @if (Model.IsAdmin)
+    {
+        <article class="panel">
+            <h3>Admin Moderation</h3>
+            <p class="muted">Review pending requests, approve or reject them, and reassign sections when needed.</p>
+
+            <section class="grid-4 compact-gap">
+                <article class="stat-card">
+                    <p class="stat-title">Total</p>
+                    <p class="stat-value">@Model.TotalCount</p>
+                </article>
+                <article class="stat-card">
+                    <p class="stat-title">Pending</p>
+                    <p class="stat-value warning">@Model.PendingCount</p>
+                </article>
+                <article class="stat-card">
+                    <p class="stat-title">Approved</p>
+                    <p class="stat-value success">@Model.ApprovedCount</p>
+                </article>
+                <article class="stat-card">
+                    <p class="stat-title">Rejected</p>
+                    <p class="stat-value danger">@Model.RejectedCount</p>
+                </article>
+            </section>
+
+            <form method="get" class="filters-grid three">
+                <div>
+                    <label for="status">Status</label>
+                    <select id="status" name="status" class="input-select">
+                        <option value="" selected="@string.IsNullOrWhiteSpace(Model.SelectedStatus)">All statuses</option>
+                        <option value="pending" selected="@(Model.SelectedStatus == "pending")">Pending</option>
+                        <option value="approved" selected="@(Model.SelectedStatus == "approved")">Approved</option>
+                        <option value="rejected" selected="@(Model.SelectedStatus == "rejected")">Rejected</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="academicYearId">Academic Period</label>
+                    <select id="academicYearId" name="academicYearId" class="input-select">
+                        <option value="" selected="@(Model.SelectedAcademicYearId is null)">All periods</option>
+                        @foreach (var period in Model.AcademicYears)
+                        {
+                            <option value="@period.Id" selected="@(Model.SelectedAcademicYearId == period.Id)">@period.Label
+                            </option>
+                        }
+                    </select>
+                </div>
+                <div>
+                    <label for="pageSize">Page Size</label>
+                    <input id="pageSize" name="pageSize" class="input-select" type="number" min="1" max="100"
+                           value="@Model.PageSize" />
+                </div>
+
+                <button type="submit" class="btn-primary btn-inline">Apply Filters</button>
+            </form>
+
+            @if (!Model.Enrollments.Any())
+            {
+                <p class="footer-note">No enrollments match the selected filters.</p>
+            }
+            else
+            {
+                <div class="table-wrap">
+                    <table class="app-table">
+                        <thead>
+                            <tr>
+                                <th>Student</th>
+                                <th>Section</th>
+                                <th>Academic Period</th>
+                                <th>Status</th>
+                                <th>Requested</th>
+                                <th>Processed</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var enrollment in Model.Enrollments)
+                            {
+                                <tr>
+                                    <td>
+                                        <strong>@enrollment.StudentName</strong><br />
+                                        <span class="muted">@enrollment.StudentNumber</span>
+                                    </td>
+                                    <td>@enrollment.SectionName</td>
+                                    <td>@enrollment.AcademicYearLabel</td>
+                                    <td>
+                                        @if (enrollment.Status.Equals("approved", StringComparison.OrdinalIgnoreCase))
+                                        {
+                                            <span class="status-pill active">Approved</span>
+                                        }
+                                        else if (enrollment.Status.Equals("rejected", StringComparison.OrdinalIgnoreCase))
+                                        {
+                                            <span class="status-pill inactive">Rejected</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="role-pill">Pending</span>
+                                        }
+
+                                        @if (!string.IsNullOrWhiteSpace(enrollment.RejectionReason))
+                                        {
+                                            <p class="footer-note">Reason: @enrollment.RejectionReason</p>
+                                        }
+
+                                        @if (enrollment.HasWarning && !string.IsNullOrWhiteSpace(enrollment.WarningMessage))
+                                        {
+                                            <p class="form-validation">@enrollment.WarningMessage</p>
+                                        }
+                                    </td>
+                                    <td>@enrollment.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</td>
+                                    <td>
+                                        @if (enrollment.ProcessedAt.HasValue)
+                                        {
+                                            <span>@enrollment.ProcessedAt.Value.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</span><br />
+                                            <span class="muted">@enrollment.ProcessorName</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="muted">Not processed</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        <div class="action-stack">
+                                            @if (enrollment.IsPending)
+                                            {
+                                                <form asp-controller="Enrollments" asp-action="Approve" asp-route-id="@enrollment.Id"
+                                                      method="post" class="inline-form">
+                                                    @Html.AntiForgeryToken()
+                                                    <input type="hidden" name="status" value="@Model.SelectedStatus" />
+                                                    <input type="hidden" name="academicYearId" value="@Model.SelectedAcademicYearId" />
+                                                    <input type="hidden" name="page" value="@Model.Page" />
+                                                    <button type="submit" class="btn-primary">Approve</button>
+                                                </form>
+
+                                                <form asp-controller="Enrollments" asp-action="Reject" asp-route-id="@enrollment.Id"
+                                                      method="post" class="stack-form">
+                                                    @Html.AntiForgeryToken()
+                                                    <input type="hidden" name="status" value="@Model.SelectedStatus" />
+                                                    <input type="hidden" name="academicYearId" value="@Model.SelectedAcademicYearId" />
+                                                    <input type="hidden" name="page" value="@Model.Page" />
+                                                    <input type="text" name="RejectForm.RejectionReason"
+                                                           class="input-select compact-input" placeholder="Rejection reason" />
+                                                    <button type="submit" class="btn-danger">Reject</button>
+                                                </form>
+                                            }
+
+                                            @if (enrollment.CanReassign)
+                                            {
+                                                <form asp-controller="Enrollments" asp-action="Reassign" asp-route-id="@enrollment.Id"
+                                                      method="post" class="stack-form">
+                                                    @Html.AntiForgeryToken()
+                                                    <input type="hidden" name="status" value="@Model.SelectedStatus" />
+                                                    <input type="hidden" name="academicYearId" value="@Model.SelectedAcademicYearId" />
+                                                    <input type="hidden" name="page" value="@Model.Page" />
+                                                    <select name="ReassignForm.NewSectionId" class="input-select compact-input">
+                                                        @foreach (var sectionItem in Model.Sections)
+                                                        {
+                                                            <option value="@sectionItem.Id"
+                                                                    selected="@(sectionItem.Id == enrollment.SectionId)">@sectionItem.Label
+                                                            </option>
+                                                        }
+                                                    </select>
+                                                    <input type="text" name="ReassignForm.Reason" class="input-select compact-input"
+                                                           placeholder="Reason (optional)" />
+                                                    <button type="submit" class="btn-secondary">Reassign</button>
+                                                </form>
+                                            }
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="filters-grid">
+                    @if (Model.HasPreviousPage)
+                    {
+                        <a class="btn-secondary" asp-controller="Enrollments" asp-action="Index"
+                           asp-route-status="@Model.SelectedStatus" asp-route-academicYearId="@Model.SelectedAcademicYearId"
+                           asp-route-page="@(Model.Page - 1)" asp-route-pageSize="@Model.PageSize">Previous</a>
+                    }
+                    else
+                    {
+                        <span></span>
+                    }
+
+                    <span class="footer-note">Page @Model.Page</span>
+
+                    @if (Model.HasNextPage)
+                    {
+                        <a class="btn-secondary" asp-controller="Enrollments" asp-action="Index"
+                           asp-route-status="@Model.SelectedStatus" asp-route-academicYearId="@Model.SelectedAcademicYearId"
+                           asp-route-page="@(Model.Page + 1)" asp-route-pageSize="@Model.PageSize">Next</a>
+                    }
+                </div>
+            }
+        </article>
+    }
+
+    @if (Model.IsStudent)
+    {
+        <article class="panel">
+            <h3>Student Enrollment Request</h3>
+
+            @if (Model.StudentProfile is null)
+            {
+                <p class="form-validation">Your student profile is not available. Contact an administrator.</p>
+            }
+            else
+            {
+                <section class="info-grid">
+                    <article class="info-card">
+                        <span class="muted">Student Number</span>
+                        <strong>@Model.StudentProfile.StudentNumber</strong>
+                    </article>
+                    <article class="info-card">
+                        <span class="muted">Student Name</span>
+                        <strong>@Model.StudentProfile.FullName</strong>
+                    </article>
+                    <article class="info-card">
+                        <span class="muted">Year Level</span>
+                        <strong>@Model.StudentProfile.YearLevel</strong>
+                    </article>
+                    <article class="info-card">
+                        <span class="muted">Course</span>
+                        <strong>@Model.StudentProfile.CourseText</strong>
+                    </article>
+                </section>
+
+                <form asp-controller="Enrollments" asp-action="Create" method="post" class="filters-grid three">
+                    @Html.AntiForgeryToken()
+                    <div asp-validation-summary="ModelOnly" class="form-validation"></div>
+
+                    <div>
+                        <label asp-for="CreateForm.CourseId"></label>
+                        @if (Model.StudentProfile.CourseId.HasValue)
+                        {
+                            <input class="input-select" value="@Model.StudentProfile.CourseText" disabled />
+                            <input asp-for="CreateForm.CourseId" type="hidden" />
+                        }
+                        else
+                        {
+                            <select asp-for="CreateForm.CourseId" class="input-select">
+                                <option value="">Choose a course</option>
+                                @foreach (var courseItem in Model.Courses)
+                                {
+                                    <option value="@courseItem.Id">@courseItem.Label</option>
+                                }
+                            </select>
+                        }
+                        <span asp-validation-for="CreateForm.CourseId" class="field-validation"></span>
+                    </div>
+
+                    <div>
+                        <label asp-for="CreateForm.AcademicYearId"></label>
+                        <select asp-for="CreateForm.AcademicYearId" class="input-select">
+                            <option value="">Choose academic period</option>
+                            @foreach (var period in Model.AcademicYears)
+                            {
+                                <option value="@period.Id">@period.Label</option>
+                            }
+                        </select>
+                        <span asp-validation-for="CreateForm.AcademicYearId" class="field-validation"></span>
+                    </div>
+
+                    <button type="submit" class="btn-primary btn-inline">Submit Enrollment Request</button>
+                </form>
+
+                @if (!Model.AvailableSections.Any())
+                {
+                    <p class="footer-note">No matching sections are currently available for your course and year level.</p>
+                }
+                else
+                {
+                    <h3>Available Sections</h3>
+                    <div class="table-wrap">
+                        <table class="app-table">
+                            <thead>
+                                <tr>
+                                    <th>Section</th>
+                                    <th>Year</th>
+                                    <th>Current Enrollment</th>
+                                    <th>Available Slots</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var sectionInfo in Model.AvailableSections)
+                                {
+                                    <tr>
+                                        <td>@sectionInfo.SectionName</td>
+                                        <td>@sectionInfo.YearLevel</td>
+                                        <td>@sectionInfo.CurrentEnrollment</td>
+                                        <td>@sectionInfo.AvailableSlots</td>
+                                        <td>
+                                            @if (sectionInfo.Status ==
+                                                                        Attendance_Management_System.Backend.Enums.SectionCapacityStatus.Available)
+                                            {
+                                                <span class="status-pill active">@sectionInfo.StatusText</span>
+                                            }
+                                            else if (sectionInfo.Status ==
+                            Attendance_Management_System.Backend.Enums.SectionCapacityStatus.AtWarning)
+                                            {
+                                                <span class="role-pill">@sectionInfo.StatusText</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="status-pill inactive">@sectionInfo.StatusText</span>
+                                            }
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            }
+        </article>
+    }
+</section>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

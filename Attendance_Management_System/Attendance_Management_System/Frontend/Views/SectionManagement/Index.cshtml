@@ -5,7 +5,58 @@
 
 <section class="panel">
     <h3>Section Management</h3>
-    <p class="muted">Server-rendered C# MVC list of available sections.</p>
+    <p class="muted">Server-rendered C# MVC section CRUD and teacher assignment workflows.</p>
+
+    @if (TempData["SectionsSuccess"] is string successMessage)
+    {
+        <p class="status-pill active">@successMessage</p>
+    }
+
+    @if (TempData["SectionsError"] is string errorMessage)
+    {
+        <p class="form-validation">@errorMessage</p>
+    }
+
+    <article class="panel">
+        <h3>Create Section</h3>
+        <form asp-controller="SectionManagement" asp-action="Create" method="post" class="filters-grid three">
+            @Html.AntiForgeryToken()
+            <div asp-validation-summary="ModelOnly" class="form-validation"></div>
+
+            <div>
+                <label asp-for="CreateForm.Name"></label>
+                <input asp-for="CreateForm.Name" class="input-select" />
+                <span asp-validation-for="CreateForm.Name" class="field-validation"></span>
+            </div>
+            <div>
+                <label asp-for="CreateForm.YearLevel"></label>
+                <input asp-for="CreateForm.YearLevel" class="input-select" type="number" min="1" />
+                <span asp-validation-for="CreateForm.YearLevel" class="field-validation"></span>
+            </div>
+            <div>
+                <label asp-for="CreateForm.AcademicYearId"></label>
+                <input asp-for="CreateForm.AcademicYearId" class="input-select" type="number" min="1" />
+                <span asp-validation-for="CreateForm.AcademicYearId" class="field-validation"></span>
+            </div>
+            <div>
+                <label asp-for="CreateForm.CourseId"></label>
+                <input asp-for="CreateForm.CourseId" class="input-select" type="number" min="1" />
+                <span asp-validation-for="CreateForm.CourseId" class="field-validation"></span>
+            </div>
+            <div>
+                <label asp-for="CreateForm.SubjectId"></label>
+                <input asp-for="CreateForm.SubjectId" class="input-select" type="number" min="1" />
+                <span asp-validation-for="CreateForm.SubjectId" class="field-validation"></span>
+            </div>
+            <div>
+                <label asp-for="CreateForm.ClassroomId"></label>
+                <input asp-for="CreateForm.ClassroomId" class="input-select" type="number" min="1" />
+                <span asp-validation-for="CreateForm.ClassroomId" class="field-validation"></span>
+            </div>
+
+            <button type="submit" class="btn-primary btn-inline">Create Section</button>
+        </form>
+    </article>
 
     @if (!string.IsNullOrWhiteSpace(Model.ErrorMessage))
     {
@@ -27,6 +78,7 @@
                         <th>Subject</th>
                         <th>Classroom</th>
                         <th>Enrolled</th>
+                        <th>Actions</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -39,6 +91,33 @@
                         <td>@item.SubjectName</td>
                         <td>@item.ClassroomName</td>
                         <td>@item.CurrentEnrollmentCount</td>
+                        <td>
+                            <div class="action-stack">
+                                <form asp-controller="SectionManagement" asp-action="Update" asp-route-id="@item.Id" method="post" class="stack-form">
+                                    @Html.AntiForgeryToken()
+                                    <input type="text" name="UpdateForm.Name" value="@item.Name" class="input-select compact-input" placeholder="Name" />
+                                    <input type="number" name="UpdateForm.YearLevel" value="@item.YearLevel" min="1" class="input-select compact-input" placeholder="Year" />
+                                    <button type="submit" class="btn-secondary">Save</button>
+                                </form>
+
+                                <form asp-controller="SectionManagement" asp-action="AssignTeacher" asp-route-id="@item.Id" method="post" class="stack-form">
+                                    @Html.AntiForgeryToken()
+                                    <input type="number" name="AssignForm.TeacherId" min="1" class="input-select compact-input" placeholder="Teacher ID to assign" />
+                                    <button type="submit" class="btn-secondary">Assign Teacher</button>
+                                </form>
+
+                                <form asp-controller="SectionManagement" asp-action="RemoveTeacher" asp-route-id="@item.Id" method="post" class="stack-form">
+                                    @Html.AntiForgeryToken()
+                                    <input type="number" name="teacherId" min="1" class="input-select compact-input" placeholder="Teacher ID to remove" />
+                                    <button type="submit" class="btn-secondary">Remove Teacher</button>
+                                </form>
+
+                                <form asp-controller="SectionManagement" asp-action="Delete" asp-route-id="@item.Id" method="post" class="inline-form">
+                                    @Html.AntiForgeryToken()
+                                    <button type="submit" class="btn-danger">Delete</button>
+                                </form>
+                            </div>
+                        </td>
                     </tr>
                 }
                 </tbody>
@@ -46,3 +125,7 @@
         </div>
     }
 </section>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

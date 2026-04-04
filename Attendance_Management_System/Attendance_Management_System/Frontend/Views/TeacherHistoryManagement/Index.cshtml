@@ -1,0 +1,112 @@
+@model Attendance_Management_System.Backend.ViewModels.TeacherHistory.TeacherHistoryIndexViewModel
+@{
+    ViewData["Title"] = "Teaching History";
+}
+
+<section class="panel">
+    <h3>Teaching History</h3>
+    <p class="muted">Review attendance records for your assigned schedules by date.</p>
+
+    <form method="get" class="filters-grid three">
+        <div>
+            <label for="scheduleId">Schedule</label>
+            <select id="scheduleId" name="scheduleId" class="input-select">
+                <option value="">Choose schedule</option>
+                @foreach (var scheduleItem in Model.Schedules)
+                {
+                    <option value="@scheduleItem.Id" selected="@(Model.SelectedScheduleId == scheduleItem.Id)">
+                        @scheduleItem.Label</option>
+                    }
+                </select>
+            </div>
+            <div>
+                <label for="date">Date</label>
+                <input id="date" name="date" type="date" class="input-select"
+                       value="@Model.SelectedDate.ToString("yyyy-MM-dd")" />
+            </div>
+
+            <button type="submit" class="btn-primary btn-inline">Load History</button>
+        </form>
+
+        @if (!string.IsNullOrWhiteSpace(Model.ErrorMessage))
+        {
+            <p class="form-validation">@Model.ErrorMessage</p>
+        }
+        else if (Model.SelectedScheduleId is null || Model.ScheduleDetails is null)
+        {
+            <p class="footer-note">Select a schedule and date to review attendance history.</p>
+        }
+        else
+        {
+            <section class="info-grid">
+                <article class="info-card">
+                    <span class="muted">Subject</span>
+                    <strong>@Model.ScheduleDetails.SubjectName</strong>
+                </article>
+                <article class="info-card">
+                    <span class="muted">Section</span>
+                    <strong>@Model.ScheduleDetails.Section</strong>
+                </article>
+                <article class="info-card">
+                    <span class="muted">Classroom</span>
+                    <strong>@Model.ScheduleDetails.Classroom</strong>
+                </article>
+                <article class="info-card">
+                    <span class="muted">Session</span>
+                    <strong>@Model.ScheduleDetails.Day @Model.ScheduleDetails.StartTime-@Model.ScheduleDetails.EndTime</strong>
+                </article>
+            </section>
+
+            <section class="grid-4 compact-gap">
+                <article class="stat-card">
+                    <p class="stat-title">Total Students</p>
+                    <p class="stat-value">@Model.TotalStudents</p>
+                </article>
+                <article class="stat-card">
+                    <p class="stat-title">Present</p>
+                    <p class="stat-value success">@Model.PresentCount</p>
+                </article>
+                <article class="stat-card">
+                    <p class="stat-title">Late</p>
+                    <p class="stat-value warning">@Model.LateCount</p>
+                </article>
+                <article class="stat-card">
+                    <p class="stat-title">Absent</p>
+                    <p class="stat-value danger">@Model.AbsentCount</p>
+                </article>
+            </section>
+
+            @if (!Model.Records.Any())
+            {
+                <p class="footer-note">No attendance records found for the selected schedule and date.</p>
+            }
+            else
+            {
+                <div class="table-wrap">
+                    <table class="app-table">
+                        <thead>
+                            <tr>
+                                <th>Student ID</th>
+                                <th>Student Name</th>
+                                <th>Time In</th>
+                                <th>Time Out</th>
+                                <th>Remarks</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var record in Model.Records)
+                            {
+                                <tr>
+                                    <td>@record.StudentId</td>
+                                    <td>@record.StudentName</td>
+                                    <td>@record.TimeInText</td>
+                                    <td>@record.TimeOutText</td>
+                                    <td>@record.Remarks</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        }
+    </section>

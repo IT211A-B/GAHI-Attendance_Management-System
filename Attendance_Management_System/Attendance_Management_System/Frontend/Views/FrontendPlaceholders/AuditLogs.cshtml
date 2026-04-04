@@ -1,0 +1,58 @@
+@model Attendance_Management_System.Backend.ViewModels.Frontend.AuditLogsPageViewModel
+@{
+    ViewData["Title"] = "Audit Logs";
+}
+
+<section class="panel">
+    <h3>Audit Logs</h3>
+    <p class="muted">Recent enrollment and attendance events captured from backend records.</p>
+
+    @if (!Model.Events.Any())
+    {
+        <p class="footer-note">No audit events found yet.</p>
+    }
+    else
+    {
+        <div class="table-wrap">
+            <table class="app-table">
+                <thead>
+                    <tr>
+                        <th>Timestamp</th>
+                        <th>Category</th>
+                        <th>Actor</th>
+                        <th>Status</th>
+                        <th>Description</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var auditEvent in Model.Events)
+                    {
+                        <tr>
+                            <td>@auditEvent.Timestamp.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss")</td>
+                            <td>@auditEvent.Category</td>
+                            <td>@auditEvent.Actor</td>
+                            <td>
+                                @if (auditEvent.Status.Equals("approved", StringComparison.OrdinalIgnoreCase) ||
+                                                                     auditEvent.Status.Equals("present", StringComparison.OrdinalIgnoreCase) ||
+                                                                     auditEvent.Status.Equals("active", StringComparison.OrdinalIgnoreCase))
+                                {
+                                    <span class="status-pill active">@auditEvent.Status</span>
+                                }
+                                else if (auditEvent.Status.Equals("rejected", StringComparison.OrdinalIgnoreCase) ||
+                                          auditEvent.Status.Equals("absent", StringComparison.OrdinalIgnoreCase))
+                                {
+                                    <span class="status-pill inactive">@auditEvent.Status</span>
+                                }
+                                else
+                                {
+                                    <span class="role-pill">@auditEvent.Status</span>
+                                }
+                            </td>
+                            <td>@auditEvent.Description</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</section>

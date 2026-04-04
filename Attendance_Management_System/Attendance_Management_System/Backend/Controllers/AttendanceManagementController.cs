@@ -1,5 +1,7 @@
 using System.Security.Claims;
+using Attendance_Management_System.Backend.DTOs.Requests;
 using Attendance_Management_System.Backend.Interfaces.Services;
+using Attendance_Management_System.Backend.ValueObjects;
 using Attendance_Management_System.Backend.ViewModels.Attendance;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -13,15 +15,18 @@ public class AttendanceManagementController : Controller
     private readonly ISectionsService _sectionsService;
     private readonly ISchedulesService _schedulesService;
     private readonly IAttendanceService _attendanceService;
+    private readonly ITeachersService _teachersService;
 
     public AttendanceManagementController(
         ISectionsService sectionsService,
         ISchedulesService schedulesService,
-        IAttendanceService attendanceService)
+        IAttendanceService attendanceService,
+        ITeachersService teachersService)
     {
         _sectionsService = sectionsService;
         _schedulesService = schedulesService;
         _attendanceService = attendanceService;
+        _teachersService = teachersService;
     }
 
     [HttpGet("")]
@@ -32,7 +37,13 @@ public class AttendanceManagementController : Controller
         {
             SelectedSectionId = sectionId,
             SelectedScheduleId = scheduleId,
-            SelectedDate = selectedDate
+            SelectedDate = selectedDate,
+            MarkForm = new MarkAttendanceFormViewModel
+            {
+                SectionId = sectionId ?? 0,
+                ScheduleId = scheduleId ?? 0,
+                Date = selectedDate
+            }
         };
 
         var sectionsResult = await _sectionsService.GetAllSectionsAsync();
@@ -92,6 +103,7 @@ public class AttendanceManagementController : Controller
             .OrderBy(r => r.StudentName)
             .Select(r => new AttendanceRecordItemViewModel
             {
+                StudentId = r.StudentId,
                 StudentName = string.IsNullOrWhiteSpace(r.StudentName) ? "-" : r.StudentName,
                 SubjectName = string.IsNullOrWhiteSpace(r.SubjectName) ? "-" : r.SubjectName,
                 TimeIn = r.TimeIn?.ToString("HH:mm") ?? "-",
@@ -102,5 +114,104 @@ public class AttendanceManagementController : Controller
             .ToList();
 
         return View(model);
+    }
+
+    [HttpPost("mark")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> Mark([Bind(Prefix = "MarkForm")] MarkAttendanceFormViewModel form)
+    {
+        var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        var role = User.FindFirstValue(ClaimTypes.Role) ?? string.Empty;
+
+        if (!int.TryParse(userIdClaim, out var userId) || string.IsNullOrWhiteSpace(role))
+        {
+            return Challenge();
+        }
+
+        if (!ModelState.IsValid)
+        {
+            TempData["AttendanceError"] = "Please provide valid attendance details.";
+            return RedirectToAction(nameof(Index), new
+            {
+                sectionId = form.SectionId,
+                scheduleId = form.ScheduleId,
+                date = form.Date.ToString("yyyy-MM-dd")
+            });
+        }
+
+        var contextResult = await BuildTeacherContextAsync(userId, role);
+        if (!contextResult.Success)
+        {
+            TempData["AttendanceError"] = contextResult.Error ?? "Unable to identify teacher context.";
+            return RedirectToAction(nameof(Index), new
+            {
+                sectionId = form.SectionId,
+                scheduleId = form.ScheduleId,
+                date = form.Date.ToString("yyyy-MM-dd")
+            });
+        }
+
+        var result = await _attendanceService.MarkAttendanceAsync(new MarkAttendanceRequest
+        {
+            SectionId = form.SectionId,
+            ScheduleId = form.ScheduleId,
+            StudentId = form.StudentId,
+            Date = form.Date,
+            TimeIn = form.TimeIn,
+            Remarks = NormalizeOptional(form.Remarks)
+        }, contextResult.Context);
+
+        if (!result.Success)
+        {
+            TempData["AttendanceError"] = result.Error?.Message ?? "Unable to mark attendance right now.";
+            return RedirectToAction(nameof(Index), new
+            {
+                sectionId = form.SectionId,
+                scheduleId = form.ScheduleId,
+                date = form.Date.ToString("yyyy-MM-dd")
+            });
+        }
+
+        TempData["AttendanceSuccess"] = "Attendance marked successfully.";
+        return RedirectToAction(nameof(Index), new
+        {
+            sectionId = form.SectionId,
+            scheduleId = form.ScheduleId,
+            date = form.Date.ToString("yyyy-MM-dd")
+        });
+    }
+
+    private async Task<(bool Success, TeacherContext Context, string? Error)> BuildTeacherContextAsync(int userId, string role)
+    {
+        var isAdmin = role == "admin";
+        if (isAdmin)
+        {
+            return (true, new TeacherContext { UserId = userId, TeacherId = null, IsAdmin = true }, null);
+        }
+
+        var teachersResult = await _teachersService.GetAllTeachersAsync();
+        if (!teachersResult.Success || teachersResult.Data is null)
+        {
+            return (false, default, "Unable to load teacher profile.");
+        }
+
+        var teacherId = teachersResult.Data.FirstOrDefault(t => t.UserId == userId)?.Id;
+        if (!teacherId.HasValue)
+        {
+            return (false, default, "Teacher profile not found for the current account.");
+        }
+
+        return (true, new TeacherContext
+        {
+            UserId = userId,
+            TeacherId = teacherId.Value,
+            IsAdmin = false
+        }, null);
+    }
+
+    private static string? NormalizeOptional(string? value)
+    {
+        var trimmed = value?.Trim();
+        return string.IsNullOrWhiteSpace(trimmed) ? null : trimmed;
     }
 }

@@ -6,7 +6,6 @@ using Attendance_Management_System.Backend.Persistence;
 using Attendance_Management_System.Backend.Repositories;
 using Attendance_Management_System.Backend.Services;
 using Attendance_Management_System.Backend.Security;
-using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -60,33 +59,6 @@ public static class DependencyInjection
             options.Cookie.HttpOnly = cookieSettings.HttpOnly;
             options.Cookie.SameSite = ParseSameSite(cookieSettings.SameSite);
             options.Cookie.SecurePolicy = ParseSecurePolicy(cookieSettings.SecurePolicy);
-
-            // Return 401/403 for API endpoints instead of redirecting to login/access denied pages
-            options.Events = new CookieAuthenticationEvents
-            {
-                OnRedirectToLogin = context =>
-                {
-                    if (IsApiRequest(context.Request.Path))
-                    {
-                        context.Response.StatusCode = StatusCodes.Status401Unauthorized;
-                        return Task.CompletedTask;
-                    }
-
-                    context.Response.Redirect(context.RedirectUri);
-                    return Task.CompletedTask;
-                },
-                OnRedirectToAccessDenied = context =>
-                {
-                    if (IsApiRequest(context.Request.Path))
-                    {
-                        context.Response.StatusCode = StatusCodes.Status403Forbidden;
-                        return Task.CompletedTask;
-                    }
-
-                    context.Response.Redirect(context.RedirectUri);
-                    return Task.CompletedTask;
-                }
-            };
         });
 
         // Register generic repository pattern for data access
@@ -123,12 +95,6 @@ public static class DependencyInjection
         });
 
         return services;
-    }
-
-    // Checks if the request path targets an API endpoint
-    private static bool IsApiRequest(PathString path)
-    {
-        return path.StartsWithSegments("/api");
     }
 
     // Converts string configuration value to SameSiteMode enum

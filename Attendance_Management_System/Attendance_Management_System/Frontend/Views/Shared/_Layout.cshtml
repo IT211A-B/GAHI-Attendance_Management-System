@@ -1,16 +1,20 @@
 ﻿<!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>@ViewData["Title"] - DonBosco AMS</title>
     @* Use the active Bosconian hero logo as favicon across authenticated pages. *@
-    <link rel="icon" type="image/png" href="~/images/Gemini_Generated_Image_s4on5ys4on5ys4on-Photoroom.png" asp-append-version="true" />
-    <link rel="apple-touch-icon" href="~/images/Gemini_Generated_Image_s4on5ys4on5ys4on-Photoroom.png" asp-append-version="true" />
+    <link rel="icon" type="image/png" href="~/images/Gemini_Generated_Image_s4on5ys4on5ys4on-Photoroom.png"
+          asp-append-version="true" />
+    <link rel="apple-touch-icon" href="~/images/Gemini_Generated_Image_s4on5ys4on5ys4on-Photoroom.png"
+          asp-append-version="true" />
     <script type="importmap"></script>
     <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/Attendance_Management_System.styles.css" asp-append-version="true" />
 </head>
+
 <body>
     @{
         var currentController = ViewContext.RouteData.Values["controller"]?.ToString() ?? string.Empty;
@@ -26,53 +30,69 @@
                 </div>
             </div>
             <nav class="sidebar-nav" aria-label="Primary navigation">
-                     <a class="sidebar-link @(currentController == "Dashboard" ? "active" : "")"
-                         asp-controller="Dashboard" asp-action="Index">Dashboard</a>
+                <a class="sidebar-link @(currentController == "Dashboard" ? "active" : "")" asp-controller="Dashboard"
+                   asp-action="Index">Dashboard</a>
 
-                     @if (User.IsInRole("admin"))
-                     {
-                          <a class="sidebar-link @(currentController == "UserManagement" ? "active" : "")"
-                              asp-controller="UserManagement" asp-action="Index">Users</a>
-                          <a class="sidebar-link @(currentController == "AcademicPeriods" ? "active" : "")"
-                              asp-controller="AcademicPeriods" asp-action="Index">Academic Periods</a>
-                          <a class="sidebar-link @(currentController == "Programs" ? "active" : "")"
-                              asp-controller="Programs" asp-action="Index">Programs</a>
-                     }
+                @if (User.IsInRole("admin"))
+                {
+                    <a class="sidebar-link @(currentController == "UserManagement" ? "active" : "")"
+                       asp-controller="UserManagement" asp-action="Index">Users</a>
+                    <a class="sidebar-link @(currentController == "Enrollments" ? "active" : "")"
+                       asp-controller="Enrollments" asp-action="Index">Enrollments</a>
+                    <a class="sidebar-link @(currentController == "AcademicPeriods" ? "active" : "")"
+                       asp-controller="AcademicPeriods" asp-action="Index">Academic Periods</a>
+                    <a class="sidebar-link @(currentController == "Programs" ? "active" : "")" asp-controller="Programs"
+                       asp-action="Index">Programs</a>
+                }
 
-                     @if (User.IsInRole("admin") || User.IsInRole("teacher"))
-                     {
-                          <a class="sidebar-link @(currentController == "SectionManagement" ? "active" : "")"
-                              asp-controller="SectionManagement" asp-action="Index">Sections</a>
-                          <a class="sidebar-link @(currentController == "ScheduleManagement" ? "active" : "")"
-                              asp-controller="ScheduleManagement" asp-action="Index">Schedules</a>
-                          <a class="sidebar-link @(currentController == "StudentsManagement" ? "active" : "")"
-                              asp-controller="StudentsManagement" asp-action="Index">Students</a>
-                          <a class="sidebar-link @(currentController == "AttendanceManagement" ? "active" : "")"
-                              asp-controller="AttendanceManagement" asp-action="Index">Attendance</a>
-                          <a class="sidebar-link @(currentController == "Reports" ? "active" : "")"
-                              asp-controller="Reports" asp-action="Index">Reports</a>
-                     }
+                @if (User.IsInRole("admin") || User.IsInRole("teacher"))
+                {
+                    <a class="sidebar-link @(currentController == "SectionManagement" ? "active" : "")"
+                       asp-controller="SectionManagement" asp-action="Index">Sections</a>
+                    <a class="sidebar-link @(currentController == "SubjectsManagement" ? "active" : "")"
+                       asp-controller="SubjectsManagement" asp-action="Index">Subjects</a>
+                    <a class="sidebar-link @(currentController == "ScheduleManagement" ? "active" : "")"
+                       asp-controller="ScheduleManagement" asp-action="Index">Schedules</a>
+                    <a class="sidebar-link @(currentController == "StudentsManagement" ? "active" : "")"
+                       asp-controller="StudentsManagement" asp-action="Index">Students</a>
+                    <a class="sidebar-link @(currentController == "AttendanceManagement" ? "active" : "")"
+                       asp-controller="AttendanceManagement" asp-action="Index">Attendance</a>
+                    <a class="sidebar-link @(currentController == "Reports" ? "active" : "")" asp-controller="Reports"
+                       asp-action="Index">Reports</a>
 
-                     @if (User.IsInRole("admin"))
-                     {
-                          <a class="sidebar-link @(currentController == "ClassroomManagement" ? "active" : "")"
-                              asp-controller="ClassroomManagement" asp-action="Index">Departments</a>
-                          <a class="sidebar-link @(currentController == "TeacherManagement" ? "active" : "")"
-                              asp-controller="TeacherManagement" asp-action="Index">Teachers</a>
-                          <a class="sidebar-link @(currentController == "FrontendPlaceholders" && currentAction == "Staff" ? "active" : "")"
-                              asp-controller="FrontendPlaceholders" asp-action="Staff">Staff</a>
-                          <a class="sidebar-link @(currentController == "FrontendPlaceholders" && currentAction == "GateTerminals" ? "active" : "")"
-                              asp-controller="FrontendPlaceholders" asp-action="GateTerminals">Gate Terminals</a>
-                          <a class="sidebar-link @(currentController == "FrontendPlaceholders" && currentAction == "BusinessRules" ? "active" : "")"
-                              asp-controller="FrontendPlaceholders" asp-action="BusinessRules">Business Rules</a>
-                          <a class="sidebar-link @(currentController == "FrontendPlaceholders" && currentAction == "AuditLogs" ? "active" : "")"
-                              asp-controller="FrontendPlaceholders" asp-action="AuditLogs">Audit Logs</a>
-                     }
+                    @if (User.IsInRole("teacher"))
+                    {
+                        <a class="sidebar-link @(currentController == "TeacherHistoryManagement" ? "active" : "")"
+                           asp-controller="TeacherHistoryManagement" asp-action="Index">Teaching History</a>
+                    }
+                }
 
-                     <a class="sidebar-link @(currentController == "Settings" ? "active" : "")"
-                         asp-controller="Settings" asp-action="Index">Settings</a>
-                     <a class="sidebar-link @(currentController == "Home" && currentAction == "Privacy" ? "active" : "")"
-                         asp-controller="Home" asp-action="Privacy">About</a>
+                @if (User.IsInRole("admin"))
+                {
+                    <a class="sidebar-link @(currentController == "ClassroomManagement" ? "active" : "")"
+                       asp-controller="ClassroomManagement" asp-action="Index">Departments</a>
+                    <a class="sidebar-link @(currentController == "TeacherManagement" ? "active" : "")"
+                       asp-controller="TeacherManagement" asp-action="Index">Teachers</a>
+                    <a class="sidebar-link @(currentController == "FrontendPlaceholders" && currentAction == "Staff" ? "active" : "")"
+                       asp-controller="FrontendPlaceholders" asp-action="Staff">Staff</a>
+                    <a class="sidebar-link @(currentController == "FrontendPlaceholders" && currentAction == "GateTerminals" ? "active" : "")"
+                       asp-controller="FrontendPlaceholders" asp-action="GateTerminals">Gate Terminals</a>
+                    <a class="sidebar-link @(currentController == "FrontendPlaceholders" && currentAction == "BusinessRules" ? "active" : "")"
+                       asp-controller="FrontendPlaceholders" asp-action="BusinessRules">Business Rules</a>
+                    <a class="sidebar-link @(currentController == "FrontendPlaceholders" && currentAction == "AuditLogs" ? "active" : "")"
+                       asp-controller="FrontendPlaceholders" asp-action="AuditLogs">Audit Logs</a>
+                }
+
+                @if (User.IsInRole("student"))
+                {
+                    <a class="sidebar-link @(currentController == "Enrollments" ? "active" : "")"
+                       asp-controller="Enrollments" asp-action="Index">Enrollments</a>
+                }
+
+                <a class="sidebar-link @(currentController == "Settings" ? "active" : "")" asp-controller="Settings"
+                   asp-action="Index">Settings</a>
+                <a class="sidebar-link @(currentController == "Home" && currentAction == "Privacy" ? "active" : "")"
+                   asp-controller="Home" asp-action="Privacy">About</a>
             </nav>
 
             @if (User.Identity?.IsAuthenticated == true)
@@ -111,4 +131,5 @@
     <script src="~/js/site.js" asp-append-version="true"></script>
     @await RenderSectionAsync("Scripts", required: false)
 </body>
+
 </html>

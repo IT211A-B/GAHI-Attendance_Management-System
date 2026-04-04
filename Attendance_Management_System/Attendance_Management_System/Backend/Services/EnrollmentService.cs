@@ -332,6 +332,7 @@ public class EnrollmentService : IEnrollmentService
         // Check for existing enrollment for this course and academic year
         var existingEnrollment = await _context.Enrollments
             .AnyAsync(e => e.StudentId == student.Id
+                && e.Section != null
                 && e.Section.CourseId == request.CourseId
                 && e.AcademicYearId == request.AcademicYearId
                 && (e.Status == "approved" || e.Status == "pending"));
@@ -481,7 +482,7 @@ public class EnrollmentService : IEnrollmentService
     }
 
     // Returns current enrollment count and capacity status for a section
-    public async Task<SectionCapacityDto> GetSectionCapacityAsync(int sectionId)
+    public async Task<SectionCapacityDto?> GetSectionCapacityAsync(int sectionId)
     {
         var section = await _context.Sections
             .Include(s => s.Course)
@@ -490,7 +491,7 @@ public class EnrollmentService : IEnrollmentService
 
         if (section == null)
         {
-            return null!;
+            return null;
         }
 
         var currentCount = await _context.Enrollments
@@ -525,7 +526,10 @@ public class EnrollmentService : IEnrollmentService
         foreach (var section in sections)
         {
             var capacity = await GetSectionCapacityAsync(section.Id);
-            result.Add(capacity);
+            if (capacity != null)
+            {
+                result.Add(capacity);
+            }
         }
 
         return result;
