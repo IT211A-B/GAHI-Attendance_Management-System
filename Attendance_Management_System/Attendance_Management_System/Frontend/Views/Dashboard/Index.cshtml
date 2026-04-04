@@ -1,0 +1,53 @@
+@{
+    ViewData["Title"] = "Dashboard";
+}
+
+<section class="hero">
+    <h2>Welcome back to DonBosco Attendance Management</h2>
+    <p>Today overview for attendance performance and system activity.</p>
+</section>
+
+<section class="grid-4">
+    <article class="stat-card">
+        <p class="stat-title">Total Scans</p>
+        <p class="stat-value">342</p>
+    </article>
+    <article class="stat-card">
+        <p class="stat-title">On Time</p>
+        <p class="stat-value success">281</p>
+    </article>
+    <article class="stat-card">
+        <p class="stat-title">Late</p>
+        <p class="stat-value warning">41</p>
+    </article>
+    <article class="stat-card">
+        <p class="stat-title">Absent</p>
+        <p class="stat-value danger">20</p>
+    </article>
+</section>
+
+<section class="grid-2">
+    <article class="panel">
+        <h3>Recent Attendance Events</h3>
+        <ul class="list">
+            <li><strong>08:11 AM</strong> - Grade 10, Section St. Mark scanned in.</li>
+            <li><strong>08:16 AM</strong> - 2 late arrivals flagged for review.</li>
+            <li><strong>09:02 AM</strong> - Faculty attendance synced successfully.</li>
+            <li><strong>09:14 AM</strong> - Gate terminal 2 is actively receiving scans.</li>
+        </ul>
+    </article>
+
+    <article class="panel">
+        <h3>Department Snapshot</h3>
+        <ul class="list">
+            <li>Junior High: <strong>94%</strong> attendance rate</li>
+            <li>Senior High: <strong>91%</strong> attendance rate</li>
+            <li>College: <strong>88%</strong> attendance rate</li>
+        </ul>
+        <p class="footer-note">This is the first C# MVC dashboard slice. Next pages will reuse this design language for parity with your previous frontend.</p>
+    </article>
+</section>
+
+<p class="footer-note muted">
+    Visual style retained from your previous frontend direction: soft glass cards, rounded sections, and blue-gradient emphasis.
+</p>

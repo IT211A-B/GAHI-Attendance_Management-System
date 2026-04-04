@@ -1,0 +1,53 @@
+@model Attendance_Management_System.Backend.ViewModels.Users.UsersIndexViewModel
+@{
+    ViewData["Title"] = "Users";
+}
+
+<section class="panel">
+    <h3>User Management</h3>
+    <p class="muted">Server-rendered C# MVC list of registered users.</p>
+
+    @if (!string.IsNullOrWhiteSpace(Model.ErrorMessage))
+    {
+        <p class="form-validation">@Model.ErrorMessage</p>
+    }
+    else if (!Model.Users.Any())
+    {
+        <p class="footer-note">No users found.</p>
+    }
+    else
+    {
+        <div class="table-wrap">
+            <table class="app-table">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Email</th>
+                        <th>Role</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                @foreach (var user in Model.Users)
+                {
+                    <tr>
+                        <td>@user.Id</td>
+                        <td>@user.Email</td>
+                        <td><span class="role-pill">@user.Role</span></td>
+                        <td>
+                            @if (user.IsActive)
+                            {
+                                <span class="status-pill active">Active</span>
+                            }
+                            else
+                            {
+                                <span class="status-pill inactive">Inactive</span>
+                            }
+                        </td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        </div>
+    }
+</section>

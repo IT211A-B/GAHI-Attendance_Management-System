@@ -1,0 +1,57 @@
+@model Attendance_Management_System.Backend.ViewModels.Schedules.SchedulesIndexViewModel
+@{
+    ViewData["Title"] = "Schedules";
+}
+
+<section class="panel">
+    <h3>Schedule Management</h3>
+    <p class="muted">Server-rendered C# MVC view of class schedules.</p>
+
+    @if (!string.IsNullOrWhiteSpace(Model.ErrorMessage))
+    {
+        <p class="form-validation">@Model.ErrorMessage</p>
+    }
+    else if (!Model.Schedules.Any())
+    {
+        <p class="footer-note">No schedules found.</p>
+    }
+    else
+    {
+        <div class="table-wrap">
+            <table class="app-table">
+                <thead>
+                    <tr>
+                        <th>Section</th>
+                        <th>Subject</th>
+                        <th>Classroom</th>
+                        <th>Day</th>
+                        <th>Time</th>
+                        <th>Owner</th>
+                    </tr>
+                </thead>
+                <tbody>
+                @foreach (var item in Model.Schedules)
+                {
+                    <tr>
+                        <td>@item.SectionName</td>
+                        <td>@item.SubjectName</td>
+                        <td>@item.ClassroomName</td>
+                        <td>@item.DayName</td>
+                        <td>@item.TimeRange</td>
+                        <td>
+                            @if (item.IsMine)
+                            {
+                                <span class="role-pill">Mine</span>
+                            }
+                            else
+                            {
+                                <span class="muted">Shared</span>
+                            }
+                        </td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        </div>
+    }
+</section>

@@ -2,13 +2,26 @@ using Attendance_Management_System.Backend;
 using Attendance_Management_System.Backend.Data;
 using Attendance_Management_System.Backend.Persistence;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.Mvc.Razor;
 using Scalar.AspNetCore;
 
-// Create the web application builder with default configuration
-var builder = WebApplication.CreateBuilder(args);
+// Create the web application builder with frontend web root configured up-front
+var builder = WebApplication.CreateBuilder(new WebApplicationOptions
+{
+    Args = args,
+    WebRootPath = "Frontend/wwwroot"
+});
 
 // Add MVC controllers with views for handling web and API requests
 builder.Services.AddControllersWithViews();
+
+// Tell Razor to resolve pages from Frontend/Views instead of root Views
+builder.Services.Configure<RazorViewEngineOptions>(options =>
+{
+    options.ViewLocationFormats.Clear();
+    options.ViewLocationFormats.Add("/Frontend/Views/{1}/{0}.cshtml");
+    options.ViewLocationFormats.Add("/Frontend/Views/Shared/{0}.cshtml");
+});
 
 // Register all backend services (database, auth, repositories, services)
 builder.Services.AddBackend(builder.Configuration);

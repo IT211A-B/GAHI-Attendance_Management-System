@@ -1,0 +1,44 @@
+@model Attendance_Management_System.Backend.ViewModels.Programs.ProgramsIndexViewModel
+@{
+    ViewData["Title"] = "Programs";
+}
+
+<section class="panel">
+    <h3>Programs</h3>
+    <p class="muted">C# MVC view of academic programs and course codes.</p>
+
+    @if (!string.IsNullOrWhiteSpace(Model.ErrorMessage))
+    {
+        <p class="form-validation">@Model.ErrorMessage</p>
+    }
+    else if (!Model.Programs.Any())
+    {
+        <p class="footer-note">No programs found.</p>
+    }
+    else
+    {
+        <div class="table-wrap">
+            <table class="app-table">
+                <thead>
+                    <tr>
+                        <th>Code</th>
+                        <th>Name</th>
+                        <th>Description</th>
+                        <th>Created</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var item in Model.Programs)
+                    {
+                        <tr>
+                            <td><span class="role-pill">@item.Code</span></td>
+                            <td>@item.Name</td>
+                            <td>@item.Description</td>
+                            <td>@item.CreatedAt</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</section>

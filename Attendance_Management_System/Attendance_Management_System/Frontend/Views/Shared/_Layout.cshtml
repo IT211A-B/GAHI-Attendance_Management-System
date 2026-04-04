@@ -1,0 +1,114 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@ViewData["Title"] - DonBosco AMS</title>
+    @* Use the active Bosconian hero logo as favicon across authenticated pages. *@
+    <link rel="icon" type="image/png" href="~/images/Gemini_Generated_Image_s4on5ys4on5ys4on-Photoroom.png" asp-append-version="true" />
+    <link rel="apple-touch-icon" href="~/images/Gemini_Generated_Image_s4on5ys4on5ys4on-Photoroom.png" asp-append-version="true" />
+    <script type="importmap"></script>
+    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/Attendance_Management_System.styles.css" asp-append-version="true" />
+</head>
+<body>
+    @{
+        var currentController = ViewContext.RouteData.Values["controller"]?.ToString() ?? string.Empty;
+        var currentAction = ViewContext.RouteData.Values["action"]?.ToString() ?? string.Empty;
+    }
+    <div class="app-shell">
+        <aside class="app-sidebar">
+            <div class="brand">
+                <div class="brand-badge">DB</div>
+                <div class="brand-text">
+                    <strong>DonBosco AMS</strong>
+                    <span>Pure C# MVC Frontend</span>
+                </div>
+            </div>
+            <nav class="sidebar-nav" aria-label="Primary navigation">
+                     <a class="sidebar-link @(currentController == "Dashboard" ? "active" : "")"
+                         asp-controller="Dashboard" asp-action="Index">Dashboard</a>
+
+                     @if (User.IsInRole("admin"))
+                     {
+                          <a class="sidebar-link @(currentController == "UserManagement" ? "active" : "")"
+                              asp-controller="UserManagement" asp-action="Index">Users</a>
+                          <a class="sidebar-link @(currentController == "AcademicPeriods" ? "active" : "")"
+                              asp-controller="AcademicPeriods" asp-action="Index">Academic Periods</a>
+                          <a class="sidebar-link @(currentController == "Programs" ? "active" : "")"
+                              asp-controller="Programs" asp-action="Index">Programs</a>
+                     }
+
+                     @if (User.IsInRole("admin") || User.IsInRole("teacher"))
+                     {
+                          <a class="sidebar-link @(currentController == "SectionManagement" ? "active" : "")"
+                              asp-controller="SectionManagement" asp-action="Index">Sections</a>
+                          <a class="sidebar-link @(currentController == "ScheduleManagement" ? "active" : "")"
+                              asp-controller="ScheduleManagement" asp-action="Index">Schedules</a>
+                          <a class="sidebar-link @(currentController == "StudentsManagement" ? "active" : "")"
+                              asp-controller="StudentsManagement" asp-action="Index">Students</a>
+                          <a class="sidebar-link @(currentController == "AttendanceManagement" ? "active" : "")"
+                              asp-controller="AttendanceManagement" asp-action="Index">Attendance</a>
+                          <a class="sidebar-link @(currentController == "Reports" ? "active" : "")"
+                              asp-controller="Reports" asp-action="Index">Reports</a>
+                     }
+
+                     @if (User.IsInRole("admin"))
+                     {
+                          <a class="sidebar-link @(currentController == "ClassroomManagement" ? "active" : "")"
+                              asp-controller="ClassroomManagement" asp-action="Index">Departments</a>
+                          <a class="sidebar-link @(currentController == "TeacherManagement" ? "active" : "")"
+                              asp-controller="TeacherManagement" asp-action="Index">Teachers</a>
+                          <a class="sidebar-link @(currentController == "FrontendPlaceholders" && currentAction == "Staff" ? "active" : "")"
+                              asp-controller="FrontendPlaceholders" asp-action="Staff">Staff</a>
+                          <a class="sidebar-link @(currentController == "FrontendPlaceholders" && currentAction == "GateTerminals" ? "active" : "")"
+                              asp-controller="FrontendPlaceholders" asp-action="GateTerminals">Gate Terminals</a>
+                          <a class="sidebar-link @(currentController == "FrontendPlaceholders" && currentAction == "BusinessRules" ? "active" : "")"
+                              asp-controller="FrontendPlaceholders" asp-action="BusinessRules">Business Rules</a>
+                          <a class="sidebar-link @(currentController == "FrontendPlaceholders" && currentAction == "AuditLogs" ? "active" : "")"
+                              asp-controller="FrontendPlaceholders" asp-action="AuditLogs">Audit Logs</a>
+                     }
+
+                     <a class="sidebar-link @(currentController == "Settings" ? "active" : "")"
+                         asp-controller="Settings" asp-action="Index">Settings</a>
+                     <a class="sidebar-link @(currentController == "Home" && currentAction == "Privacy" ? "active" : "")"
+                         asp-controller="Home" asp-action="Privacy">About</a>
+            </nav>
+
+            @if (User.Identity?.IsAuthenticated == true)
+            {
+                <form asp-controller="Account" asp-action="Logout" method="post" class="sidebar-logout-form">
+                    @Html.AntiForgeryToken()
+                    <button type="submit" class="sidebar-logout-btn">Sign out</button>
+                </form>
+            }
+            else
+            {
+                <a class="sidebar-link" asp-controller="Account" asp-action="Login">Sign in</a>
+            }
+        </aside>
+
+        <div class="app-main">
+            <header class="topbar">
+                <h1>@(ViewData["Title"] ?? "Dashboard")</h1>
+                <div class="topbar-meta">
+                    @if (User.Identity?.IsAuthenticated == true)
+                    {
+                        <span class="user-pill">@User.Identity.Name</span>
+                    }
+                    <span class="date-pill">@DateTime.Now.ToString("MMM dd, yyyy")</span>
+                </div>
+            </header>
+
+            <main class="content" role="main">
+                @RenderBody()
+            </main>
+        </div>
+    </div>
+
+    <script src="~/lib/jquery/dist/jquery.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/animejs@3.2.2/lib/anime.min.js"></script>
+    <script src="~/js/site.js" asp-append-version="true"></script>
+    @await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>

@@ -23,9 +23,9 @@ public class SubjectsController : BaseController
         _logger = logger;
     }
 
-    // Get all subjects - Admin only access
+    // Get all subjects - Teacher only access
     [HttpGet]
-    [Authorize(Policy = "AdminOnly")]
+    [Authorize(Policy = "TeacherOnly")]
     [ProducesResponseType(typeof(ApiResponse<List<SubjectDto>>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponse<List<SubjectDto>>), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ApiResponse<List<SubjectDto>>), StatusCodes.Status403Forbidden)]
@@ -37,7 +37,7 @@ public class SubjectsController : BaseController
 
     // Get a specific subject by ID
     [HttpGet("{id}")]
-    [Authorize(Policy = "AdminOnly")]
+    [Authorize(Policy = "TeacherOnly")]
     [ProducesResponseType(typeof(ApiResponse<SubjectDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponse<SubjectDto>), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ApiResponse<SubjectDto>), StatusCodes.Status403Forbidden)]
@@ -57,7 +57,7 @@ public class SubjectsController : BaseController
 
     // Get all subjects for a specific course
     [HttpGet("course/{courseId}")]
-    [Authorize(Policy = "AdminOnly")]
+    [Authorize(Policy = "TeacherOnly")]
     public async Task<ActionResult<ApiResponse<List<SubjectDto>>>> GetSubjectsByCourse(int courseId)
     {
         var result = await _subjectsService.GetSubjectsByCourseIdAsync(courseId);
@@ -73,7 +73,7 @@ public class SubjectsController : BaseController
 
     // Create a new subject
     [HttpPost]
-    [Authorize(Policy = "AdminOnly")]
+    [Authorize(Policy = "TeacherOnly")]
     [ProducesResponseType(typeof(ApiResponse<SubjectDto>), StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(ApiResponse<SubjectDto>), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ApiResponse<SubjectDto>), StatusCodes.Status401Unauthorized)]
@@ -100,7 +100,7 @@ public class SubjectsController : BaseController
 
     // Update an existing subject
     [HttpPut("{id}")]
-    [Authorize(Policy = "AdminOnly")]
+    [Authorize(Policy = "TeacherOnly")]
     [ProducesResponseType(typeof(ApiResponse<SubjectDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponse<SubjectDto>), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ApiResponse<SubjectDto>), StatusCodes.Status401Unauthorized)]
@@ -132,7 +132,7 @@ public class SubjectsController : BaseController
 
     // Delete a subject by ID
     [HttpDelete("{id}")]
-    [Authorize(Policy = "AdminOnly")]
+    [Authorize(Policy = "TeacherOnly")]
     [ProducesResponseType(typeof(ApiResponse<bool>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponse<bool>), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ApiResponse<bool>), StatusCodes.Status401Unauthorized)]

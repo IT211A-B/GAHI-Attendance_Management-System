@@ -1,0 +1,57 @@
+@model Attendance_Management_System.Backend.ViewModels.Teachers.TeachersIndexViewModel
+@{
+    ViewData["Title"] = "Teachers";
+}
+
+<section class="panel">
+    <h3>Teacher Management</h3>
+    <p class="muted">Server-rendered C# MVC list of teachers and assigned sections.</p>
+
+    @if (!string.IsNullOrWhiteSpace(Model.ErrorMessage))
+    {
+        <p class="form-validation">@Model.ErrorMessage</p>
+    }
+    else if (!Model.Teachers.Any())
+    {
+        <p class="footer-note">No teachers found.</p>
+    }
+    else
+    {
+        <div class="table-wrap">
+            <table class="app-table">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Email</th>
+                        <th>Department</th>
+                        <th>Employee No.</th>
+                        <th>Sections</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                @foreach (var item in Model.Teachers)
+                {
+                    <tr>
+                        <td>@item.Name</td>
+                        <td>@item.Email</td>
+                        <td>@item.Department</td>
+                        <td>@item.EmployeeNumber</td>
+                        <td>@item.SectionsText</td>
+                        <td>
+                            @if (item.IsActive)
+                            {
+                                <span class="status-pill active">Active</span>
+                            }
+                            else
+                            {
+                                <span class="status-pill inactive">Inactive</span>
+                            }
+                        </td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        </div>
+    }
+</section>
