@@ -309,44 +309,22 @@ public class SectionsService : ISectionsService
             return ApiResponse<TimetableResponse>.ErrorResponse(ErrorCodes.NotFound, "Section not found.");
         }
 
-        // Get all teachers assigned to this section
-        var assignedTeacherIds = await _context.SectionTeachers
-            .Where(st => st.SectionId == sectionId)
-            .Select(st => st.TeacherId)
-            .ToListAsync();
-
         // Determine current teacher ID if user is a teacher
         int? currentTeacherId = null;
         if (currentUserId.HasValue)
         {
             currentTeacherId = await _context.Teachers
                 .Where(t => t.UserId == currentUserId.Value)
-                .Select(t => t.Id)
+                .Select(t => (int?)t.Id)
                 .FirstOrDefaultAsync();
         }
 
         // Get all schedules for this section
         var schedules = await _context.Schedules
             .Include(s => s.Subject)
+            .Include(s => s.Teacher)
             .Where(s => s.SectionId == sectionId)
             .ToListAsync();
-
-        // Get all teachers assigned to this section with their details
-        var assignedTeachers = await _context.SectionTeachers
-            .Include(st => st.Teacher)
-            .Where(st => st.SectionId == sectionId)
-            .Select(st => st.Teacher)
-            .ToListAsync();
-
-        // Build teacher name string (comma-separated)
-        var teacherNames = assignedTeachers
-            .Where(t => t != null)
-            .Select(t => $"{t!.FirstName} {t.LastName}")
-            .ToList();
-        var teacherNameString = string.Join(", ", teacherNames);
-
-        // Check if current teacher is assigned to this section
-        var isCurrentUserAssigned = currentTeacherId.HasValue && assignedTeacherIds.Contains(currentTeacherId.Value);
 
         // Build timetable dictionary with all 7 days
         var timetable = new Dictionary<string, List<ScheduleSlotDto>>();
@@ -365,12 +343,19 @@ public class SectionsService : ISectionsService
                 var slot = new ScheduleSlotDto
                 {
                     ScheduleId = schedule.Id,
+                    SubjectId = schedule.SubjectId,
+                    DayOfWeek = schedule.DayOfWeek,
+                    TeacherId = schedule.TeacherId,
                     SubjectName = schedule.Subject?.Name ?? string.Empty,
-                    TeacherName = teacherNameString,
+                    TeacherName = schedule.Teacher != null
+                        ? $"{schedule.Teacher.FirstName} {schedule.Teacher.LastName}".Trim()
+                        : "Unassigned",
                     Classroom = section.Classroom?.Name ?? string.Empty,
                     StartTime = schedule.StartTime.ToString("HH:mm"),
                     EndTime = schedule.EndTime.ToString("HH:mm"),
-                    IsMine = isCurrentUserAssigned
+                    IsMine = currentTeacherId.HasValue
+                        && schedule.TeacherId.HasValue
+                        && schedule.TeacherId.Value == currentTeacherId.Value
                 };
                 timetable[dayName].Add(slot);
             }

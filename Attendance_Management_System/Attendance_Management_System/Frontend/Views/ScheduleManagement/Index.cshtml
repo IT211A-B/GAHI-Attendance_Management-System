@@ -115,29 +115,36 @@
                         </td>
                         <td>
                             <div class="action-stack">
-                                <form asp-controller="ScheduleManagement" asp-action="Update" asp-route-id="@item.Id" method="post" class="stack-form">
-                                    @Html.AntiForgeryToken()
-                                    <input type="number" name="UpdateForm.SubjectId" min="1" class="input-select compact-input" placeholder="Subject ID" />
-                                    <select name="UpdateForm.DayOfWeek" class="input-select compact-input">
-                                        <option value="0">Sunday</option>
-                                        <option value="1">Monday</option>
-                                        <option value="2">Tuesday</option>
-                                        <option value="3">Wednesday</option>
-                                        <option value="4">Thursday</option>
-                                        <option value="5">Friday</option>
-                                        <option value="6">Saturday</option>
-                                    </select>
-                                    <input type="time" name="UpdateForm.StartTime" class="input-select compact-input" />
-                                    <input type="time" name="UpdateForm.EndTime" class="input-select compact-input" />
-                                    <input type="date" name="UpdateForm.EffectiveFrom" class="input-select compact-input" />
-                                    <input type="date" name="UpdateForm.EffectiveTo" class="input-select compact-input" />
-                                    <button type="submit" class="btn-secondary">Save</button>
-                                </form>
+                                @if (item.IsMine)
+                                {
+                                    <form asp-controller="ScheduleManagement" asp-action="Update" asp-route-id="@item.Id" method="post" class="stack-form">
+                                        @Html.AntiForgeryToken()
+                                        <input type="number" name="UpdateForm.SubjectId" min="1" class="input-select compact-input" placeholder="Subject ID" />
+                                        <select name="UpdateForm.DayOfWeek" class="input-select compact-input">
+                                            <option value="0">Sunday</option>
+                                            <option value="1">Monday</option>
+                                            <option value="2">Tuesday</option>
+                                            <option value="3">Wednesday</option>
+                                            <option value="4">Thursday</option>
+                                            <option value="5">Friday</option>
+                                            <option value="6">Saturday</option>
+                                        </select>
+                                        <input type="time" name="UpdateForm.StartTime" class="input-select compact-input" />
+                                        <input type="time" name="UpdateForm.EndTime" class="input-select compact-input" />
+                                        <input type="date" name="UpdateForm.EffectiveFrom" class="input-select compact-input" />
+                                        <input type="date" name="UpdateForm.EffectiveTo" class="input-select compact-input" />
+                                        <button type="submit" class="btn-secondary">Save</button>
+                                    </form>
 
-                                <form asp-controller="ScheduleManagement" asp-action="Delete" asp-route-id="@item.Id" method="post" class="inline-form">
-                                    @Html.AntiForgeryToken()
-                                    <button type="submit" class="btn-danger">Delete</button>
-                                </form>
+                                    <form asp-controller="ScheduleManagement" asp-action="Delete" asp-route-id="@item.Id" method="post" class="inline-form">
+                                        @Html.AntiForgeryToken()
+                                        <button type="submit" class="btn-danger">Delete</button>
+                                    </form>
+                                }
+                                else
+                                {
+                                    <span class="muted">View only</span>
+                                }
                             </div>
                         </td>
                     </tr>

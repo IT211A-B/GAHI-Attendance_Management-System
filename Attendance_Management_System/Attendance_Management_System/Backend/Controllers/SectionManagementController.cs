@@ -1,6 +1,8 @@
 using System.Security.Claims;
 using Attendance_Management_System.Backend.DTOs.Requests;
+using Attendance_Management_System.Backend.DTOs.Responses;
 using Attendance_Management_System.Backend.Interfaces.Services;
+using Attendance_Management_System.Backend.ValueObjects;
 using Attendance_Management_System.Backend.ViewModels.Sections;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -12,16 +14,50 @@ namespace Attendance_Management_System.Backend.Controllers;
 public class SectionManagementController : Controller
 {
     private readonly ISectionsService _sectionsService;
+    private readonly ISchedulesService _schedulesService;
+    private readonly IStudentsService _studentsService;
+    private readonly IAttendanceService _attendanceService;
+    private readonly ITeachersService _teachersService;
 
-    public SectionManagementController(ISectionsService sectionsService)
+    private static readonly int[] TimetableDayOrder = { 1, 2, 3, 4, 5, 6, 0 };
+    private static readonly Dictionary<int, string> TimetableDayNames = new()
+    {
+        [0] = "Sunday",
+        [1] = "Monday",
+        [2] = "Tuesday",
+        [3] = "Wednesday",
+        [4] = "Thursday",
+        [5] = "Friday",
+        [6] = "Saturday"
+    };
+
+    private static readonly TimeOnly TimetableStart = new(5, 0);
+    private static readonly TimeOnly TimetableEnd = new(19, 0);
+
+    public SectionManagementController(
+        ISectionsService sectionsService,
+        ISchedulesService schedulesService,
+        IStudentsService studentsService,
+        IAttendanceService attendanceService,
+        ITeachersService teachersService)
     {
         _sectionsService = sectionsService;
+        _schedulesService = schedulesService;
+        _studentsService = studentsService;
+        _attendanceService = attendanceService;
+        _teachersService = teachersService;
     }
 
     [HttpGet("")]
-    public async Task<IActionResult> Index()
+    public async Task<IActionResult> Index([FromQuery] int? sectionId, [FromQuery] int? scheduleId, [FromQuery] DateOnly? attendanceDate)
     {
-        var viewModel = await BuildIndexViewModelAsync();
+        var context = GetUserContext();
+        if (!context.IsValid)
+        {
+            return Challenge();
+        }
+
+        var viewModel = await BuildIndexViewModelAsync(context.UserId, context.Role, sectionId, scheduleId, attendanceDate);
         return View(viewModel);
     }
 
@@ -30,7 +66,13 @@ public class SectionManagementController : Controller
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Create([Bind(Prefix = "CreateForm")] CreateSectionFormViewModel form)
     {
-        var viewModel = await BuildIndexViewModelAsync();
+        var context = GetUserContext();
+        if (!context.IsValid)
+        {
+            return Challenge();
+        }
+
+        var viewModel = await BuildIndexViewModelAsync(context.UserId, context.Role, null, null, null);
         viewModel.CreateForm = form;
 
         if (!ModelState.IsValid)
@@ -148,11 +190,260 @@ public class SectionManagementController : Controller
         return RedirectToAction(nameof(Index));
     }
 
-    private async Task<SectionsIndexViewModel> BuildIndexViewModelAsync()
+    [HttpPost("timetable/slots/add")]
+    [Authorize(Policy = "TeacherOnly")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> AddTimetableSlot(int sectionId, int dayOfWeek, TimeOnly startTime, TimeOnly endTime, int? selectedSectionId)
+    {
+        var context = GetUserContext();
+        if (!context.IsValid)
+        {
+            return Challenge();
+        }
+
+        if (endTime <= startTime)
+        {
+            TempData["SectionsError"] = "End time must be after start time.";
+            return RedirectToAction(nameof(Index), new { sectionId = selectedSectionId ?? sectionId });
+        }
+
+        var sectionResult = await _sectionsService.GetSectionByIdAsync(sectionId);
+        if (!sectionResult.Success || sectionResult.Data is null)
+        {
+            TempData["SectionsError"] = sectionResult.Error?.Message ?? "Unable to load the selected section.";
+            return RedirectToAction(nameof(Index), new { sectionId = selectedSectionId ?? sectionId });
+        }
+
+        var subjectId = sectionResult.Data.SubjectId;
+        if (subjectId <= 0)
+        {
+            TempData["SectionsError"] = "Selected section does not have an assigned subject.";
+            return RedirectToAction(nameof(Index), new { sectionId = selectedSectionId ?? sectionId });
+        }
+
+        var result = await _schedulesService.CreateScheduleAsync(new CreateScheduleRequest
+        {
+            SectionId = sectionId,
+            SubjectId = subjectId,
+            DayOfWeek = dayOfWeek,
+            StartTime = startTime,
+            EndTime = endTime,
+            EffectiveFrom = DateOnly.FromDateTime(DateTime.Today)
+        }, context.UserId);
+
+        if (!result.Success)
+        {
+            TempData["SectionsError"] = result.Error?.Message ?? "Unable to add the timetable slot right now.";
+            return RedirectToAction(nameof(Index), new { sectionId = selectedSectionId ?? sectionId });
+        }
+
+        TempData["SectionsSuccess"] = "Timetable slot added successfully.";
+        return RedirectToAction(nameof(Index), new { sectionId = selectedSectionId ?? sectionId });
+    }
+
+    [HttpPost("timetable/slots/add-range")]
+    [Authorize(Policy = "TeacherOnly")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> AddTimetableSlotRange(int sectionId, TimeOnly startTime, TimeOnly endTime, [FromForm] List<int>? selectedDays, int? selectedSectionId)
+    {
+        var context = GetUserContext();
+        if (!context.IsValid)
+        {
+            return Challenge();
+        }
+
+        if (endTime <= startTime)
+        {
+            TempData["SectionsError"] = "End time must be after start time.";
+            return RedirectToAction(nameof(Index), new { sectionId = selectedSectionId ?? sectionId });
+        }
+
+        var normalizedDays = (selectedDays ?? [])
+            .Where(day => day >= 0 && day <= 6)
+            .Distinct()
+            .OrderBy(day => day)
+            .ToList();
+
+        if (normalizedDays.Count == 0)
+        {
+            TempData["SectionsError"] = "Select at least one weekday.";
+            return RedirectToAction(nameof(Index), new { sectionId = selectedSectionId ?? sectionId });
+        }
+
+        var sectionResult = await _sectionsService.GetSectionByIdAsync(sectionId);
+        if (!sectionResult.Success || sectionResult.Data is null)
+        {
+            TempData["SectionsError"] = sectionResult.Error?.Message ?? "Unable to load the selected section.";
+            return RedirectToAction(nameof(Index), new { sectionId = selectedSectionId ?? sectionId });
+        }
+
+        var subjectId = sectionResult.Data.SubjectId;
+        if (subjectId <= 0)
+        {
+            TempData["SectionsError"] = "Selected section does not have an assigned subject.";
+            return RedirectToAction(nameof(Index), new { sectionId = selectedSectionId ?? sectionId });
+        }
+
+        var result = await _schedulesService.CreateScheduleRangeAsync(new CreateScheduleRangeRequest
+        {
+            SectionId = sectionId,
+            SubjectId = subjectId,
+            DaysOfWeek = normalizedDays,
+            StartTime = startTime,
+            EndTime = endTime,
+            EffectiveFrom = DateOnly.FromDateTime(DateTime.Today)
+        }, context.UserId);
+
+        if (!result.Success)
+        {
+            TempData["SectionsError"] = result.Error?.Message ?? "Unable to add timetable slots right now.";
+            return RedirectToAction(nameof(Index), new { sectionId = selectedSectionId ?? sectionId });
+        }
+
+        var createdCount = result.Data?.Count ?? normalizedDays.Count;
+        TempData["SectionsSuccess"] = createdCount == 1
+            ? "Timetable slot added successfully."
+            : $"Timetable slots added successfully ({createdCount} days).";
+
+        return RedirectToAction(nameof(Index), new { sectionId = selectedSectionId ?? sectionId });
+    }
+
+    [HttpPost("timetable/slots/{scheduleId:int}/update")]
+    [Authorize(Policy = "TeacherOnly")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> UpdateTimetableSlot(int scheduleId, int dayOfWeek, TimeOnly startTime, TimeOnly endTime, int? selectedSectionId)
+    {
+        var context = GetUserContext();
+        if (!context.IsValid)
+        {
+            return Challenge();
+        }
+
+        if (endTime <= startTime)
+        {
+            TempData["SectionsError"] = "End time must be after start time.";
+            return RedirectToAction(nameof(Index), new { sectionId = selectedSectionId });
+        }
+
+        var result = await _schedulesService.UpdateScheduleAsync(scheduleId, new UpdateScheduleRequest
+        {
+            DayOfWeek = dayOfWeek,
+            StartTime = startTime,
+            EndTime = endTime
+        }, context.UserId);
+
+        if (!result.Success)
+        {
+            TempData["SectionsError"] = result.Error?.Message ?? "Unable to update the timetable slot right now.";
+            return RedirectToAction(nameof(Index), new { sectionId = selectedSectionId });
+        }
+
+        TempData["SectionsSuccess"] = "Timetable slot updated successfully.";
+        return RedirectToAction(nameof(Index), new { sectionId = selectedSectionId });
+    }
+
+    [HttpPost("timetable/slots/{scheduleId:int}/delete")]
+    [Authorize(Policy = "TeacherOnly")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> DeleteTimetableSlot(int scheduleId, int? selectedSectionId)
+    {
+        var context = GetUserContext();
+        if (!context.IsValid)
+        {
+            return Challenge();
+        }
+
+        var result = await _schedulesService.DeleteScheduleAsync(scheduleId, context.UserId, isAdmin: false);
+
+        if (!result.Success)
+        {
+            TempData["SectionsError"] = result.Error?.Message ?? "Unable to delete the timetable slot right now.";
+            return RedirectToAction(nameof(Index), new { sectionId = selectedSectionId });
+        }
+
+        TempData["SectionsSuccess"] = "Timetable slot deleted successfully.";
+        return RedirectToAction(nameof(Index), new { sectionId = selectedSectionId });
+    }
+
+    [HttpPost("attendance/mark")]
+    [Authorize(Policy = "TeacherOnly")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> MarkSectionAttendance([FromForm] SectionMarkAttendanceFormViewModel form)
+    {
+        var context = GetUserContext();
+        if (!context.IsValid)
+        {
+            return Challenge();
+        }
+
+        if (!ModelState.IsValid)
+        {
+            TempData["SectionAttendanceError"] = "Please provide valid attendance details.";
+            return RedirectToAction(nameof(Index), new
+            {
+                sectionId = form.SectionId,
+                scheduleId = form.ScheduleId,
+                attendanceDate = form.Date.ToString("yyyy-MM-dd")
+            });
+        }
+
+        var teacherContextResult = await BuildTeacherContextAsync(context.UserId, context.Role);
+        if (!teacherContextResult.Success)
+        {
+            TempData["SectionAttendanceError"] = teacherContextResult.Error ?? "Unable to identify teacher context.";
+            return RedirectToAction(nameof(Index), new
+            {
+                sectionId = form.SectionId,
+                scheduleId = form.ScheduleId,
+                attendanceDate = form.Date.ToString("yyyy-MM-dd")
+            });
+        }
+
+        var result = await _attendanceService.MarkAttendanceAsync(new MarkAttendanceRequest
+        {
+            SectionId = form.SectionId,
+            ScheduleId = form.ScheduleId,
+            StudentId = form.StudentId,
+            Date = form.Date,
+            TimeIn = form.TimeIn,
+            Remarks = NormalizeOptional(form.Remarks)
+        }, teacherContextResult.Context);
+
+        if (!result.Success)
+        {
+            TempData["SectionAttendanceError"] = result.Error?.Message ?? "Unable to mark attendance right now.";
+            return RedirectToAction(nameof(Index), new
+            {
+                sectionId = form.SectionId,
+                scheduleId = form.ScheduleId,
+                attendanceDate = form.Date.ToString("yyyy-MM-dd")
+            });
+        }
+
+        TempData["SectionAttendanceSuccess"] = "Attendance marked successfully.";
+        return RedirectToAction(nameof(Index), new
+        {
+            sectionId = form.SectionId,
+            scheduleId = form.ScheduleId,
+            attendanceDate = form.Date.ToString("yyyy-MM-dd")
+        });
+    }
+
+    private async Task<SectionsIndexViewModel> BuildIndexViewModelAsync(
+        int currentUserId,
+        string role,
+        int? requestedSectionId,
+        int? requestedScheduleId,
+        DateOnly? requestedAttendanceDate)
     {
         var result = await _sectionsService.GetAllSectionsAsync();
 
-        var viewModel = new SectionsIndexViewModel();
+        var viewModel = new SectionsIndexViewModel
+        {
+            IsAdmin = role == "admin",
+            IsTeacher = role == "teacher",
+            SelectedAttendanceDate = requestedAttendanceDate ?? DateOnly.FromDateTime(DateTime.Today)
+        };
 
         if (!result.Success || result.Data is null)
         {
@@ -174,6 +465,323 @@ public class SectionManagementController : Controller
             })
             .ToList();
 
+        viewModel.SectionOptions = viewModel.Sections
+            .Select(section => new SectionOptionViewModel
+            {
+                Id = section.Id,
+                Name = section.Name
+            })
+            .ToList();
+
+        if (!viewModel.SectionOptions.Any())
+        {
+            return viewModel;
+        }
+
+        var selectedSectionId = requestedSectionId.HasValue && viewModel.SectionOptions.Any(s => s.Id == requestedSectionId.Value)
+            ? requestedSectionId.Value
+            : viewModel.SectionOptions.First().Id;
+
+        viewModel.SelectedSectionId = selectedSectionId;
+
+        var selectedSection = result.Data.FirstOrDefault(s => s.Id == selectedSectionId);
+        if (selectedSection != null)
+        {
+            viewModel.SelectedSectionName = selectedSection.Name;
+            viewModel.SelectedSectionSubjectId = selectedSection.SubjectId;
+            viewModel.SelectedSectionSubjectName = string.IsNullOrWhiteSpace(selectedSection.SubjectName)
+                ? "-"
+                : selectedSection.SubjectName;
+        }
+
+        var timetableResult = await _sectionsService.GetTimetableAsync(selectedSectionId, currentUserId);
+        if (!timetableResult.Success || timetableResult.Data is null)
+        {
+            viewModel.TimetableErrorMessage = timetableResult.Error?.Message ?? "Unable to load timetable right now.";
+        }
+
+        if (timetableResult.Success && timetableResult.Data is not null)
+        {
+            var slots = new List<TimetableSlotRecord>();
+            foreach (var dayEntry in timetableResult.Data.Timetable)
+            {
+                foreach (var slot in dayEntry.Value)
+                {
+                    if (!TimeOnly.TryParse(slot.StartTime, out var parsedStart) || !TimeOnly.TryParse(slot.EndTime, out var parsedEnd))
+                    {
+                        continue;
+                    }
+
+                    var dayOfWeek = slot.DayOfWeek >= 0 && slot.DayOfWeek <= 6
+                        ? slot.DayOfWeek
+                        : ResolveDayOfWeek(dayEntry.Key);
+
+                    slots.Add(new TimetableSlotRecord
+                    {
+                        ScheduleId = slot.ScheduleId,
+                        SubjectId = slot.SubjectId,
+                        SubjectName = slot.SubjectName,
+                        TeacherName = string.IsNullOrWhiteSpace(slot.TeacherName) ? "Unassigned" : slot.TeacherName,
+                        DayOfWeek = dayOfWeek,
+                        StartTime = parsedStart,
+                        EndTime = parsedEnd,
+                        IsMine = slot.IsMine
+                    });
+                }
+            }
+
+            viewModel.TimetableRows = BuildTimetableRows(slots);
+        }
+
+        await PopulateAttendancePanelAsync(viewModel, currentUserId, role, selectedSectionId, requestedScheduleId);
+
         return viewModel;
+    }
+
+    private async Task PopulateAttendancePanelAsync(
+        SectionsIndexViewModel viewModel,
+        int currentUserId,
+        string role,
+        int selectedSectionId,
+        int? requestedScheduleId)
+    {
+        var schedulesResult = await _schedulesService.GetSchedulesAsync(currentUserId, role);
+        if (!schedulesResult.Success || schedulesResult.Data is null)
+        {
+            viewModel.AttendanceErrorMessage = schedulesResult.Error?.Message ?? "Unable to load schedules for attendance.";
+            return;
+        }
+
+        var scheduleOptions = schedulesResult.Data
+            .Where(schedule => schedule.SectionId == selectedSectionId)
+            .OrderBy(schedule => schedule.DayOfWeek)
+            .ThenBy(schedule => schedule.StartTime)
+            .Select(schedule => new SectionAttendanceScheduleOptionViewModel
+            {
+                Id = schedule.Id,
+                SectionId = schedule.SectionId,
+                Label = $"{schedule.SubjectName} | {schedule.DayName} {schedule.StartTime}-{schedule.EndTime}"
+            })
+            .ToList();
+
+        viewModel.AttendanceSchedules = scheduleOptions;
+
+        if (!scheduleOptions.Any())
+        {
+            return;
+        }
+
+        var selectedScheduleId = requestedScheduleId.HasValue && scheduleOptions.Any(schedule => schedule.Id == requestedScheduleId.Value)
+            ? requestedScheduleId
+            : scheduleOptions.First().Id;
+
+        viewModel.SelectedAttendanceScheduleId = selectedScheduleId;
+        if (!selectedScheduleId.HasValue)
+        {
+            return;
+        }
+
+        var studentsResult = await _studentsService.GetStudentsBySectionAsync(selectedSectionId, currentUserId, role);
+        if (!studentsResult.Success || studentsResult.Data is null)
+        {
+            viewModel.AttendanceErrorMessage = studentsResult.Error?.Message ?? "Unable to load students for the selected section.";
+            return;
+        }
+
+        var summaryResult = await _attendanceService.GetSectionAttendanceAsync(
+            selectedSectionId,
+            viewModel.SelectedAttendanceDate,
+            selectedScheduleId.Value);
+
+        if (!summaryResult.Success || summaryResult.Data is null)
+        {
+            viewModel.AttendanceErrorMessage = summaryResult.Error?.Message ?? "Unable to load attendance summary.";
+            return;
+        }
+
+        viewModel.AttendanceTotalStudents = summaryResult.Data.TotalStudents;
+        viewModel.AttendancePresentCount = summaryResult.Data.PresentCount;
+        viewModel.AttendanceLateCount = summaryResult.Data.LateCount;
+        viewModel.AttendanceAbsentCount = summaryResult.Data.AbsentCount;
+
+        var recordsByStudentId = summaryResult.Data.Records
+            .GroupBy(record => record.StudentId)
+            .ToDictionary(group => group.Key, group => group.First());
+
+        viewModel.AttendanceStudents = studentsResult.Data
+            .OrderBy(student => student.LastName)
+            .ThenBy(student => student.FirstName)
+            .Select(student =>
+            {
+                recordsByStudentId.TryGetValue(student.Id, out var record);
+                return BuildAttendanceStudentRow(student, record);
+            })
+            .ToList();
+    }
+
+    private static SectionAttendanceStudentRowViewModel BuildAttendanceStudentRow(StudentBasicProfileDto student, AttendanceDto? record)
+    {
+        var fullName = string.Join(" ", new[] { student.FirstName, student.MiddleName, student.LastName }
+            .Where(part => !string.IsNullOrWhiteSpace(part)));
+
+        var courseText = string.IsNullOrWhiteSpace(student.CourseCode) && string.IsNullOrWhiteSpace(student.CourseName)
+            ? "-"
+            : $"{student.CourseCode} {student.CourseName}".Trim();
+
+        var isMarked = record is not null && record.MarkedBy > 0;
+        var isPresent = isMarked && record?.TimeIn.HasValue == true;
+
+        return new SectionAttendanceStudentRowViewModel
+        {
+            StudentId = student.Id,
+            StudentNumber = string.IsNullOrWhiteSpace(student.StudentNumber) ? "-" : student.StudentNumber,
+            FullName = string.IsNullOrWhiteSpace(fullName) ? "-" : fullName,
+            YearLevel = student.YearLevel,
+            CourseText = courseText,
+            IsMarked = isMarked,
+            StatusLabel = !isMarked ? "Not Marked" : isPresent ? "Present" : "Absent",
+            StatusClass = isPresent ? "active" : "",
+            ExistingTimeIn = isPresent ? record?.TimeIn?.ToString("HH:mm") ?? "-" : "-",
+            ExistingRemarks = isMarked
+                ? string.IsNullOrWhiteSpace(record?.Remarks) ? "-" : record!.Remarks!
+                : "-",
+            MarkerName = isMarked
+                ? string.IsNullOrWhiteSpace(record?.MarkerName) ? "-" : record!.MarkerName!
+                : "-"
+        };
+    }
+
+    private async Task<(bool Success, TeacherContext Context, string? Error)> BuildTeacherContextAsync(int userId, string role)
+    {
+        var isAdmin = role == "admin";
+        if (isAdmin)
+        {
+            return (true, new TeacherContext { UserId = userId, TeacherId = null, IsAdmin = true }, null);
+        }
+
+        var teachersResult = await _teachersService.GetAllTeachersAsync();
+        if (!teachersResult.Success || teachersResult.Data is null)
+        {
+            return (false, default, "Unable to load teacher profile.");
+        }
+
+        var teacherId = teachersResult.Data.FirstOrDefault(teacher => teacher.UserId == userId)?.Id;
+        if (!teacherId.HasValue)
+        {
+            return (false, default, "Teacher profile not found for the current account.");
+        }
+
+        return (true, new TeacherContext
+        {
+            UserId = userId,
+            TeacherId = teacherId.Value,
+            IsAdmin = false
+        }, null);
+    }
+
+    private static string? NormalizeOptional(string? value)
+    {
+        var trimmed = value?.Trim();
+        return string.IsNullOrWhiteSpace(trimmed) ? null : trimmed;
+    }
+
+    private static IReadOnlyList<SectionTimetableRowViewModel> BuildTimetableRows(List<TimetableSlotRecord> slots)
+    {
+        var rows = new List<SectionTimetableRowViewModel>();
+
+        for (var slotStart = TimetableStart; slotStart < TimetableEnd; slotStart = slotStart.AddMinutes(30))
+        {
+            var slotEnd = slotStart.AddMinutes(30);
+            var cells = new List<SectionTimetableCellViewModel>();
+
+            foreach (var day in TimetableDayOrder)
+            {
+                var occupiedSlot = slots
+                    .Where(s => s.DayOfWeek == day)
+                    .Where(s => s.StartTime < slotEnd && s.EndTime > slotStart)
+                    .OrderBy(s => s.StartTime)
+                    .ThenBy(s => s.ScheduleId)
+                    .FirstOrDefault();
+
+                if (occupiedSlot == null)
+                {
+                    cells.Add(new SectionTimetableCellViewModel
+                    {
+                        DayOfWeek = day,
+                        DayName = TimetableDayNames[day],
+                        IsOccupied = false,
+                        StartTime = slotStart.ToString("HH:mm"),
+                        EndTime = slotEnd.ToString("HH:mm")
+                    });
+                    continue;
+                }
+
+                cells.Add(new SectionTimetableCellViewModel
+                {
+                    DayOfWeek = day,
+                    DayName = TimetableDayNames[day],
+                    IsOccupied = true,
+                    IsMine = occupiedSlot.IsMine,
+                    IsStart = occupiedSlot.StartTime == slotStart,
+                    ScheduleId = occupiedSlot.ScheduleId,
+                    SubjectId = occupiedSlot.SubjectId,
+                    SubjectName = occupiedSlot.SubjectName,
+                    TeacherName = occupiedSlot.TeacherName,
+                    StartTime = occupiedSlot.StartTime.ToString("HH:mm"),
+                    EndTime = occupiedSlot.EndTime.ToString("HH:mm"),
+                    TimeRange = $"{occupiedSlot.StartTime:HH\\:mm}-{occupiedSlot.EndTime:HH\\:mm}"
+                });
+            }
+
+            rows.Add(new SectionTimetableRowViewModel
+            {
+                TimeLabel = slotStart.ToString("hh:mm tt"),
+                StartTime = slotStart.ToString("HH:mm"),
+                EndTime = slotEnd.ToString("HH:mm"),
+                Cells = cells
+            });
+        }
+
+        return rows;
+    }
+
+    private static int ResolveDayOfWeek(string day)
+    {
+        return day.Trim().ToLowerInvariant() switch
+        {
+            "sun" or "sunday" => 0,
+            "mon" or "monday" => 1,
+            "tue" or "tuesday" => 2,
+            "wed" or "wednesday" => 3,
+            "thu" or "thursday" => 4,
+            "fri" or "friday" => 5,
+            "sat" or "saturday" => 6,
+            _ => 0
+        };
+    }
+
+    private (bool IsValid, int UserId, string Role, bool IsAdmin) GetUserContext()
+    {
+        var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        var role = User.FindFirstValue(ClaimTypes.Role) ?? string.Empty;
+
+        if (!int.TryParse(userIdClaim, out var userId) || string.IsNullOrWhiteSpace(role))
+        {
+            return (false, 0, string.Empty, false);
+        }
+
+        return (true, userId, role, role == "admin");
+    }
+
+    private sealed class TimetableSlotRecord
+    {
+        public int ScheduleId { get; set; }
+        public int SubjectId { get; set; }
+        public string SubjectName { get; set; } = string.Empty;
+        public string TeacherName { get; set; } = string.Empty;
+        public int DayOfWeek { get; set; }
+        public TimeOnly StartTime { get; set; }
+        public TimeOnly EndTime { get; set; }
+        public bool IsMine { get; set; }
     }
 }

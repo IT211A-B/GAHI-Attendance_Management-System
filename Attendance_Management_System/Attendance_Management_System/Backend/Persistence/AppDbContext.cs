@@ -181,6 +181,11 @@ public class AppDbContext : IdentityDbContext<User, IdentityRole<int>, int>
                 .HasForeignKey(s => s.SectionId)
                 .OnDelete(DeleteBehavior.Restrict);
 
+            entity.HasOne(s => s.Teacher)
+                .WithMany()
+                .HasForeignKey(s => s.TeacherId)
+                .OnDelete(DeleteBehavior.Restrict);
+
             entity.HasOne(s => s.Subject)
                 .WithMany()
                 .HasForeignKey(s => s.SubjectId)
@@ -188,6 +193,7 @@ public class AppDbContext : IdentityDbContext<User, IdentityRole<int>, int>
 
             // Index for efficient conflict detection queries
             entity.HasIndex(s => new { s.SectionId, s.DayOfWeek });
+            entity.HasIndex(s => new { s.TeacherId, s.DayOfWeek });
 
             entity.ToTable(t => t.HasCheckConstraint(
                 "CK_Schedule_EndTime",

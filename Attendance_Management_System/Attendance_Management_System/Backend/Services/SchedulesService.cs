@@ -39,6 +39,7 @@ public class SchedulesService : ISchedulesService
             schedules = await _context.Schedules
                 .Include(s => s.Section)
                     .ThenInclude(sec => sec!.Classroom)
+                .Include(s => s.Teacher)
                 .Include(s => s.Subject)
                 .OrderBy(s => s.DayOfWeek)
                 .ThenBy(s => s.StartTime)
@@ -56,6 +57,7 @@ public class SchedulesService : ISchedulesService
             schedules = await _context.Schedules
                 .Include(s => s.Section)
                     .ThenInclude(sec => sec!.Classroom)
+                .Include(s => s.Teacher)
                 .Include(s => s.Subject)
                 .Join(_context.SectionTeachers,
                     s => s.SectionId,
@@ -78,6 +80,7 @@ public class SchedulesService : ISchedulesService
         var schedule = await _context.Schedules
             .Include(s => s.Section)
                 .ThenInclude(sec => sec!.Classroom)
+            .Include(s => s.Teacher)
             .Include(s => s.Subject)
             .FirstOrDefaultAsync(s => s.Id == id);
 
@@ -148,6 +151,7 @@ public class SchedulesService : ISchedulesService
         var schedule = new Schedule
         {
             SectionId = request.SectionId,
+            TeacherId = teacherId.Value,
             SubjectId = request.SubjectId,
             DayOfWeek = request.DayOfWeek,
             StartTime = request.StartTime,
@@ -161,6 +165,99 @@ public class SchedulesService : ISchedulesService
 
         var dto = await BuildScheduleDtoAsync(schedule, userId);
         return ApiResponse<ScheduleDto>.SuccessResponse(dto);
+    }
+
+    // Create multiple schedule slots for one shared time range across weekdays
+    public async Task<ApiResponse<List<ScheduleDto>>> CreateScheduleRangeAsync(CreateScheduleRangeRequest request, int userId)
+    {
+        // Validate time range
+        if (request.EndTime <= request.StartTime)
+        {
+            return ApiResponse<List<ScheduleDto>>.ErrorResponse(ErrorCodes.ValidationError, "End time must be after start time.");
+        }
+
+        var targetDays = request.DaysOfWeek
+            .Where(day => day >= 0 && day <= 6)
+            .Distinct()
+            .OrderBy(day => day)
+            .ToList();
+
+        if (targetDays.Count == 0)
+        {
+            return ApiResponse<List<ScheduleDto>>.ErrorResponse(ErrorCodes.ValidationError, "Select at least one valid day.");
+        }
+
+        // Get teacher profile for ownership and conflict checks
+        var teacherId = await GetTeacherIdByUserIdAsync(userId);
+        if (teacherId == null)
+        {
+            return ApiResponse<List<ScheduleDto>>.ErrorResponse(ErrorCodes.NotFound, "Teacher profile not found.");
+        }
+
+        // Validate section and classroom
+        var section = await _context.Sections
+            .Include(s => s.Classroom)
+            .FirstOrDefaultAsync(s => s.Id == request.SectionId);
+
+        if (section == null)
+        {
+            return ApiResponse<List<ScheduleDto>>.ErrorResponse(ErrorCodes.NotFound, "Section not found.");
+        }
+
+        // Validate subject
+        var subject = await _context.Subjects.FindAsync(request.SubjectId);
+        if (subject == null)
+        {
+            return ApiResponse<List<ScheduleDto>>.ErrorResponse(ErrorCodes.NotFound, "Subject not found.");
+        }
+
+        // Pre-validate all requested days to avoid partial inserts
+        foreach (var dayOfWeek in targetDays)
+        {
+            var conflictResult = await _conflictService.CheckConflictsAsync(
+                request.SectionId,
+                section.ClassroomId,
+                teacherId.Value,
+                dayOfWeek,
+                request.StartTime,
+                request.EndTime);
+
+            if (conflictResult.HasConflict)
+            {
+                var errorDetails = _conflictService.BuildConflictDetail(conflictResult);
+                var dayName = DayNames[dayOfWeek];
+                return ApiResponse<List<ScheduleDto>>.ErrorResponse(
+                    conflictResult.ConflictType ?? ErrorCodes.Conflict,
+                    $"{dayName}: {errorDetails.Message}",
+                    errorDetails);
+            }
+        }
+
+        await using var transaction = await _context.Database.BeginTransactionAsync();
+
+        // Keep self-assignment behavior for teacher-created schedules
+        await EnsureTeacherAssignedToSectionAsync(teacherId.Value, request.SectionId);
+
+        var createdSchedules = targetDays
+            .Select(dayOfWeek => new Schedule
+            {
+                SectionId = request.SectionId,
+                TeacherId = teacherId.Value,
+                SubjectId = request.SubjectId,
+                DayOfWeek = dayOfWeek,
+                StartTime = request.StartTime,
+                EndTime = request.EndTime,
+                EffectiveFrom = request.EffectiveFrom,
+                EffectiveTo = request.EffectiveTo
+            })
+            .ToList();
+
+        _context.Schedules.AddRange(createdSchedules);
+        await _context.SaveChangesAsync();
+        await transaction.CommitAsync();
+
+        var dtos = await BuildScheduleDtosAsync(createdSchedules, userId);
+        return ApiResponse<List<ScheduleDto>>.SuccessResponse(dtos);
     }
 
     // Update an existing schedule slot with re-validation
@@ -183,13 +280,19 @@ public class SchedulesService : ISchedulesService
             return ApiResponse<ScheduleDto>.ErrorResponse(ErrorCodes.NotFound, "Teacher profile not found.");
         }
 
-        // Check if teacher is assigned to this section (owner check)
-        var isAssigned = await _context.SectionTeachers
-            .AnyAsync(st => st.SectionId == schedule.SectionId && st.TeacherId == teacherId.Value);
+        var isOwner = schedule.TeacherId.HasValue && schedule.TeacherId.Value == teacherId.Value;
+        var canClaimUnowned = !schedule.TeacherId.HasValue
+            && await _context.SectionTeachers
+                .AnyAsync(st => st.SectionId == schedule.SectionId && st.TeacherId == teacherId.Value);
 
-        if (!isAssigned)
+        if (!isOwner && !canClaimUnowned)
         {
-            return ApiResponse<ScheduleDto>.ErrorResponse(ErrorCodes.Forbidden, "You are not assigned to this section.");
+            return ApiResponse<ScheduleDto>.ErrorResponse(ErrorCodes.Forbidden, "You can only update your own schedule slots.");
+        }
+
+        if (canClaimUnowned)
+        {
+            schedule.TeacherId = teacherId.Value;
         }
 
         // Calculate new values (use existing if not provided)
@@ -273,19 +376,20 @@ public class SchedulesService : ISchedulesService
         // Admin can delete any schedule
         if (!isAdmin)
         {
-            // Check if teacher is assigned to this section (owner check)
             var teacherId = await GetTeacherIdByUserIdAsync(userId);
             if (teacherId == null)
             {
                 return ApiResponse<bool>.ErrorResponse(ErrorCodes.NotFound, "Teacher profile not found.");
             }
 
-            var isAssigned = await _context.SectionTeachers
-                .AnyAsync(st => st.SectionId == schedule.SectionId && st.TeacherId == teacherId.Value);
+            var isOwner = schedule.TeacherId.HasValue && schedule.TeacherId.Value == teacherId.Value;
+            var canManageUnowned = !schedule.TeacherId.HasValue
+                && await _context.SectionTeachers
+                    .AnyAsync(st => st.SectionId == schedule.SectionId && st.TeacherId == teacherId.Value);
 
-            if (!isAssigned)
+            if (!isOwner && !canManageUnowned)
             {
-                return ApiResponse<bool>.ErrorResponse(ErrorCodes.Forbidden, "You are not assigned to this section.");
+                return ApiResponse<bool>.ErrorResponse(ErrorCodes.Forbidden, "You can only delete your own schedule slots.");
             }
         }
 
@@ -444,8 +548,10 @@ public class SchedulesService : ISchedulesService
             .Where(t => t != null)
             .ToListAsync();
 
-        // Check if current teacher is assigned to this section
-        var isMine = teacherId.HasValue && teachers.Any(t => t!.Id == teacherId.Value);
+        // Check if current teacher owns this schedule slot
+        var isMine = teacherId.HasValue
+            && schedule.TeacherId.HasValue
+            && schedule.TeacherId.Value == teacherId.Value;
 
         return new ScheduleDto
         {

@@ -189,6 +189,7 @@ public static class SeedData
         var schedule1 = new Schedule
         {
             SectionId = section1.Id,
+            TeacherId = teacher1.Id,
             SubjectId = subject1.Id,
             DayOfWeek = 1, // Monday
             StartTime = new TimeOnly(8, 0),
@@ -198,6 +199,7 @@ public static class SeedData
         var schedule2 = new Schedule
         {
             SectionId = section1.Id,
+            TeacherId = teacher1.Id,
             SubjectId = subject1.Id,
             DayOfWeek = 3, // Wednesday
             StartTime = new TimeOnly(8, 0),
@@ -207,6 +209,7 @@ public static class SeedData
         var schedule3 = new Schedule
         {
             SectionId = section1.Id,
+            TeacherId = teacher1.Id,
             SubjectId = subject1.Id,
             DayOfWeek = 5, // Friday
             StartTime = new TimeOnly(8, 0),
@@ -216,6 +219,7 @@ public static class SeedData
         var schedule4 = new Schedule
         {
             SectionId = section2.Id,
+            TeacherId = teacher2.Id,
             SubjectId = subject2.Id,
             DayOfWeek = 2, // Tuesday
             StartTime = new TimeOnly(10, 0),
@@ -225,6 +229,7 @@ public static class SeedData
         var schedule5 = new Schedule
         {
             SectionId = section2.Id,
+            TeacherId = teacher2.Id,
             SubjectId = subject2.Id,
             DayOfWeek = 4, // Thursday
             StartTime = new TimeOnly(10, 0),

@@ -15,6 +15,9 @@ public interface ISchedulesService
     // Create a new schedule slot with conflict validation
     Task<ApiResponse<ScheduleDto>> CreateScheduleAsync(CreateScheduleRequest request, int userId);
 
+    // Create multiple schedule slots for one shared time range across weekdays
+    Task<ApiResponse<List<ScheduleDto>>> CreateScheduleRangeAsync(CreateScheduleRangeRequest request, int userId);
+
     // Update an existing schedule slot with re-validation
     Task<ApiResponse<ScheduleDto>> UpdateScheduleAsync(int id, UpdateScheduleRequest request, int userId);
 

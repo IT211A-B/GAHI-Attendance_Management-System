@@ -4,6 +4,9 @@ namespace Attendance_Management_System.Backend.DTOs.Responses;
 public class ScheduleSlotDto
 {
     public int ScheduleId { get; set; }
+    public int SubjectId { get; set; }
+    public int DayOfWeek { get; set; }
+    public int? TeacherId { get; set; }
     public string SubjectName { get; set; } = string.Empty;
     public string TeacherName { get; set; } = string.Empty;
     public string Classroom { get; set; } = string.Empty;

@@ -31,26 +31,13 @@ public class TeacherHistoryService : ITeacherHistoryService
                 "Teacher profile not found.");
         }
 
-        // Get section IDs that the teacher is assigned to via SectionTeachers bridge table
-        var assignedSectionIds = await _context.SectionTeachers
-            .AsNoTracking()
-            .Where(st => st.TeacherId == teacher.Id)
-            .Select(st => st.SectionId)
-            .ToListAsync();
-
-        if (!assignedSectionIds.Any())
-        {
-            // Teacher has no section assignments - return empty list
-            return ApiResponse<List<TeacherScheduleDto>>.SuccessResponse(new List<TeacherScheduleDto>());
-        }
-
-        // Get all schedules for the assigned sections with related data
+        // Get all schedules owned by this teacher with related data
         var schedules = await _context.Schedules
             .AsNoTracking()
             .Include(s => s.Section)
                 .ThenInclude(sec => sec!.Classroom)
             .Include(s => s.Subject)
-            .Where(s => assignedSectionIds.Contains(s.SectionId))
+            .Where(s => s.TeacherId == teacher.Id)
             .OrderBy(s => s.DayOfWeek)
             .ThenBy(s => s.StartTime)
             .ToListAsync();
@@ -103,16 +90,12 @@ public class TeacherHistoryService : ITeacherHistoryService
                 "Schedule not found.");
         }
 
-        // Verify teacher is assigned to the schedule's section
-        var isAssigned = await _context.SectionTeachers
-            .AsNoTracking()
-            .AnyAsync(st => st.TeacherId == teacher.Id && st.SectionId == schedule.SectionId);
-
-        if (!isAssigned)
+        // Verify teacher owns the target schedule slot
+        if (schedule.TeacherId != teacher.Id)
         {
             return ApiResponse<ScheduleHistoryDto>.ErrorResponse(
                 "FORBIDDEN",
-                "You are not assigned to this section.");
+                "You can only view history for your own schedule slots.");
         }
 
         // Use provided date or default to today

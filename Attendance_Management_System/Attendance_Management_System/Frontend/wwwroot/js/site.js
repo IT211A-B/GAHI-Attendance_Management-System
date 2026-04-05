@@ -100,7 +100,107 @@
 		}
 	}
 
+	function toTimeValue(totalMinutes) {
+		var normalized = Math.max(0, Math.min(23 * 60 + 59, totalMinutes));
+		var hours = Math.floor(normalized / 60);
+		var minutes = normalized % 60;
+		return String(hours).padStart(2, "0") + ":" + String(minutes).padStart(2, "0");
+	}
+
+	function addMinutesToTime(timeValue, minutesToAdd) {
+		if (!timeValue || timeValue.indexOf(":") === -1) {
+			return timeValue;
+		}
+
+		var parts = timeValue.split(":");
+		var hours = parseInt(parts[0], 10);
+		var minutes = parseInt(parts[1], 10);
+		if (Number.isNaN(hours) || Number.isNaN(minutes)) {
+			return timeValue;
+		}
+
+		return toTimeValue(hours * 60 + minutes + minutesToAdd);
+	}
+
+	function initializeTimetableQuickAdd() {
+		var panel = document.getElementById("quick-add-panel");
+		if (!panel) {
+			return;
+		}
+
+		var form = document.getElementById("quick-add-form");
+		var sectionInput = document.getElementById("quick-add-section-id");
+		var startInput = document.getElementById("quick-add-start-time");
+		var endInput = document.getElementById("quick-add-end-time");
+		var hint = document.getElementById("quick-add-hint");
+		var triggers = document.querySelectorAll("[data-quick-add-trigger='true']");
+		var closeButtons = panel.querySelectorAll("[data-quick-add-close='true']");
+		var dayCheckboxes = panel.querySelectorAll("input[name='selectedDays']");
+
+		if (!form || !startInput || !endInput || !triggers.length) {
+			return;
+		}
+
+		function closePanel() {
+			panel.hidden = true;
+			panel.classList.remove("is-open");
+		}
+
+		function openPanel(trigger) {
+			var sectionId = trigger.getAttribute("data-section-id") || "";
+			var dayOfWeek = trigger.getAttribute("data-day-of-week") || "";
+			var dayName = trigger.getAttribute("data-day-name") || "Selected day";
+			var startTime = trigger.getAttribute("data-start-time") || "";
+			var defaultEnd = trigger.getAttribute("data-default-end-time") || addMinutesToTime(startTime, 30);
+
+			if (sectionInput) {
+				sectionInput.value = sectionId;
+			}
+
+			startInput.value = startTime;
+			endInput.value = defaultEnd;
+			endInput.min = addMinutesToTime(startTime, 30);
+			endInput.max = "19:00";
+
+			dayCheckboxes.forEach(function (checkbox) {
+				checkbox.checked = checkbox.value === dayOfWeek;
+			});
+
+			if (hint) {
+				hint.textContent = "Add " + dayName + " from " + startTime + " and optionally repeat on other days.";
+			}
+
+			panel.hidden = false;
+			panel.classList.add("is-open");
+			endInput.focus();
+		}
+
+		triggers.forEach(function (trigger) {
+			trigger.addEventListener("click", function () {
+				openPanel(trigger);
+			});
+		});
+
+		closeButtons.forEach(function (button) {
+			button.addEventListener("click", closePanel);
+		});
+
+		panel.addEventListener("click", function (event) {
+			if (event.target === panel) {
+				closePanel();
+			}
+		});
+
+		document.addEventListener("keydown", function (event) {
+			if (event.key === "Escape" && !panel.hidden) {
+				closePanel();
+			}
+		});
+	}
+
 	document.addEventListener("DOMContentLoaded", function () {
+		initializeTimetableQuickAdd();
+
 		if (prefersReducedMotion() || !supportsAnime()) {
 			return;
 		}
