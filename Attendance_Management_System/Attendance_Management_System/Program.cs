@@ -41,20 +41,17 @@ if (!app.Environment.IsDevelopment())
 
 // Force HTTPS redirection for secure connections
 app.UseHttpsRedirection();
+app.UseStaticFiles();
 app.UseRouting();
 
 // Enable authentication and authorization middleware
 app.UseAuthentication();
 app.UseAuthorization();
 
-// Serve static files (CSS, JS, images)
-app.MapStaticAssets();
-
 // Configure default MVC route pattern
 app.MapControllerRoute(
     name: "default",
-    pattern: "{controller=Home}/{action=Index}/{id?}")
-    .WithStaticAssets();
+    pattern: "{controller=Home}/{action=Index}/{id?}");
 
 // Expose health check endpoint for monitoring
 app.MapHealthChecks("/health");

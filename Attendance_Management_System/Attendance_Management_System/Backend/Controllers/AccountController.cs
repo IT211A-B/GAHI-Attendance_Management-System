@@ -1,4 +1,6 @@
+using Attendance_Management_System.Backend.DTOs.Requests;
 using Attendance_Management_System.Backend.Entities;
+using Attendance_Management_System.Backend.Interfaces.Services;
 using Attendance_Management_System.Backend.ViewModels.Auth;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
@@ -10,10 +12,20 @@ namespace Attendance_Management_System.Backend.Controllers;
 public class AccountController : Controller
 {
     private readonly SignInManager<User> _signInManager;
+    private readonly IAuthService _authService;
+    private readonly ICoursesService _coursesService;
+    private readonly IAcademicYearsService _academicYearsService;
 
-    public AccountController(SignInManager<User> signInManager)
+    public AccountController(
+        SignInManager<User> signInManager,
+        IAuthService authService,
+        ICoursesService coursesService,
+        IAcademicYearsService academicYearsService)
     {
         _signInManager = signInManager;
+        _authService = authService;
+        _coursesService = coursesService;
+        _academicYearsService = academicYearsService;
     }
 
     [HttpGet("login")]
@@ -33,6 +45,27 @@ public class AccountController : Controller
     public IActionResult LegacyLogin(string? returnUrl = null)
     {
         return RedirectToAction(nameof(Login), new { returnUrl });
+    }
+
+    [HttpGet("signup")]
+    [AllowAnonymous]
+    public async Task<IActionResult> Signup()
+    {
+        if (User.Identity?.IsAuthenticated == true)
+        {
+            return RedirectToAction("Index", "Dashboard");
+        }
+
+        var viewModel = new StudentSignupViewModel();
+        await PopulateSignupOptionsAsync(viewModel);
+        return View(viewModel);
+    }
+
+    [HttpGet("Account/Register")]
+    [AllowAnonymous]
+    public IActionResult LegacyRegister()
+    {
+        return RedirectToAction(nameof(Signup));
     }
 
     [HttpPost("login")]
@@ -65,6 +98,52 @@ public class AccountController : Controller
         return RedirectToAction("Index", "Dashboard");
     }
 
+    [HttpPost("signup")]
+    [AllowAnonymous]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> Signup(StudentSignupViewModel model)
+    {
+        if (User.Identity?.IsAuthenticated == true)
+        {
+            return RedirectToAction("Index", "Dashboard");
+        }
+
+        await PopulateSignupOptionsAsync(model);
+
+        if (!ModelState.IsValid)
+        {
+            return View(model);
+        }
+
+        var request = new RegisterRequest
+        {
+            Email = model.Email.Trim(),
+            Password = model.Password,
+            ConfirmPassword = model.ConfirmPassword,
+            StudentNumber = model.StudentNumber.Trim(),
+            FirstName = model.FirstName.Trim(),
+            MiddleName = NormalizeOptional(model.MiddleName),
+            LastName = model.LastName.Trim(),
+            Birthdate = model.Birthdate,
+            Gender = model.Gender.Trim(),
+            Address = model.Address.Trim(),
+            GuardianName = model.GuardianName.Trim(),
+            GuardianContact = model.GuardianContact.Trim(),
+            CourseId = model.CourseId,
+            AcademicYearId = model.AcademicYearId
+        };
+
+        var result = await _authService.RegisterStudentAsync(request);
+        if (!result.Success)
+        {
+            ModelState.AddModelError(string.Empty, result.Message ?? "Unable to complete registration right now.");
+            return View(model);
+        }
+
+        TempData["AuthSuccess"] = result.Message ?? "Registration successful. You can now sign in.";
+        return RedirectToAction(nameof(Login));
+    }
+
     [HttpPost("logout")]
     [Authorize]
     [ValidateAntiForgeryToken]
@@ -72,5 +151,51 @@ public class AccountController : Controller
     {
         await _signInManager.SignOutAsync();
         return RedirectToAction(nameof(Login));
+    }
+
+    private async Task PopulateSignupOptionsAsync(StudentSignupViewModel model)
+    {
+        var coursesResult = await _coursesService.GetAllCoursesAsync();
+        if (!coursesResult.Success || coursesResult.Data is null)
+        {
+            model.ErrorMessage ??= coursesResult.Error?.Message ?? "Unable to load course options right now.";
+        }
+        else
+        {
+            model.AvailableCourses = coursesResult.Data
+                .OrderBy(course => course.Name)
+                .Select(course => new SignupCourseOptionViewModel
+                {
+                    Id = course.Id,
+                    Label = string.IsNullOrWhiteSpace(course.Code)
+                        ? course.Name
+                        : $"{course.Code} - {course.Name}"
+                })
+                .ToList();
+        }
+
+        var academicYearsResult = await _academicYearsService.GetAllAcademicYearsAsync();
+        if (!academicYearsResult.Success || academicYearsResult.Data is null)
+        {
+            model.ErrorMessage ??= academicYearsResult.Error?.Message ?? "Unable to load academic period options right now.";
+        }
+        else
+        {
+            model.AvailableAcademicYears = academicYearsResult.Data
+                .OrderByDescending(year => year.StartDate)
+                .Select(year => new SignupAcademicYearOptionViewModel
+                {
+                    Id = year.Id,
+                    Label = year.YearLabel
+                })
+                .ToList();
+        }
+
+    }
+
+    private static string? NormalizeOptional(string? value)
+    {
+        var trimmed = value?.Trim();
+        return string.IsNullOrWhiteSpace(trimmed) ? null : trimmed;
     }
 }

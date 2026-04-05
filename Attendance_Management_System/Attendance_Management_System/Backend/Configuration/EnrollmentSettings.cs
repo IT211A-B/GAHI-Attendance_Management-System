@@ -15,6 +15,9 @@ public class EnrollmentSettings
     // Whether to automatically create new sections when all are at capacity
     public bool AutoCreateSections { get; set; } = true;
 
+    // Whether section assignment prefers deterministic balancing over random picks
+    public bool DeterministicSectionAssignment { get; set; } = true;
+
     // Validates that settings are properly configured
     // Returns true if valid, false if defaults should be used
     public bool IsValid()
@@ -27,6 +30,7 @@ public class EnrollmentSettings
     {
         WarningThreshold = 50,
         OverCapacityLimit = 55,
-        AutoCreateSections = true
+        AutoCreateSections = true,
+        DeterministicSectionAssignment = true
     };
 }

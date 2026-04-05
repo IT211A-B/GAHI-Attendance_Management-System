@@ -46,8 +46,8 @@ public class RegisterRequest
     [Required(ErrorMessage = "Course ID is required")]
     public int CourseId { get; set; }
 
-    [Required(ErrorMessage = "Section ID is required")]
-    public int SectionId { get; set; }
+    // Optional for compatibility. If omitted, enrollment flow auto-assigns a section.
+    public int? SectionId { get; set; }
 
     [Required(ErrorMessage = "Academic year ID is required")]
     public int AcademicYearId { get; set; }
