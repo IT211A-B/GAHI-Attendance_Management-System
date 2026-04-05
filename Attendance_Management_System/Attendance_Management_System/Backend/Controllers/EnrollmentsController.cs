@@ -297,6 +297,7 @@ public class EnrollmentsController : Controller
             .Select(section => new EnrollmentOptionViewModel
             {
                 Id = section.Id,
+                CourseId = section.CourseId,
                 Label = $"{section.Name} | Year {section.YearLevel}"
             })
             .ToList();
@@ -344,6 +345,7 @@ public class EnrollmentsController : Controller
                 StudentId = enrollment.StudentId,
                 StudentName = string.IsNullOrWhiteSpace(enrollment.StudentName) ? "-" : enrollment.StudentName,
                 StudentNumber = string.IsNullOrWhiteSpace(enrollment.StudentNumber) ? "-" : enrollment.StudentNumber,
+                StudentCourseId = enrollment.StudentCourseId,
                 SectionId = enrollment.SectionId,
                 SectionName = string.IsNullOrWhiteSpace(enrollment.SectionName) ? "-" : enrollment.SectionName,
                 AcademicYearId = enrollment.AcademicYearId,

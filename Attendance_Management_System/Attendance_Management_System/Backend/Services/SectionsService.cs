@@ -140,11 +140,22 @@ public class SectionsService : ISectionsService
             return ApiResponse<SectionDto>.ErrorResponse("VALIDATION_ERROR", "Course not found.");
         }
 
-        // Validate subject exists
-        var subjectExists = await _context.Subjects.AnyAsync(s => s.Id == request.SubjectId);
-        if (!subjectExists)
+        // Validate subject exists and belongs to the selected course
+        var subjectCourseId = await _context.Subjects
+            .Where(subject => subject.Id == request.SubjectId)
+            .Select(subject => (int?)subject.CourseId)
+            .FirstOrDefaultAsync();
+
+        if (!subjectCourseId.HasValue)
         {
             return ApiResponse<SectionDto>.ErrorResponse("VALIDATION_ERROR", "Subject not found.");
+        }
+
+        if (subjectCourseId.Value != request.CourseId)
+        {
+            return ApiResponse<SectionDto>.ErrorResponse(
+                "VALIDATION_ERROR",
+                "Selected subject does not belong to the selected course.");
         }
 
         // Validate classroom exists

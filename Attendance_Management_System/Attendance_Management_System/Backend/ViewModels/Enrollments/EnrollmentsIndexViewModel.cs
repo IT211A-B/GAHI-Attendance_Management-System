@@ -40,6 +40,7 @@ public class EnrollmentListItemViewModel
     public int StudentId { get; set; }
     public string StudentName { get; set; } = "-";
     public string StudentNumber { get; set; } = "-";
+    public int? StudentCourseId { get; set; }
     public int SectionId { get; set; }
     public string SectionName { get; set; } = "-";
     public int AcademicYearId { get; set; }
@@ -59,6 +60,7 @@ public class EnrollmentListItemViewModel
 public class EnrollmentOptionViewModel
 {
     public int Id { get; set; }
+    public int? CourseId { get; set; }
     public string Label { get; set; } = string.Empty;
 }
 

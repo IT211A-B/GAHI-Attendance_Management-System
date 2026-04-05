@@ -433,12 +433,27 @@ public class EnrollmentService : IEnrollmentService
                 "Target section not found.");
         }
 
+        // Ensure reassignment stays within the student's assigned course.
+        if (enrollment.Student == null || enrollment.Student.CourseId <= 0)
+        {
+            return ApiResponse<EnrollmentDto>.ErrorResponse(
+                ErrorCodes.BadRequest,
+                "Student course is not set. Unable to validate reassignment.");
+        }
+
+        if (newSection.CourseId != enrollment.Student.CourseId)
+        {
+            return ApiResponse<EnrollmentDto>.ErrorResponse(
+                ErrorCodes.BadRequest,
+                "Target section must match the student's course.");
+        }
+
         // Check if this is the same section
         if (newSection.Id == enrollment.SectionId)
         {
             return ApiResponse<EnrollmentDto>.ErrorResponse(
                 ErrorCodes.BadRequest,
-                "Student is already assigned to this section.");
+                "Student is already assigned to this section. Please choose a different target section.");
         }
 
         // Check capacity on new section
@@ -578,6 +593,7 @@ public class EnrollmentService : IEnrollmentService
             StudentName = enrollment.Student != null
                 ? $"{enrollment.Student.FirstName} {enrollment.Student.LastName}"
                 : null,
+            StudentCourseId = enrollment.Student?.CourseId,
             SectionId = enrollment.SectionId,
             SectionName = enrollment.Section?.Name,
             AcademicYearId = enrollment.AcademicYearId,

@@ -6,6 +6,10 @@ public class SectionsIndexViewModel
 {
     public IReadOnlyList<SectionListItemViewModel> Sections { get; set; } = [];
     public IReadOnlyList<SectionOptionViewModel> SectionOptions { get; set; } = [];
+    public IReadOnlyList<SectionReferenceOptionViewModel> AcademicPeriods { get; set; } = [];
+    public IReadOnlyList<SectionReferenceOptionViewModel> Courses { get; set; } = [];
+    public IReadOnlyList<SectionSubjectReferenceOptionViewModel> Subjects { get; set; } = [];
+    public IReadOnlyList<SectionReferenceOptionViewModel> Classrooms { get; set; } = [];
     public IReadOnlyList<SectionTimetableRowViewModel> TimetableRows { get; set; } = [];
     public IReadOnlyList<SectionAttendanceScheduleOptionViewModel> AttendanceSchedules { get; set; } = [];
     public IReadOnlyList<SectionAttendanceStudentRowViewModel> AttendanceStudents { get; set; } = [];
@@ -23,6 +27,7 @@ public class SectionsIndexViewModel
     public int AttendanceLateCount { get; set; }
     public int AttendanceAbsentCount { get; set; }
     public string? ErrorMessage { get; set; }
+    public string? CreateSectionOptionsErrorMessage { get; set; }
     public string? TimetableErrorMessage { get; set; }
     public string? AttendanceErrorMessage { get; set; }
 }
@@ -31,6 +36,17 @@ public class SectionOptionViewModel
 {
     public int Id { get; set; }
     public string Name { get; set; } = string.Empty;
+}
+
+public class SectionReferenceOptionViewModel
+{
+    public int Id { get; set; }
+    public string Label { get; set; } = string.Empty;
+}
+
+public class SectionSubjectReferenceOptionViewModel : SectionReferenceOptionViewModel
+{
+    public int CourseId { get; set; }
 }
 
 public class SectionTimetableRowViewModel
@@ -123,24 +139,24 @@ public class CreateSectionFormViewModel
     [Display(Name = "Year level")]
     public int YearLevel { get; set; } = 1;
 
-    [Required(ErrorMessage = "Academic year ID is required")]
-    [Range(1, int.MaxValue, ErrorMessage = "Academic year ID must be greater than 0")]
-    [Display(Name = "Academic year ID")]
+    [Required(ErrorMessage = "Academic period is required")]
+    [Range(1, int.MaxValue, ErrorMessage = "Please select a valid academic period")]
+    [Display(Name = "Academic Period")]
     public int AcademicYearId { get; set; }
 
-    [Required(ErrorMessage = "Course ID is required")]
-    [Range(1, int.MaxValue, ErrorMessage = "Course ID must be greater than 0")]
-    [Display(Name = "Course ID")]
+    [Required(ErrorMessage = "Course is required")]
+    [Range(1, int.MaxValue, ErrorMessage = "Please select a valid course")]
+    [Display(Name = "Course")]
     public int CourseId { get; set; }
 
-    [Required(ErrorMessage = "Subject ID is required")]
-    [Range(1, int.MaxValue, ErrorMessage = "Subject ID must be greater than 0")]
-    [Display(Name = "Subject ID")]
+    [Required(ErrorMessage = "Subject is required")]
+    [Range(1, int.MaxValue, ErrorMessage = "Please select a valid subject")]
+    [Display(Name = "Subject")]
     public int SubjectId { get; set; }
 
-    [Required(ErrorMessage = "Classroom ID is required")]
-    [Range(1, int.MaxValue, ErrorMessage = "Classroom ID must be greater than 0")]
-    [Display(Name = "Classroom ID")]
+    [Required(ErrorMessage = "Classroom is required")]
+    [Range(1, int.MaxValue, ErrorMessage = "Please select a valid classroom")]
+    [Display(Name = "Classroom")]
     public int ClassroomId { get; set; }
 }
 

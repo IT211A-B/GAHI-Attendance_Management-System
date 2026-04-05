@@ -73,14 +73,6 @@
                        asp-controller="ClassroomManagement" asp-action="Index">Departments</a>
                     <a class="sidebar-link @(currentController == "TeacherManagement" ? "active" : "")"
                        asp-controller="TeacherManagement" asp-action="Index">Teachers</a>
-                    <a class="sidebar-link @(currentController == "FrontendPlaceholders" && currentAction == "Staff" ? "active" : "")"
-                       asp-controller="FrontendPlaceholders" asp-action="Staff">Staff</a>
-                    <a class="sidebar-link @(currentController == "FrontendPlaceholders" && currentAction == "GateTerminals" ? "active" : "")"
-                       asp-controller="FrontendPlaceholders" asp-action="GateTerminals">Gate Terminals</a>
-                    <a class="sidebar-link @(currentController == "FrontendPlaceholders" && currentAction == "BusinessRules" ? "active" : "")"
-                       asp-controller="FrontendPlaceholders" asp-action="BusinessRules">Business Rules</a>
-                    <a class="sidebar-link @(currentController == "FrontendPlaceholders" && currentAction == "AuditLogs" ? "active" : "")"
-                       asp-controller="FrontendPlaceholders" asp-action="AuditLogs">Audit Logs</a>
                 }
 
                 @if (User.IsInRole("student"))

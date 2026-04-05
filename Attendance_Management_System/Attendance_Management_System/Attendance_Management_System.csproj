@@ -4,7 +4,7 @@
     <TargetFramework>net9.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <DefaultItemExcludes>$(DefaultItemExcludes);artifacts/**</DefaultItemExcludes>
+    <DefaultItemExcludes>$(DefaultItemExcludes);artifacts/**;**/artifacts/**</DefaultItemExcludes>
   </PropertyGroup>
 
   <ItemGroup>
@@ -17,5 +17,9 @@
     </PackageReference>
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="9.0.0" />
   </ItemGroup>
+
+  <Target Name="ClearStaleBuildFileList" BeforeTargets="PrepareForBuild">
+    <Delete Files="$(MSBuildProjectExtensionsPath)$(MSBuildProjectFile).FileListAbsolute.txt" ContinueOnError="true" />
+  </Target>
 
 </Project>

@@ -396,6 +396,12 @@
 
                 <article class="panel">
                     <h3>Create Section</h3>
+
+                    @if (!string.IsNullOrWhiteSpace(Model.CreateSectionOptionsErrorMessage))
+                    {
+                        <p class="form-validation">@Model.CreateSectionOptionsErrorMessage</p>
+                    }
+
                     <form asp-controller="SectionManagement" asp-action="Create" method="post" class="filters-grid three">
                         @Html.AntiForgeryToken()
                         <div asp-validation-summary="ModelOnly" class="form-validation"></div>
@@ -412,22 +418,46 @@
                         </div>
                         <div>
                             <label asp-for="CreateForm.AcademicYearId"></label>
-                            <input asp-for="CreateForm.AcademicYearId" class="input-select" type="number" min="1" />
+                            <select asp-for="CreateForm.AcademicYearId" class="input-select">
+                                <option value="">Choose academic period</option>
+                                @foreach (var period in Model.AcademicPeriods)
+                                {
+                                    <option value="@period.Id">@period.Label</option>
+                                }
+                            </select>
                             <span asp-validation-for="CreateForm.AcademicYearId" class="field-validation"></span>
                         </div>
                         <div>
                             <label asp-for="CreateForm.CourseId"></label>
-                            <input asp-for="CreateForm.CourseId" class="input-select" type="number" min="1" />
+                            <select asp-for="CreateForm.CourseId" class="input-select">
+                                <option value="">Choose course</option>
+                                @foreach (var course in Model.Courses)
+                                {
+                                    <option value="@course.Id">@course.Label</option>
+                                }
+                            </select>
                             <span asp-validation-for="CreateForm.CourseId" class="field-validation"></span>
                         </div>
                         <div>
                             <label asp-for="CreateForm.SubjectId"></label>
-                            <input asp-for="CreateForm.SubjectId" class="input-select" type="number" min="1" />
+                            <select asp-for="CreateForm.SubjectId" class="input-select">
+                                <option value="">Choose subject</option>
+                                @foreach (var subject in Model.Subjects)
+                                {
+                                    <option value="@subject.Id" data-course-id="@subject.CourseId">@subject.Label</option>
+                                }
+                            </select>
                             <span asp-validation-for="CreateForm.SubjectId" class="field-validation"></span>
                         </div>
                         <div>
                             <label asp-for="CreateForm.ClassroomId"></label>
-                            <input asp-for="CreateForm.ClassroomId" class="input-select" type="number" min="1" />
+                            <select asp-for="CreateForm.ClassroomId" class="input-select">
+                                <option value="">Choose classroom</option>
+                                @foreach (var classroom in Model.Classrooms)
+                                {
+                                    <option value="@classroom.Id">@classroom.Label</option>
+                                }
+                            </select>
                             <span asp-validation-for="CreateForm.ClassroomId" class="field-validation"></span>
                         </div>
 
@@ -510,4 +540,40 @@
 
         @section Scripts {
             <partial name="_ValidationScriptsPartial" />
+
+            <script>
+                (() => {
+                    const courseSelect = document.getElementById("CreateForm_CourseId");
+                    const subjectSelect = document.getElementById("CreateForm_SubjectId");
+
+                    if (!courseSelect || !subjectSelect) {
+                        return;
+                    }
+
+                    const allSubjectOptions = Array.from(subjectSelect.options)
+                        .filter(option => option.value === "" || option.dataset.courseId);
+
+                    const refreshSubjectOptions = () => {
+                        const selectedCourseId = courseSelect.value;
+                        const selectedSubjectId = subjectSelect.value;
+
+                        subjectSelect.innerHTML = "";
+
+                        for (const option of allSubjectOptions) {
+                            if (option.value === "" || option.dataset.courseId === selectedCourseId) {
+                                subjectSelect.appendChild(option);
+                            }
+                        }
+
+                        const hasPreviousSelection = Array.from(subjectSelect.options)
+                            .some(option => option.value === selectedSubjectId);
+
+                        subjectSelect.value = hasPreviousSelection ? selectedSubjectId : "";
+                        subjectSelect.disabled = selectedCourseId === "";
+                    };
+
+                    courseSelect.addEventListener("change", refreshSubjectOptions);
+                    refreshSubjectOptions();
+                })();
+            </script>
         }

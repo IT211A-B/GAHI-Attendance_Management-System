@@ -170,23 +170,38 @@
 
                                             @if (enrollment.CanReassign)
                                             {
+                                                var targetSections = Model.Sections
+                                                    .Where(sectionItem =>
+                                                        sectionItem.Id != enrollment.SectionId
+                                                        && (!enrollment.StudentCourseId.HasValue
+                                                            || sectionItem.CourseId == enrollment.StudentCourseId.Value))
+                                                    .ToList();
+
                                                 <form asp-controller="Enrollments" asp-action="Reassign" asp-route-id="@enrollment.Id"
                                                       method="post" class="stack-form">
                                                     @Html.AntiForgeryToken()
                                                     <input type="hidden" name="status" value="@Model.SelectedStatus" />
                                                     <input type="hidden" name="academicYearId" value="@Model.SelectedAcademicYearId" />
                                                     <input type="hidden" name="page" value="@Model.Page" />
-                                                    <select name="ReassignForm.NewSectionId" class="input-select compact-input">
-                                                        @foreach (var sectionItem in Model.Sections)
-                                                        {
-                                                            <option value="@sectionItem.Id"
-                                                                    selected="@(sectionItem.Id == enrollment.SectionId)">@sectionItem.Label
-                                                            </option>
-                                                        }
-                                                    </select>
-                                                    <input type="text" name="ReassignForm.Reason" class="input-select compact-input"
-                                                           placeholder="Reason (optional)" />
-                                                    <button type="submit" class="btn-secondary">Reassign</button>
+                                                    @if (!targetSections.Any())
+                                                    {
+                                                        <p class="footer-note">No other sections available for this student's course.</p>
+                                                        <button type="button" class="btn-secondary" disabled>Reassign</button>
+                                                    }
+                                                    else
+                                                    {
+                                                        <select name="ReassignForm.NewSectionId" class="input-select compact-input"
+                                                                required>
+                                                            <option value="">Select target section</option>
+                                                            @foreach (var sectionItem in targetSections)
+                                                            {
+                                                                <option value="@sectionItem.Id">@sectionItem.Label</option>
+                                                            }
+                                                        </select>
+                                                        <input type="text" name="ReassignForm.Reason" class="input-select compact-input"
+                                                               placeholder="Reason (optional)" />
+                                                        <button type="submit" class="btn-secondary">Reassign</button>
+                                                    }
                                                 </form>
                                             }
                                         </div>
@@ -319,7 +334,7 @@
                                         <td>@sectionInfo.AvailableSlots</td>
                                         <td>
                                             @if (sectionInfo.Status ==
-                                                                        Attendance_Management_System.Backend.Enums.SectionCapacityStatus.Available)
+                                                                                                                                                                Attendance_Management_System.Backend.Enums.SectionCapacityStatus.Available)
                                             {
                                                 <span class="status-pill active">@sectionInfo.StatusText</span>
                                             }

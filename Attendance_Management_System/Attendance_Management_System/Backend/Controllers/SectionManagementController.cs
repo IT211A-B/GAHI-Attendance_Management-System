@@ -18,6 +18,10 @@ public class SectionManagementController : Controller
     private readonly IStudentsService _studentsService;
     private readonly IAttendanceService _attendanceService;
     private readonly ITeachersService _teachersService;
+    private readonly IAcademicYearsService _academicYearsService;
+    private readonly ICoursesService _coursesService;
+    private readonly ISubjectsService _subjectsService;
+    private readonly IClassroomsService _classroomsService;
 
     private static readonly int[] TimetableDayOrder = { 1, 2, 3, 4, 5, 6, 0 };
     private static readonly Dictionary<int, string> TimetableDayNames = new()
@@ -39,13 +43,21 @@ public class SectionManagementController : Controller
         ISchedulesService schedulesService,
         IStudentsService studentsService,
         IAttendanceService attendanceService,
-        ITeachersService teachersService)
+        ITeachersService teachersService,
+        IAcademicYearsService academicYearsService,
+        ICoursesService coursesService,
+        ISubjectsService subjectsService,
+        IClassroomsService classroomsService)
     {
         _sectionsService = sectionsService;
         _schedulesService = schedulesService;
         _studentsService = studentsService;
         _attendanceService = attendanceService;
         _teachersService = teachersService;
+        _academicYearsService = academicYearsService;
+        _coursesService = coursesService;
+        _subjectsService = subjectsService;
+        _classroomsService = classroomsService;
     }
 
     [HttpGet("")]
@@ -473,6 +485,8 @@ public class SectionManagementController : Controller
             })
             .ToList();
 
+        await PopulateCreateSectionOptionsAsync(viewModel);
+
         if (!viewModel.SectionOptions.Any())
         {
             return viewModel;
@@ -649,6 +663,113 @@ public class SectionManagementController : Controller
                 ? string.IsNullOrWhiteSpace(record?.MarkerName) ? "-" : record!.MarkerName!
                 : "-"
         };
+    }
+
+    private async Task PopulateCreateSectionOptionsAsync(SectionsIndexViewModel viewModel)
+    {
+        if (!viewModel.IsAdmin)
+        {
+            return;
+        }
+
+        var academicPeriodsTask = _academicYearsService.GetAllAcademicYearsAsync();
+        var coursesTask = _coursesService.GetAllCoursesAsync();
+        var subjectsTask = _subjectsService.GetAllSubjectsAsync();
+        var classroomsTask = _classroomsService.GetAllClassroomsAsync();
+
+        await Task.WhenAll(academicPeriodsTask, coursesTask, subjectsTask, classroomsTask);
+
+        var lookupLoadFailures = new List<string>();
+
+        var academicPeriodsResult = await academicPeriodsTask;
+        if (!academicPeriodsResult.Success || academicPeriodsResult.Data is null)
+        {
+            lookupLoadFailures.Add("academic periods");
+        }
+        else
+        {
+            viewModel.AcademicPeriods = academicPeriodsResult.Data
+                .OrderByDescending(period => period.StartDate)
+                .Select(period => new SectionReferenceOptionViewModel
+                {
+                    Id = period.Id,
+                    Label = period.YearLabel
+                })
+                .ToList();
+        }
+
+        var coursesResult = await coursesTask;
+        if (!coursesResult.Success || coursesResult.Data is null)
+        {
+            lookupLoadFailures.Add("courses");
+        }
+        else
+        {
+            viewModel.Courses = coursesResult.Data
+                .OrderBy(course => course.Name)
+                .Select(course => new SectionReferenceOptionViewModel
+                {
+                    Id = course.Id,
+                    Label = string.IsNullOrWhiteSpace(course.Code)
+                        ? course.Name
+                        : $"{course.Code} - {course.Name}"
+                })
+                .ToList();
+        }
+
+        var subjectsResult = await subjectsTask;
+        if (!subjectsResult.Success || subjectsResult.Data is null)
+        {
+            lookupLoadFailures.Add("subjects");
+        }
+        else
+        {
+            viewModel.Subjects = subjectsResult.Data
+                .OrderBy(subject => subject.Name)
+                .Select(subject => new SectionSubjectReferenceOptionViewModel
+                {
+                    Id = subject.Id,
+                    CourseId = subject.CourseId,
+                    Label = BuildSubjectOptionLabel(subject)
+                })
+                .ToList();
+        }
+
+        var classroomsResult = await classroomsTask;
+        if (!classroomsResult.Success || classroomsResult.Data is null)
+        {
+            lookupLoadFailures.Add("classrooms");
+        }
+        else
+        {
+            viewModel.Classrooms = classroomsResult.Data
+                .OrderBy(classroom => classroom.Name)
+                .Select(classroom => new SectionReferenceOptionViewModel
+                {
+                    Id = classroom.Id,
+                    Label = classroom.Name
+                })
+                .ToList();
+        }
+
+        if (lookupLoadFailures.Count == 0)
+        {
+            return;
+        }
+
+        viewModel.CreateSectionOptionsErrorMessage =
+            $"Some create form options could not be loaded ({string.Join(", ", lookupLoadFailures)}).";
+    }
+
+    private static string BuildSubjectOptionLabel(SubjectDto subject)
+    {
+        var baseLabel = string.IsNullOrWhiteSpace(subject.Code)
+            ? subject.Name
+            : $"{subject.Code} - {subject.Name}";
+
+        return string.IsNullOrWhiteSpace(subject.CourseName)
+            ? baseLabel
+            : $"{baseLabel} ({subject.CourseName})";
     }
 
     private async Task<(bool Success, TeacherContext Context, string? Error)> BuildTeacherContextAsync(int userId, string role)
