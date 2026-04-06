@@ -1,0 +1,65 @@
+@{
+    ViewData["Title"] = "Attendance QR";
+}
+
+<section class="panel attendance-qr-page" data-attendance-qr-page="teacher">
+    <h3>Teacher QR Attendance</h3>
+    <p class="muted">
+        Generate a short-lived QR for the active class period. Students scan and submit attendance for this period only.
+    </p>
+
+    <div class="filters-grid three">
+        <div>
+            <label for="qr-section-code">Section</label>
+            <input id="qr-section-code" class="input-select" type="text" maxlength="64" value="11-STEM-A" />
+        </div>
+        <div>
+            <label for="qr-subject-code">Subject</label>
+            <input id="qr-subject-code" class="input-select" type="text" maxlength="64" value="MATH101" />
+        </div>
+        <div>
+            <label for="qr-period-label">Period</label>
+            <input id="qr-period-label" class="input-select" type="text" maxlength="64" value="08:00-09:00" />
+        </div>
+    </div>
+
+    <div class="row-actions">
+        <button type="button" class="btn-primary" id="qr-generate-btn">Generate QR</button>
+        <button type="button" class="btn-secondary" id="qr-reset-btn">Reset Session</button>
+    </div>
+
+    <section class="grid-2 compact-gap attendance-qr-grid">
+        <article class="panel qr-panel">
+            <h4>Active QR</h4>
+            <p id="qr-status" class="footer-note">Generate a session to display QR.</p>
+            <div id="qr-render-target" class="qr-render-target" aria-live="polite"></div>
+            <p class="footer-note"><strong>Session:</strong> <span id="qr-session-id">-</span></p>
+            <p class="footer-note"><strong>Expires In:</strong> <span id="qr-countdown">-</span></p>
+        </article>
+
+        <article class="panel">
+            <h4>Live Check-ins</h4>
+            <p class="footer-note">Updates every second for this demo frontend session.</p>
+            <div class="table-wrap">
+                <table class="app-table">
+                    <thead>
+                        <tr>
+                            <th>Student ID</th>
+                            <th>Student Name</th>
+                            <th>Scanned At</th>
+                        </tr>
+                    </thead>
+                    <tbody id="qr-checkins-body">
+                        <tr>
+                            <td colspan="3" class="muted">No check-ins yet.</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </article>
+    </section>
+</section>
+
+@section Scripts {
+    <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+}

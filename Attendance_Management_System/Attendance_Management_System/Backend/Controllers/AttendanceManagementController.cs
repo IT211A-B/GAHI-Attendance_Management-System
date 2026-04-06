@@ -4,11 +4,11 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace Attendance_Management_System.Backend.Controllers;
 
-[Authorize(Policy = "AdminOrTeacher")]
 [Route("attendance")]
 public class AttendanceManagementController : Controller
 {
     [HttpGet("")]
+    [Authorize(Policy = "AdminOrTeacher")]
     public IActionResult Index([FromQuery] int? sectionId, [FromQuery] int? scheduleId, [FromQuery] DateOnly? date)
     {
         return RedirectToAction("Index", "SectionManagement", new
@@ -19,7 +19,22 @@ public class AttendanceManagementController : Controller
         });
     }
 
+    [HttpGet("qr")]
+    [Authorize(Policy = "AdminOrTeacher")]
+    public IActionResult Qr()
+    {
+        return View();
+    }
+
+    [HttpGet("scan")]
+    [Authorize(Policy = "StudentOnly")]
+    public IActionResult Scan()
+    {
+        return View();
+    }
+
     [HttpPost("mark")]
+    [Authorize(Policy = "AdminOrTeacher")]
     [ValidateAntiForgeryToken]
     public IActionResult Mark([Bind(Prefix = "MarkForm")] MarkAttendanceFormViewModel form)
     {
