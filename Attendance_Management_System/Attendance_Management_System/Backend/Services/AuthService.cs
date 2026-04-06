@@ -13,13 +13,16 @@ public class AuthService : IAuthService
 {
     private readonly UserManager<User> _userManager;
     private readonly AppDbContext _context;
+    private readonly ISectionAllocationService _sectionAllocationService;
 
     public AuthService(
         UserManager<User> userManager,
-        AppDbContext context)
+        AppDbContext context,
+        ISectionAllocationService sectionAllocationService)
     {
         _userManager = userManager;
         _context = context;
+        _sectionAllocationService = sectionAllocationService;
     }
 
     // Authenticates user by verifying email and password
@@ -108,17 +111,6 @@ public class AuthService : IAuthService
             };
         }
 
-        // Validate SectionId exists
-        var sectionExists = await _context.Sections.AnyAsync(s => s.Id == request.SectionId);
-        if (!sectionExists)
-        {
-            return new AuthResponse
-            {
-                Success = false,
-                Message = "Invalid section selected."
-            };
-        }
-
         // Validate AcademicYearId exists
         var academicYearExists = await _context.AcademicYears.AnyAsync(ay => ay.Id == request.AcademicYearId);
         if (!academicYearExists)
@@ -130,70 +122,143 @@ public class AuthService : IAuthService
             };
         }
 
-        // Create user
-        var user = new User
-        {
-            UserName = request.Email,
-            Email = request.Email,
-            Role = "student",
-            IsActive = true,
-            EmailConfirmed = true // Auto-confirm for MVP
-        };
+        Section? assignedSection;
+        var resolvedYearLevel = 1;
 
-        var result = await _userManager.CreateAsync(user, request.Password);
-
-        if (!result.Succeeded)
+        // Optional explicit section still supported for backward compatibility.
+        if (request.SectionId.HasValue && request.SectionId.Value > 0)
         {
-            var errors = string.Join(", ", result.Errors.Select(e => e.Description));
+            assignedSection = await _context.Sections
+                .AsNoTracking()
+                .FirstOrDefaultAsync(s => s.Id == request.SectionId.Value);
+
+            if (assignedSection == null)
+            {
+                return new AuthResponse
+                {
+                    Success = false,
+                    Message = "Invalid section selected."
+                };
+            }
+
+            if (assignedSection.CourseId != request.CourseId)
+            {
+                return new AuthResponse
+                {
+                    Success = false,
+                    Message = "Selected section does not belong to the selected course."
+                };
+            }
+
+            if (assignedSection.AcademicYearId != request.AcademicYearId)
+            {
+                return new AuthResponse
+                {
+                    Success = false,
+                    Message = "Selected section does not belong to the selected academic period."
+                };
+            }
+
+            resolvedYearLevel = assignedSection.YearLevel > 0 ? assignedSection.YearLevel : 1;
+        }
+        else
+        {
+            assignedSection = await _sectionAllocationService
+                .AllocateSectionAsync(request.CourseId, request.AcademicYearId, resolvedYearLevel);
+
+            if (assignedSection == null)
+            {
+                return new AuthResponse
+                {
+                    Success = false,
+                    Message = "No available sections for the selected course and academic period. Please contact an administrator."
+                };
+            }
+
+            resolvedYearLevel = assignedSection.YearLevel > 0 ? assignedSection.YearLevel : resolvedYearLevel;
+        }
+
+        await using var transaction = await _context.Database.BeginTransactionAsync();
+
+        try
+        {
+            // Create user
+            var user = new User
+            {
+                UserName = request.Email,
+                Email = request.Email,
+                Role = "student",
+                IsActive = true,
+                EmailConfirmed = true // Auto-confirm for MVP
+            };
+
+            var result = await _userManager.CreateAsync(user, request.Password);
+
+            if (!result.Succeeded)
+            {
+                await transaction.RollbackAsync();
+                var errors = string.Join(", ", result.Errors.Select(e => e.Description));
+                return new AuthResponse
+                {
+                    Success = false,
+                    Message = $"Registration failed: {errors}"
+                };
+            }
+
+            // Create student record
+            var student = new Student
+            {
+                UserId = user.Id,
+                CourseId = request.CourseId,
+                SectionId = null, // Will be set when enrollment is approved
+                StudentNumber = request.StudentNumber,
+                FirstName = request.FirstName,
+                LastName = request.LastName,
+                MiddleName = request.MiddleName,
+                Birthdate = request.Birthdate,
+                Gender = request.Gender,
+                Address = request.Address,
+                GuardianName = request.GuardianName,
+                GuardianContact = request.GuardianContact,
+                YearLevel = resolvedYearLevel,
+                IsActive = true
+            };
+
+            _context.Students.Add(student);
+            await _context.SaveChangesAsync();
+
+            // Create pending enrollment
+            var enrollment = new Enrollment
+            {
+                StudentId = student.Id,
+                SectionId = assignedSection.Id,
+                AcademicYearId = request.AcademicYearId,
+                Status = "pending"
+            };
+
+            _context.Enrollments.Add(enrollment);
+            await _context.SaveChangesAsync();
+
+            await transaction.CommitAsync();
+
+            var userDto = await BuildUserDtoAsync(user);
+
+            return new AuthResponse
+            {
+                Success = true,
+                Message = "Registration successful. Your enrollment is pending approval.",
+                User = userDto
+            };
+        }
+        catch
+        {
+            await transaction.RollbackAsync();
             return new AuthResponse
             {
                 Success = false,
-                Message = $"Registration failed: {errors}"
+                Message = "Unable to complete registration right now. Please try again."
             };
         }
-
-        // Create student record
-        var student = new Student
-        {
-            UserId = user.Id,
-            CourseId = request.CourseId,
-            SectionId = null, // Will be set when enrollment is approved
-            StudentNumber = request.StudentNumber,
-            FirstName = request.FirstName,
-            LastName = request.LastName,
-            MiddleName = request.MiddleName,
-            Birthdate = request.Birthdate,
-            Gender = request.Gender,
-            Address = request.Address,
-            GuardianName = request.GuardianName,
-            GuardianContact = request.GuardianContact,
-            YearLevel = 1, // Default to first year
-            IsActive = true
-        };
-
-        _context.Students.Add(student);
-        await _context.SaveChangesAsync();
-
-        // Create pending enrollment
-        var enrollment = new Enrollment
-        {
-            StudentId = student.Id,
-            SectionId = request.SectionId,
-            AcademicYearId = request.AcademicYearId,
-            Status = "pending"
-        };
-
-        _context.Enrollments.Add(enrollment);
-        await _context.SaveChangesAsync();
-
-        var userDto = await BuildUserDtoAsync(user);
-
-        return new AuthResponse
-        {
-            Success = true,
-            Message = "Registration successful. Your enrollment is pending approval.",
-            User = userDto
-        };
     }
 
     // Registers a new teacher with auto-generated employee number

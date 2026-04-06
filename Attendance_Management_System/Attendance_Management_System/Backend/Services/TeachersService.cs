@@ -46,6 +46,35 @@ public class TeachersService : ITeachersService
         return ApiResponse<List<TeacherDto>>.SuccessResponse(teachers);
     }
 
+    public async Task<ApiResponse<TeacherDto>> GetTeacherByUserIdAsync(int userId)
+    {
+        var teacher = await _context.Teachers
+            .Include(t => t.User)
+            .FirstOrDefaultAsync(t => t.UserId == userId && t.IsActive);
+
+        if (teacher == null)
+        {
+            return ApiResponse<TeacherDto>.ErrorResponse(ErrorCodes.NotFound, "Teacher profile not found.");
+        }
+
+        var dto = new TeacherDto
+        {
+            Id = teacher.Id,
+            UserId = teacher.UserId,
+            Email = teacher.User?.Email ?? string.Empty,
+            EmployeeNumber = teacher.EmployeeNumber,
+            FirstName = teacher.FirstName,
+            LastName = teacher.LastName,
+            MiddleName = teacher.MiddleName,
+            Department = teacher.Department,
+            Specialization = teacher.Specialization,
+            IsActive = teacher.IsActive,
+            CreatedAt = teacher.CreatedAt
+        };
+
+        return ApiResponse<TeacherDto>.SuccessResponse(dto);
+    }
+
     // Retrieves a single teacher by their ID
     public async Task<ApiResponse<TeacherDto>> GetTeacherByIdAsync(int id)
     {

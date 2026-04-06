@@ -99,31 +99,30 @@ public class ConflictService : IConflictService
         TimeOnly endTime,
         int excludeId = 0)
     {
-        // Find schedules in sections where the teacher is assigned, excluding the current section
+        // Find overlapping schedules owned by the same teacher, excluding the current section
         return await _context.Schedules
             .Include(s => s.Section)
-            .Join(_context.SectionTeachers,
-                s => s.SectionId,
-                st => st.SectionId,
-                (s, st) => new { Schedule = s, SectionTeacher = st })
-            .Where(x => x.SectionTeacher.TeacherId == teacherId)
-            .Where(x => x.Schedule.SectionId != currentSectionId) // Different section
-            .Where(x => x.Schedule.DayOfWeek == dayOfWeek)
-            .Where(x => x.Schedule.StartTime < endTime)
-            .Where(x => x.Schedule.EndTime > startTime)
-            .Where(x => x.Schedule.Id != excludeId)
-            .Select(x => x.Schedule)
+            .Where(s => s.TeacherId == teacherId)
+            .Where(s => s.SectionId != currentSectionId)
+            .Where(s => s.DayOfWeek == dayOfWeek)
+            .Where(s => s.StartTime < endTime)
+            .Where(s => s.EndTime > startTime)
+            .Where(s => s.Id != excludeId)
             .FirstOrDefaultAsync();
     }
 
     // Build conflict detail DTO from a conflict result
     public ConflictDetailDto BuildConflictDetail(ConflictResult result)
     {
+        var resolvedTeacherName = string.IsNullOrWhiteSpace(result.TeacherName)
+            ? "Selected teacher"
+            : result.TeacherName;
+
         var message = result.ConflictType switch
         {
             ErrorCodes.ConflictSectionSlot => $"This section already has a schedule at {result.ConflictingSchedule?.StartTime.ToString("HH:mm")} - {result.ConflictingSchedule?.EndTime.ToString("HH:mm")}",
             ErrorCodes.ConflictClassroom => $"{result.ClassroomName} is already booked at this time",
-            ErrorCodes.ConflictTeacher => $"{result.TeacherName} has an overlapping schedule in another section",
+            ErrorCodes.ConflictTeacher => $"{resolvedTeacherName} has an overlapping schedule in another section",
             _ => "Schedule conflict detected"
         };
 
@@ -157,14 +156,16 @@ public class ConflictService : IConflictService
         var sectionName = section?.Name;
         var classroomName = section?.Classroom?.Name;
 
-        // Get teacher names for this section
-        var teachers = await _context.SectionTeachers
-            .Include(st => st.Teacher)
-            .Where(st => st.SectionId == schedule.SectionId)
-            .Select(st => st.Teacher != null ? $"{st.Teacher.FirstName} {st.Teacher.LastName}" : null)
-            .Where(name => name != null)
-            .ToListAsync();
-        var teacherName = string.Join(", ", teachers);
+        var teacherName = string.Empty;
+        if (schedule.TeacherId.HasValue)
+        {
+            var teacher = await _context.Teachers
+                .FirstOrDefaultAsync(t => t.Id == schedule.TeacherId.Value);
+            if (teacher != null)
+            {
+                teacherName = $"{teacher.FirstName} {teacher.LastName}".Trim();
+            }
+        }
 
         return new ConflictResult
         {

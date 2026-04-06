@@ -1,9 +1,8 @@
 using Attendance_Management_System.Backend;
 using Attendance_Management_System.Backend.Data;
 using Attendance_Management_System.Backend.Persistence;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Mvc.Razor;
-using Scalar.AspNetCore;
+using Microsoft.EntityFrameworkCore;
 
 // Create the web application builder with frontend web root configured up-front
 var builder = WebApplication.CreateBuilder(new WebApplicationOptions
@@ -30,18 +29,8 @@ builder.Services.AddBackend(builder.Configuration);
 builder.Services.AddHealthChecks()
     .AddNpgSql(builder.Configuration.GetConnectionString("Default")!);
 
-// Add OpenAPI for API documentation (used by Scalar)
-builder.Services.AddOpenApi();
-
 // Build the application from configured services
 var app = builder.Build();
-
-// Enable Scalar API documentation in development environment
-if (app.Environment.IsDevelopment())
-{
-    app.MapOpenApi();
-    app.MapScalarApiReference();
-}
 
 // Configure production-specific error handling and security
 if (!app.Environment.IsDevelopment())
@@ -52,20 +41,17 @@ if (!app.Environment.IsDevelopment())
 
 // Force HTTPS redirection for secure connections
 app.UseHttpsRedirection();
+app.UseStaticFiles();
 app.UseRouting();
 
 // Enable authentication and authorization middleware
 app.UseAuthentication();
 app.UseAuthorization();
 
-// Serve static files (CSS, JS, images)
-app.MapStaticAssets();
-
 // Configure default MVC route pattern
 app.MapControllerRoute(
     name: "default",
-    pattern: "{controller=Home}/{action=Index}/{id?}")
-    .WithStaticAssets();
+    pattern: "{controller=Home}/{action=Index}/{id?}");
 
 // Expose health check endpoint for monitoring
 app.MapHealthChecks("/health");

@@ -17,13 +17,18 @@ public class EnrollmentService : IEnrollmentService
 {
     private readonly AppDbContext _context;
     private readonly EnrollmentSettings _enrollmentSettings;
+    private readonly ISectionAllocationService _sectionAllocationService;
 
-    public EnrollmentService(AppDbContext context, IOptions<EnrollmentSettings> enrollmentSettings)
+    public EnrollmentService(
+        AppDbContext context,
+        IOptions<EnrollmentSettings> enrollmentSettings,
+        ISectionAllocationService sectionAllocationService)
     {
         _context = context;
         _enrollmentSettings = enrollmentSettings.Value?.IsValid() == true
             ? enrollmentSettings.Value
             : EnrollmentSettings.Default;
+        _sectionAllocationService = sectionAllocationService;
     }
 
     // Gets a paginated list of enrollments with "pending" status
@@ -297,7 +302,7 @@ public class EnrollmentService : IEnrollmentService
         return MapToDto(enrollment, teacherNames);
     }
 
-    // Student self-enrollment - finds matching sections by course and year level, randomly assigns
+    // Student self-enrollment - finds matching sections by course and year level and auto-assigns
     public async Task<ApiResponse<EnrollmentResultDto>> CreateEnrollmentAsync(CreateEnrollmentRequest request, int studentUserId)
     {
         // Get the student record for the user
@@ -332,6 +337,7 @@ public class EnrollmentService : IEnrollmentService
         // Check for existing enrollment for this course and academic year
         var existingEnrollment = await _context.Enrollments
             .AnyAsync(e => e.StudentId == student.Id
+                && e.Section != null
                 && e.Section.CourseId == request.CourseId
                 && e.AcademicYearId == request.AcademicYearId
                 && (e.Status == "approved" || e.Status == "pending"));
@@ -346,14 +352,9 @@ public class EnrollmentService : IEnrollmentService
         // Get student's year level (default to 1 if not set)
         var yearLevel = student.YearLevel > 0 ? student.YearLevel : 1;
 
-        // Select a random section for the student
-        var section = await SelectRandomSectionAsync(request.CourseId, yearLevel, request.AcademicYearId);
-
-        // If no section found, try to auto-create one if enabled
-        if (section == null && _enrollmentSettings.AutoCreateSections)
-        {
-            section = await AutoCreateSectionIfNeededAsync(request.CourseId, yearLevel, request.AcademicYearId);
-        }
+        // Resolve section through centralized allocation policy.
+        var section = await _sectionAllocationService
+            .AllocateSectionAsync(request.CourseId, request.AcademicYearId, yearLevel);
 
         // If still no section available, return error
         if (section == null)
@@ -432,12 +433,27 @@ public class EnrollmentService : IEnrollmentService
                 "Target section not found.");
         }
 
+        // Ensure reassignment stays within the student's assigned course.
+        if (enrollment.Student == null || enrollment.Student.CourseId <= 0)
+        {
+            return ApiResponse<EnrollmentDto>.ErrorResponse(
+                ErrorCodes.BadRequest,
+                "Student course is not set. Unable to validate reassignment.");
+        }
+
+        if (newSection.CourseId != enrollment.Student.CourseId)
+        {
+            return ApiResponse<EnrollmentDto>.ErrorResponse(
+                ErrorCodes.BadRequest,
+                "Target section must match the student's course.");
+        }
+
         // Check if this is the same section
         if (newSection.Id == enrollment.SectionId)
         {
             return ApiResponse<EnrollmentDto>.ErrorResponse(
                 ErrorCodes.BadRequest,
-                "Student is already assigned to this section.");
+                "Student is already assigned to this section. Please choose a different target section.");
         }
 
         // Check capacity on new section
@@ -481,7 +497,7 @@ public class EnrollmentService : IEnrollmentService
     }
 
     // Returns current enrollment count and capacity status for a section
-    public async Task<SectionCapacityDto> GetSectionCapacityAsync(int sectionId)
+    public async Task<SectionCapacityDto?> GetSectionCapacityAsync(int sectionId)
     {
         var section = await _context.Sections
             .Include(s => s.Course)
@@ -490,7 +506,7 @@ public class EnrollmentService : IEnrollmentService
 
         if (section == null)
         {
-            return null!;
+            return null;
         }
 
         var currentCount = await _context.Enrollments
@@ -525,122 +541,13 @@ public class EnrollmentService : IEnrollmentService
         foreach (var section in sections)
         {
             var capacity = await GetSectionCapacityAsync(section.Id);
-            result.Add(capacity);
+            if (capacity != null)
+            {
+                result.Add(capacity);
+            }
         }
 
         return result;
-    }
-
-    // Selects random section with available capacity, prefers sections under warning threshold
-    private async Task<Section?> SelectRandomSectionAsync(int courseId, int yearLevel, int academicYearId)
-    {
-        var sections = await _context.Sections
-            .Where(s => s.CourseId == courseId && s.YearLevel == yearLevel && s.AcademicYearId == academicYearId)
-            .ToListAsync();
-
-        if (!sections.Any())
-        {
-            return null;
-        }
-
-        // Get enrollment counts for all sections
-        var sectionIds = sections.Select(s => s.Id).ToList();
-        var enrollmentCounts = await _context.Enrollments
-            .Where(e => sectionIds.Contains(e.SectionId) && e.Status == "approved")
-            .GroupBy(e => e.SectionId)
-            .ToDictionaryAsync(g => g.Key, g => g.Count());
-
-        // Separate sections by capacity status
-        var availableSections = new List<Section>();
-        var warningSections = new List<Section>();
-        var overCapacitySections = new List<Section>();
-
-        foreach (var section in sections)
-        {
-            var count = enrollmentCounts.GetValueOrDefault(section.Id, 0);
-
-            if (count < _enrollmentSettings.WarningThreshold)
-            {
-                availableSections.Add(section);
-            }
-            else if (count < _enrollmentSettings.OverCapacityLimit)
-            {
-                warningSections.Add(section);
-            }
-            // Skip sections at or over the limit
-        }
-
-        // Prefer sections with available capacity, then warning sections
-        var candidateSections = availableSections.Any() ? availableSections : warningSections;
-
-        if (!candidateSections.Any())
-        {
-            return null;
-        }
-
-        // Select random section from candidates
-        var random = new Random();
-        return candidateSections[random.Next(candidateSections.Count)];
-    }
-
-    // Creates new section when all existing sections are at over-capacity limit
-    private async Task<Section?> AutoCreateSectionIfNeededAsync(int courseId, int yearLevel, int academicYearId)
-    {
-        // Get existing sections for this course, year level, and academic year
-        var sections = await _context.Sections
-            .Where(s => s.CourseId == courseId && s.YearLevel == yearLevel && s.AcademicYearId == academicYearId)
-            .ToListAsync();
-
-        // Check if all sections are at over-capacity limit
-        foreach (var section in sections)
-        {
-            var count = await _context.Enrollments
-                .CountAsync(e => e.SectionId == section.Id && e.Status == "approved");
-
-            if (count < _enrollmentSettings.OverCapacityLimit)
-            {
-                return null; // There's still room in an existing section
-            }
-        }
-
-        // Get course and subject info for naming
-        var course = await _context.Courses.FindAsync(courseId);
-        if (course == null)
-        {
-            return null;
-        }
-
-        // Find a default classroom (or use the first available)
-        var classroom = await _context.Classrooms.FirstOrDefaultAsync();
-        if (classroom == null)
-        {
-            return null; // Can't create section without classroom
-        }
-
-        // Find a default subject for the course
-        var subject = await _context.Subjects.FirstOrDefaultAsync(s => s.CourseId == courseId);
-        if (subject == null)
-        {
-            return null; // Can't create section without subject
-        }
-
-        // Create new section
-        var sectionNumber = sections.Count + 1;
-        var newSection = new Section
-        {
-            Name = $"{course.Code}-{yearLevel}-{sectionNumber}",
-            YearLevel = yearLevel,
-            CourseId = courseId,
-            SubjectId = subject.Id,
-            AcademicYearId = academicYearId,
-            ClassroomId = classroom.Id,
-            CreatedAt = DateTimeOffset.UtcNow
-        };
-
-        _context.Sections.Add(newSection);
-        await _context.SaveChangesAsync();
-
-        return newSection;
     }
 
     // Calculates the capacity status based on enrollment count
@@ -686,6 +593,7 @@ public class EnrollmentService : IEnrollmentService
             StudentName = enrollment.Student != null
                 ? $"{enrollment.Student.FirstName} {enrollment.Student.LastName}"
                 : null,
+            StudentCourseId = enrollment.Student?.CourseId,
             SectionId = enrollment.SectionId,
             SectionName = enrollment.Section?.Name,
             AcademicYearId = enrollment.AcademicYearId,

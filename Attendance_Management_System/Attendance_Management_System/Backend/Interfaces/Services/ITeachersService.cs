@@ -9,6 +9,9 @@ public interface ITeachersService
     // Get all active teachers (basic info)
     Task<ApiResponse<List<TeacherDto>>> GetAllTeachersAsync();
 
+    // Resolve the teacher profile linked to an authenticated user account
+    Task<ApiResponse<TeacherDto>> GetTeacherByUserIdAsync(int userId);
+
     // Get all teachers with their assigned sections
     Task<ApiResponse<List<TeacherListDto>>> GetAllTeachersWithSectionsAsync();
 

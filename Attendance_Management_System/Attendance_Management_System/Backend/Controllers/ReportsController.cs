@@ -88,12 +88,14 @@ public class ReportsController : Controller
         model.PresentCount = summaryResult.Data.PresentCount;
         model.LateCount = summaryResult.Data.LateCount;
         model.AbsentCount = summaryResult.Data.AbsentCount;
+        model.UnmarkedCount = summaryResult.Data.UnmarkedCount;
 
         if (model.TotalStudents > 0)
         {
             model.PresentRate = decimal.Round((decimal)model.PresentCount / model.TotalStudents * 100m, 1);
             model.LateRate = decimal.Round((decimal)model.LateCount / model.TotalStudents * 100m, 1);
             model.AbsentRate = decimal.Round((decimal)model.AbsentCount / model.TotalStudents * 100m, 1);
+            model.UnmarkedRate = decimal.Round((decimal)model.UnmarkedCount / model.TotalStudents * 100m, 1);
         }
 
         return View(model);

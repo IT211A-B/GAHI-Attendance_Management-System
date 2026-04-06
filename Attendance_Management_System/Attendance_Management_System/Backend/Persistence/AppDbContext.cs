@@ -24,6 +24,7 @@ public class AppDbContext : IdentityDbContext<User, IdentityRole<int>, int>
     public DbSet<Student> Students { get; set; } = null!;
     public DbSet<Schedule> Schedules { get; set; } = null!;
     public DbSet<Attendance> Attendances { get; set; } = null!;
+    public DbSet<AttendanceAudit> AttendanceAudits { get; set; } = null!;
     public DbSet<Enrollment> Enrollments { get; set; } = null!;
     public DbSet<AttendanceReport> AttendanceReports { get; set; } = null!;
 
@@ -181,6 +182,11 @@ public class AppDbContext : IdentityDbContext<User, IdentityRole<int>, int>
                 .HasForeignKey(s => s.SectionId)
                 .OnDelete(DeleteBehavior.Restrict);
 
+            entity.HasOne(s => s.Teacher)
+                .WithMany()
+                .HasForeignKey(s => s.TeacherId)
+                .OnDelete(DeleteBehavior.Restrict);
+
             entity.HasOne(s => s.Subject)
                 .WithMany()
                 .HasForeignKey(s => s.SubjectId)
@@ -188,6 +194,7 @@ public class AppDbContext : IdentityDbContext<User, IdentityRole<int>, int>
 
             // Index for efficient conflict detection queries
             entity.HasIndex(s => new { s.SectionId, s.DayOfWeek });
+            entity.HasIndex(s => new { s.TeacherId, s.DayOfWeek });
 
             entity.ToTable(t => t.HasCheckConstraint(
                 "CK_Schedule_EndTime",
@@ -225,6 +232,32 @@ public class AppDbContext : IdentityDbContext<User, IdentityRole<int>, int>
             entity.HasOne(a => a.Marker)
                 .WithMany()
                 .HasForeignKey(a => a.MarkedBy)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasMany(a => a.Audits)
+                .WithOne(audit => audit.Attendance)
+                .HasForeignKey(audit => audit.AttendanceId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // Attendance audit configuration
+        modelBuilder.Entity<AttendanceAudit>(entity =>
+        {
+            entity.HasKey(a => a.Id);
+            entity.Property(a => a.Id).UseIdentityByDefaultColumn();
+
+            entity.Property(a => a.Action).IsRequired();
+            entity.Property(a => a.AfterStatus).IsRequired();
+
+            entity.HasIndex(a => new { a.AttendanceId, a.ActionAt });
+
+            entity.ToTable(t => t.HasCheckConstraint(
+                "CK_AttendanceAudit_Action",
+                "\"Action\" IN ('created', 'updated')"));
+
+            entity.HasOne(a => a.ActorUser)
+                .WithMany()
+                .HasForeignKey(a => a.ActorUserId)
                 .OnDelete(DeleteBehavior.Restrict);
         });
 

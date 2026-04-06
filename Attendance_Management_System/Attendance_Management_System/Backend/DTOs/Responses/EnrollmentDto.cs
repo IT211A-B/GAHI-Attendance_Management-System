@@ -6,6 +6,7 @@ public class EnrollmentDto
     public int StudentId { get; set; }
     public string? StudentNumber { get; set; }
     public string? StudentName { get; set; }
+    public int? StudentCourseId { get; set; }
     public int SectionId { get; set; }
     public string? SectionName { get; set; }
     public int AcademicYearId { get; set; }

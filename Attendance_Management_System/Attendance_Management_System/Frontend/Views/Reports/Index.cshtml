@@ -14,42 +14,66 @@
                 <option value="">Choose section</option>
                 @foreach (var sectionItem in Model.Sections)
                 {
-                    <option value="@sectionItem.Id" selected="@(Model.SelectedSectionId == sectionItem.Id)">@sectionItem.Name</option>
-                }
-            </select>
-        </div>
-        <div>
-            <label for="scheduleId">Schedule</label>
-            <select id="scheduleId" name="scheduleId" class="input-select">
-                <option value="">Choose schedule</option>
-                @foreach (var schedule in Model.Schedules.Where(s => Model.SelectedSectionId is null || s.SectionId == Model.SelectedSectionId))
-                {
-                    <option value="@schedule.Id" selected="@(Model.SelectedScheduleId == schedule.Id)">@schedule.Label</option>
-                }
-            </select>
-        </div>
-        <div>
-            <label for="date">Date</label>
-            <input id="date" name="date" type="date" class="input-select" value="@Model.SelectedDate.ToString("yyyy-MM-dd")" />
-        </div>
-        <button type="submit" class="btn-primary btn-inline">Generate Report</button>
-    </form>
+                    <option value="@sectionItem.Id" selected="@(Model.SelectedSectionId == sectionItem.Id)">
+                        @sectionItem.Name</option>
+                    }
+                </select>
+            </div>
+            <div>
+                <label for="scheduleId">Schedule</label>
+                <select id="scheduleId" name="scheduleId" class="input-select">
+                    <option value="">Choose schedule</option>
+                    @foreach (var schedule in Model.Schedules.Where(s => Model.SelectedSectionId is null || s.SectionId ==
+                                    Model.SelectedSectionId))
+                    {
+                        <option value="@schedule.Id" selected="@(Model.SelectedScheduleId == schedule.Id)">@schedule.Label
+                        </option>
+                    }
+                </select>
+            </div>
+            <div>
+                <label for="date">Date</label>
+                <input id="date" name="date" type="date" class="input-select"
+                       value="@Model.SelectedDate.ToString("yyyy-MM-dd")" />
+            </div>
+            <button type="submit" class="btn-primary btn-inline">Generate Report</button>
+        </form>
 
-    @if (!string.IsNullOrWhiteSpace(Model.ErrorMessage))
-    {
-        <p class="form-validation">@Model.ErrorMessage</p>
-    }
-    else if (Model.SelectedSectionId is null || Model.SelectedScheduleId is null)
-    {
-        <p class="footer-note">Select section and schedule to view report metrics.</p>
-    }
-    else
-    {
-        <section class="grid-4 compact-gap">
-            <article class="stat-card"><p class="stat-title">Total Students</p><p class="stat-value">@Model.TotalStudents</p></article>
-            <article class="stat-card"><p class="stat-title">Present</p><p class="stat-value success">@Model.PresentCount</p><p class="muted">@Model.PresentRate%</p></article>
-            <article class="stat-card"><p class="stat-title">Late</p><p class="stat-value warning">@Model.LateCount</p><p class="muted">@Model.LateRate%</p></article>
-            <article class="stat-card"><p class="stat-title">Absent</p><p class="stat-value danger">@Model.AbsentCount</p><p class="muted">@Model.AbsentRate%</p></article>
-        </section>
-    }
-</section>
+        @if (!string.IsNullOrWhiteSpace(Model.ErrorMessage))
+        {
+            <p class="form-validation">@Model.ErrorMessage</p>
+        }
+        else if (Model.SelectedSectionId is null || Model.SelectedScheduleId is null)
+        {
+            <p class="footer-note">Select section and schedule to view report metrics.</p>
+        }
+        else
+        {
+            <section class="grid-4 compact-gap">
+                <article class="stat-card">
+                    <p class="stat-title">Total Students</p>
+                    <p class="stat-value">@Model.TotalStudents</p>
+                </article>
+                <article class="stat-card">
+                    <p class="stat-title">Present</p>
+                    <p class="stat-value success">@Model.PresentCount</p>
+                    <p class="muted">@Model.PresentRate%</p>
+                </article>
+                <article class="stat-card">
+                    <p class="stat-title">Late</p>
+                    <p class="stat-value warning">@Model.LateCount</p>
+                    <p class="muted">@Model.LateRate%</p>
+                </article>
+                <article class="stat-card">
+                    <p class="stat-title">Absent</p>
+                    <p class="stat-value danger">@Model.AbsentCount</p>
+                    <p class="muted">@Model.AbsentRate%</p>
+                </article>
+                <article class="stat-card">
+                    <p class="stat-title">Unmarked</p>
+                    <p class="stat-value">@Model.UnmarkedCount</p>
+                    <p class="muted">@Model.UnmarkedRate%</p>
+                </article>
+            </section>
+        }
+    </section>

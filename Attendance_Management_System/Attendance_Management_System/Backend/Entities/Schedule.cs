@@ -8,6 +8,9 @@ public class Schedule : EntityBase
     // The section that has this schedule
     public int SectionId { get; set; }
 
+    // Teacher who owns this schedule slot
+    public int? TeacherId { get; set; }
+
     // The subject being taught in this time slot
     public int SubjectId { get; set; }
 
@@ -29,6 +32,10 @@ public class Schedule : EntityBase
     // Navigation property to the section
     [ForeignKey(nameof(SectionId))]
     public Section? Section { get; set; }
+
+    // Navigation property to the owner teacher
+    [ForeignKey(nameof(TeacherId))]
+    public Teacher? Teacher { get; set; }
 
     // Navigation property to the subject
     [ForeignKey(nameof(SubjectId))]

@@ -16,4 +16,8 @@ public class AttendanceDto
     public DateTimeOffset MarkedAt { get; set; }
     public int MarkedBy { get; set; }
     public string? MarkerName { get; set; }
+    public bool IsMarked { get; set; }
+    public bool IsLate { get; set; }
+    public string StatusLabel { get; set; } = "Unmarked";
+    public string StatusClass { get; set; } = "inactive";
 }

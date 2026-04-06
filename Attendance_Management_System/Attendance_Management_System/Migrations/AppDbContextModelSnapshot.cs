@@ -111,6 +111,61 @@ namespace Attendance_Management_System.Migrations
                     b.ToTable("Attendances");
                 });
 
+            modelBuilder.Entity("Attendance_Management_System.Backend.Entities.AttendanceAudit", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset>("ActionAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("ActorUserId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("AfterRemarks")
+                        .HasColumnType("text");
+
+                    b.Property<string>("AfterStatus")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<TimeOnly?>("AfterTimeIn")
+                        .HasColumnType("time without time zone");
+
+                    b.Property<int>("AttendanceId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("BeforeRemarks")
+                        .HasColumnType("text");
+
+                    b.Property<string>("BeforeStatus")
+                        .HasColumnType("text");
+
+                    b.Property<TimeOnly?>("BeforeTimeIn")
+                        .HasColumnType("time without time zone");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ActorUserId");
+
+                    b.HasIndex("AttendanceId", "ActionAt");
+
+                    b.ToTable("AttendanceAudits", t =>
+                        {
+                            t.HasCheckConstraint("CK_AttendanceAudit_Action", "\"Action\" IN ('created', 'updated')");
+                        });
+                });
+
             modelBuilder.Entity("Attendance_Management_System.Backend.Entities.AttendanceReport", b =>
                 {
                     b.Property<int>("Id")
@@ -309,11 +364,16 @@ namespace Attendance_Management_System.Migrations
                     b.Property<int>("SubjectId")
                         .HasColumnType("integer");
 
+                    b.Property<int?>("TeacherId")
+                        .HasColumnType("integer");
+
                     b.HasKey("Id");
 
                     b.HasIndex("SubjectId");
 
                     b.HasIndex("SectionId", "DayOfWeek");
+
+                    b.HasIndex("TeacherId", "DayOfWeek");
 
                     b.ToTable("Schedules", t =>
                         {
@@ -809,6 +869,25 @@ namespace Attendance_Management_System.Migrations
                     b.Navigation("Student");
                 });
 
+            modelBuilder.Entity("Attendance_Management_System.Backend.Entities.AttendanceAudit", b =>
+                {
+                    b.HasOne("Attendance_Management_System.Backend.Entities.User", "ActorUser")
+                        .WithMany()
+                        .HasForeignKey("ActorUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Attendance_Management_System.Backend.Entities.Attendance", "Attendance")
+                        .WithMany("Audits")
+                        .HasForeignKey("AttendanceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("ActorUser");
+
+                    b.Navigation("Attendance");
+                });
+
             modelBuilder.Entity("Attendance_Management_System.Backend.Entities.AttendanceReport", b =>
                 {
                     b.HasOne("Attendance_Management_System.Backend.Entities.AcademicYear", "AcademicYear")
@@ -888,9 +967,16 @@ namespace Attendance_Management_System.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("Attendance_Management_System.Backend.Entities.Teacher", "Teacher")
+                        .WithMany()
+                        .HasForeignKey("TeacherId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.Navigation("Section");
 
                     b.Navigation("Subject");
+
+                    b.Navigation("Teacher");
                 });
 
             modelBuilder.Entity("Attendance_Management_System.Backend.Entities.Section", b =>
@@ -1052,6 +1138,11 @@ namespace Attendance_Management_System.Migrations
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("Attendance_Management_System.Backend.Entities.Attendance", b =>
+                {
+                    b.Navigation("Audits");
                 });
 
             modelBuilder.Entity("Attendance_Management_System.Backend.Entities.Section", b =>

@@ -11,9 +11,11 @@ public class ReportsIndexViewModel
     public int PresentCount { get; set; }
     public int LateCount { get; set; }
     public int AbsentCount { get; set; }
+    public int UnmarkedCount { get; set; }
     public decimal PresentRate { get; set; }
     public decimal LateRate { get; set; }
     public decimal AbsentRate { get; set; }
+    public decimal UnmarkedRate { get; set; }
     public string? ErrorMessage { get; set; }
 }
 

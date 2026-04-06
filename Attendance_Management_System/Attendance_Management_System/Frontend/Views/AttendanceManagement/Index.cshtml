@@ -5,7 +5,17 @@
 
 <section class="panel">
     <h3>Attendance</h3>
-    <p class="muted">Filter by section, schedule, and date to view attendance records.</p>
+    <p class="muted">Filter by section, schedule, and date to view or mark attendance.</p>
+
+    @if (TempData["AttendanceSuccess"] is string successMessage)
+    {
+        <p class="status-pill active">@successMessage</p>
+    }
+
+    @if (TempData["AttendanceError"] is string errorMessage)
+    {
+        <p class="form-validation">@errorMessage</p>
+    }
 
     <form method="get" class="filters-grid three">
         <div>
@@ -45,6 +55,34 @@
     }
     else
     {
+        <article class="panel">
+            <h3>Mark Attendance</h3>
+            <form asp-controller="AttendanceManagement" asp-action="Mark" method="post" class="filters-grid three">
+                @Html.AntiForgeryToken()
+                <input type="hidden" asp-for="MarkForm.SectionId" value="@Model.SelectedSectionId" />
+                <input type="hidden" asp-for="MarkForm.ScheduleId" value="@Model.SelectedScheduleId" />
+                <input type="hidden" asp-for="MarkForm.Date" value="@Model.SelectedDate.ToString("yyyy-MM-dd")" />
+
+                <div>
+                    <label asp-for="MarkForm.StudentId"></label>
+                    <input asp-for="MarkForm.StudentId" class="input-select" type="number" min="1" />
+                    <span asp-validation-for="MarkForm.StudentId" class="field-validation"></span>
+                </div>
+                <div>
+                    <label asp-for="MarkForm.TimeIn"></label>
+                    <input asp-for="MarkForm.TimeIn" class="input-select" type="time" />
+                    <span asp-validation-for="MarkForm.TimeIn" class="field-validation"></span>
+                </div>
+                <div>
+                    <label asp-for="MarkForm.Remarks"></label>
+                    <input asp-for="MarkForm.Remarks" class="input-select" />
+                    <span asp-validation-for="MarkForm.Remarks" class="field-validation"></span>
+                </div>
+
+                <button type="submit" class="btn-primary btn-inline">Mark</button>
+            </form>
+        </article>
+
         <section class="grid-4 compact-gap">
             <article class="stat-card"><p class="stat-title">Total</p><p class="stat-value">@Model.TotalStudents</p></article>
             <article class="stat-card"><p class="stat-title">Present</p><p class="stat-value success">@Model.PresentCount</p></article>
@@ -56,6 +94,7 @@
             <table class="app-table">
                 <thead>
                     <tr>
+                        <th>Student ID</th>
                         <th>Student</th>
                         <th>Subject</th>
                         <th>Time In</th>
@@ -68,7 +107,7 @@
                     @if (!Model.Records.Any())
                     {
                         <tr>
-                            <td colspan="6" class="muted">No attendance records for this filter.</td>
+                            <td colspan="7" class="muted">No attendance records for this filter.</td>
                         </tr>
                     }
                     else
@@ -76,6 +115,7 @@
                         @foreach (var record in Model.Records)
                         {
                             <tr>
+                                <td>@record.StudentId</td>
                                 <td>@record.StudentName</td>
                                 <td>@record.SubjectName</td>
                                 <td>@record.TimeIn</td>
@@ -90,3 +130,7 @@
         </div>
     }
 </section>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

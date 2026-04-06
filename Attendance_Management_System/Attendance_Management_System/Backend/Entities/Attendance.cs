@@ -54,4 +54,7 @@ public class Attendance : EntityBase
     // Navigation property to the user who marked attendance
     [ForeignKey(nameof(MarkedBy))]
     public User? Marker { get; set; }
+
+    // Correction history for this attendance row.
+    public ICollection<AttendanceAudit> Audits { get; set; } = new List<AttendanceAudit>();
 }
