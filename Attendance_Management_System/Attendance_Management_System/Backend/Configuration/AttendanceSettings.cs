@@ -3,6 +3,7 @@ namespace Attendance_Management_System.Backend.Configuration;
 // Configuration settings for attendance policy behavior.
 public class AttendanceSettings
 {
+    // Configuration section key used in appsettings.json.
     public const string SectionName = "AttendanceSettings";
 
     // Number of minutes after schedule start when a student is considered late.
@@ -14,6 +15,7 @@ public class AttendanceSettings
     // School timezone used for date-window validation.
     public string TimezoneId { get; set; } = "Asia/Manila";
 
+    // Validates that all required settings have acceptable values.
     public bool IsValid()
     {
         return LateGraceMinutes >= 0
@@ -21,6 +23,7 @@ public class AttendanceSettings
             && !string.IsNullOrWhiteSpace(TimezoneId);
     }
 
+    // Provides default configuration values for the attendance system.
     public static AttendanceSettings Default => new()
     {
         LateGraceMinutes = 15,
