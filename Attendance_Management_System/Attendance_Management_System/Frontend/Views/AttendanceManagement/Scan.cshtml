@@ -1,0 +1,48 @@
+@{
+    ViewData["Title"] = "Attendance Scan";
+}
+
+<section class="panel attendance-scan-page" data-attendance-qr-page="student">
+    <h3>Student QR Scan</h3>
+    <p class="muted">
+        Scan your teacher QR token, verify your details, and submit attendance for the active class period.
+    </p>
+
+    <section class="grid-2 compact-gap">
+        <article class="panel">
+            <h4>Scanner</h4>
+            <div id="attendance-scanner" class="attendance-scanner"></div>
+            <div class="row-actions">
+                <button type="button" class="btn-primary" id="scan-start-btn">Start Scanner</button>
+                <button type="button" class="btn-secondary" id="scan-stop-btn">Stop Scanner</button>
+            </div>
+            <p id="scan-status" class="footer-note">Scanner idle.</p>
+        </article>
+
+        <article class="panel">
+            <h4>Submit Attendance</h4>
+            <div class="filters-grid">
+                <div>
+                    <label for="scan-student-id">Student ID</label>
+                    <input id="scan-student-id" class="input-select" type="text" maxlength="32" />
+                </div>
+                <div>
+                    <label for="scan-student-name">Student Name</label>
+                    <input id="scan-student-name" class="input-select" type="text" maxlength="120" />
+                </div>
+                <div>
+                    <label for="scan-token">QR Token</label>
+                    <textarea id="scan-token" class="input-select" rows="4" placeholder="Paste token if camera is unavailable"></textarea>
+                </div>
+            </div>
+            <div class="row-actions">
+                <button type="button" class="btn-primary" id="scan-submit-btn">Submit Presence</button>
+            </div>
+            <p id="scan-submit-result" class="footer-note">Waiting for submission.</p>
+        </article>
+    </section>
+</section>
+
+@section Scripts {
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+}

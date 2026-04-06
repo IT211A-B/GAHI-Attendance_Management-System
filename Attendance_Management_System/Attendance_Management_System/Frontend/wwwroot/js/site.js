@@ -374,11 +374,536 @@
 		});
 	}
 
+	var qrSessionStorageKey = "ams.qr.active-session";
+	var qrCheckinPrefix = "ams.qr.checkins.";
+	var qrSessionTtlSeconds = 90;
+	var studentSubmitCooldownMs = 2000;
+	var studentLastSubmitAt = 0;
+
+	function makeGuidLikeId(prefix) {
+		if (window.crypto && typeof window.crypto.randomUUID === "function") {
+			return prefix + window.crypto.randomUUID();
+		}
+
+		return prefix + String(Date.now()) + "-" + String(Math.random()).slice(2, 11);
+	}
+
+	function encodeBase64Url(value) {
+		var input = typeof value === "string" ? value : String(value || "");
+		var utf8 = new TextEncoder().encode(input);
+		var binary = "";
+		for (var i = 0; i < utf8.length; i += 1) {
+			binary += String.fromCharCode(utf8[i]);
+		}
+
+		return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+	}
+
+	function decodeBase64Url(encoded) {
+		var normalized = String(encoded || "").replace(/-/g, "+").replace(/_/g, "/");
+		while (normalized.length % 4 !== 0) {
+			normalized += "=";
+		}
+
+		var binary = atob(normalized);
+		var bytes = new Uint8Array(binary.length);
+		for (var i = 0; i < binary.length; i += 1) {
+			bytes[i] = binary.charCodeAt(i);
+		}
+
+		return new TextDecoder().decode(bytes);
+	}
+
+	function stringifyJsonSafe(data) {
+		try {
+			return JSON.stringify(data);
+		} catch (error) {
+			return "";
+		}
+	}
+
+	function parseJsonSafe(data) {
+		if (!data) {
+			return null;
+		}
+
+		try {
+			return JSON.parse(data);
+		} catch (error) {
+			return null;
+		}
+	}
+
+	function buildSessionToken(payload) {
+		return encodeBase64Url(stringifyJsonSafe(payload));
+	}
+
+	function parseSessionToken(token) {
+		if (!token) {
+			return null;
+		}
+
+		try {
+			var decoded = decodeBase64Url(token.trim());
+			var parsed = parseJsonSafe(decoded);
+			return parsed && typeof parsed === "object" ? parsed : null;
+		} catch (error) {
+			return null;
+		}
+	}
+
+	function saveActiveQrSession(session) {
+		try {
+			localStorage.setItem(qrSessionStorageKey, stringifyJsonSafe(session));
+		} catch (error) {
+			// Ignore storage write failures in private browsing contexts.
+		}
+	}
+
+	function getActiveQrSession() {
+		var raw;
+		try {
+			raw = localStorage.getItem(qrSessionStorageKey);
+		} catch (error) {
+			return null;
+		}
+
+		var parsed = parseJsonSafe(raw);
+		if (!parsed || typeof parsed !== "object") {
+			return null;
+		}
+
+		if (typeof parsed.expiresAt !== "number" || Date.now() > parsed.expiresAt) {
+			return null;
+		}
+
+		return parsed;
+	}
+
+	function clearQrState() {
+		var active = getActiveQrSession();
+		try {
+			localStorage.removeItem(qrSessionStorageKey);
+			if (active && active.sessionId) {
+				localStorage.removeItem(qrCheckinPrefix + active.sessionId);
+			}
+		} catch (error) {
+			// Ignore storage cleanup failures.
+		}
+	}
+
+	function getCheckinsForSession(sessionId) {
+		if (!sessionId) {
+			return [];
+		}
+
+		var raw;
+		try {
+			raw = localStorage.getItem(qrCheckinPrefix + sessionId);
+		} catch (error) {
+			return [];
+		}
+
+		var parsed = parseJsonSafe(raw);
+		if (!Array.isArray(parsed)) {
+			return [];
+		}
+
+		return parsed
+			.filter(function (item) {
+				return item && typeof item.studentId === "string" && typeof item.studentName === "string" && typeof item.scannedAt === "number";
+			})
+			.sort(function (a, b) {
+				return b.scannedAt - a.scannedAt;
+			});
+	}
+
+	function saveCheckinsForSession(sessionId, checkins) {
+		if (!sessionId) {
+			return;
+		}
+
+		try {
+			localStorage.setItem(qrCheckinPrefix + sessionId, stringifyJsonSafe(checkins || []));
+		} catch (error) {
+			// Ignore storage write failures in restricted environments.
+		}
+	}
+
+	function createQrSession(sectionCode, subjectCode, periodLabel) {
+		var normalizedSection = String(sectionCode || "").trim();
+		var normalizedSubject = String(subjectCode || "").trim();
+		var normalizedPeriod = String(periodLabel || "").trim();
+
+		var expiresAt = Date.now() + qrSessionTtlSeconds * 1000;
+		var payload = {
+			version: 1,
+			sessionId: makeGuidLikeId("sess_"),
+			sectionCode: normalizedSection,
+			subjectCode: normalizedSubject,
+			periodLabel: normalizedPeriod,
+			issuedAt: Date.now(),
+			expiresAt: expiresAt,
+			nonce: makeGuidLikeId("n_")
+		};
+
+		payload.token = buildSessionToken(payload);
+		saveActiveQrSession(payload);
+		saveCheckinsForSession(payload.sessionId, []);
+		return payload;
+	}
+
+	function renderCheckinsTable(tbody, checkins) {
+		if (!tbody) {
+			return;
+		}
+
+		if (!checkins.length) {
+			tbody.innerHTML = "";
+			var emptyRow = document.createElement("tr");
+			var emptyCell = document.createElement("td");
+			emptyCell.colSpan = 3;
+			emptyCell.className = "muted";
+			emptyCell.textContent = "No check-ins yet.";
+			emptyRow.appendChild(emptyCell);
+			tbody.appendChild(emptyRow);
+			return;
+		}
+
+		tbody.innerHTML = "";
+		checkins.forEach(function (entry) {
+			var row = document.createElement("tr");
+
+			var idCell = document.createElement("td");
+			idCell.textContent = entry.studentId;
+
+			var nameCell = document.createElement("td");
+			nameCell.textContent = entry.studentName;
+
+			var scannedCell = document.createElement("td");
+			scannedCell.textContent = new Date(entry.scannedAt).toLocaleTimeString();
+
+			row.appendChild(idCell);
+			row.appendChild(nameCell);
+			row.appendChild(scannedCell);
+			tbody.appendChild(row);
+		});
+	}
+
+	function initializeTeacherQrPage() {
+		var page = document.querySelector("[data-attendance-qr-page='teacher']");
+		if (!page) {
+			return;
+		}
+
+		var sectionInput = document.getElementById("qr-section-code");
+		var subjectInput = document.getElementById("qr-subject-code");
+		var periodInput = document.getElementById("qr-period-label");
+		var generateBtn = document.getElementById("qr-generate-btn");
+		var resetBtn = document.getElementById("qr-reset-btn");
+		var statusText = document.getElementById("qr-status");
+		var sessionText = document.getElementById("qr-session-id");
+		var countdownText = document.getElementById("qr-countdown");
+		var qrTarget = document.getElementById("qr-render-target");
+		var checkinsBody = document.getElementById("qr-checkins-body");
+
+		if (!sectionInput || !subjectInput || !periodInput || !generateBtn || !resetBtn || !statusText || !sessionText || !countdownText || !qrTarget || !checkinsBody) {
+			return;
+		}
+
+		var activeSession = null;
+
+		function updateTeacherUi(session) {
+			activeSession = session;
+
+			if (!session) {
+				statusText.textContent = "Generate a session to display QR.";
+				sessionText.textContent = "-";
+				countdownText.textContent = "-";
+				qrTarget.innerHTML = "";
+				renderCheckinsTable(checkinsBody, []);
+				return;
+			}
+
+			statusText.textContent = "Session active for " + session.sectionCode + " / " + session.subjectCode + " (" + session.periodLabel + ").";
+			sessionText.textContent = session.sessionId;
+
+			qrTarget.innerHTML = "";
+			if (window.QRCode) {
+				new window.QRCode(qrTarget, {
+					text: session.token,
+					width: 230,
+					height: 230,
+					correctLevel: window.QRCode.CorrectLevel.M
+				});
+			} else {
+				qrTarget.textContent = "QR library failed to load.";
+			}
+
+			renderCheckinsTable(checkinsBody, getCheckinsForSession(session.sessionId));
+		}
+
+		function regenerateIfExpired() {
+			if (!activeSession) {
+				return;
+			}
+
+			var remainingSeconds = Math.max(0, Math.floor((activeSession.expiresAt - Date.now()) / 1000));
+			countdownText.textContent = remainingSeconds + "s";
+
+			renderCheckinsTable(checkinsBody, getCheckinsForSession(activeSession.sessionId));
+
+			if (remainingSeconds > 0) {
+				return;
+			}
+
+			var rotated = createQrSession(activeSession.sectionCode, activeSession.subjectCode, activeSession.periodLabel);
+			updateTeacherUi(rotated);
+		}
+
+		generateBtn.addEventListener("click", function () {
+			var sectionCode = sectionInput.value.trim();
+			var subjectCode = subjectInput.value.trim();
+			var periodLabel = periodInput.value.trim();
+			var sectionPattern = /^[A-Za-z0-9\- ]{2,64}$/;
+			var subjectPattern = /^[A-Za-z0-9\- ]{2,64}$/;
+			var periodPattern = /^[A-Za-z0-9:\- ]{3,64}$/;
+
+			if (!sectionCode || !subjectCode || !periodLabel) {
+				statusText.textContent = "Section, subject, and period are required.";
+				return;
+			}
+
+			if (!sectionPattern.test(sectionCode) || !subjectPattern.test(subjectCode) || !periodPattern.test(periodLabel)) {
+				statusText.textContent = "Use letters, numbers, spaces, and dashes only for section/subject/period.";
+				return;
+			}
+
+			var session = createQrSession(sectionCode, subjectCode, periodLabel);
+			updateTeacherUi(session);
+			countdownText.textContent = qrSessionTtlSeconds + "s";
+		});
+
+		resetBtn.addEventListener("click", function () {
+			clearQrState();
+			updateTeacherUi(null);
+		});
+
+		var existing = getActiveQrSession();
+		updateTeacherUi(existing);
+		window.setInterval(regenerateIfExpired, 1000);
+	}
+
+	function initializeStudentScanPage() {
+		var page = document.querySelector("[data-attendance-qr-page='student']");
+		if (!page) {
+			return;
+		}
+
+		var scannerContainerId = "attendance-scanner";
+		var startBtn = document.getElementById("scan-start-btn");
+		var stopBtn = document.getElementById("scan-stop-btn");
+		var statusText = document.getElementById("scan-status");
+		var studentIdInput = document.getElementById("scan-student-id");
+		var studentNameInput = document.getElementById("scan-student-name");
+		var tokenInput = document.getElementById("scan-token");
+		var submitBtn = document.getElementById("scan-submit-btn");
+		var submitResult = document.getElementById("scan-submit-result");
+
+		if (!startBtn || !stopBtn || !statusText || !studentIdInput || !studentNameInput || !tokenInput || !submitBtn || !submitResult) {
+			return;
+		}
+
+		var scanner = null;
+		var scannerState = "idle";
+
+		function setStatus(message) {
+			statusText.textContent = message;
+		}
+
+		function setSubmitResult(message, type) {
+			submitResult.textContent = message;
+			submitResult.classList.remove("result-success", "result-error", "result-warning");
+			if (type) {
+				submitResult.classList.add(type);
+			}
+		}
+
+		function stopScanner() {
+			if (!scanner) {
+				scannerState = "idle";
+				setStatus("Scanner already stopped.");
+				return Promise.resolve();
+			}
+
+			if (scannerState !== "running" && scannerState !== "starting") {
+				scannerState = "idle";
+				try {
+					scanner.clear();
+				} catch (error) {
+					// Ignore cleanup errors.
+				}
+				scanner = null;
+				setStatus("Scanner already stopped.");
+				return Promise.resolve();
+			}
+
+			scannerState = "stopping";
+			var stopPromise;
+			try {
+				stopPromise = scanner.stop();
+			} catch (error) {
+				stopPromise = Promise.resolve();
+			}
+
+			return Promise.resolve(stopPromise)
+				.catch(function () {
+					return null;
+				})
+				.finally(function () {
+					try {
+						scanner.clear();
+					} catch (error) {
+						// Ignore cleanup errors.
+					}
+					scanner = null;
+					scannerState = "idle";
+					setStatus("Scanner stopped.");
+				});
+		}
+
+		startBtn.addEventListener("click", function () {
+			if (!window.Html5Qrcode) {
+				setStatus("Scanner library failed to load. Paste token manually.");
+				return;
+			}
+
+			if (scanner || scannerState === "starting" || scannerState === "running") {
+				setStatus("Scanner already running.");
+				return;
+			}
+
+			scanner = new window.Html5Qrcode(scannerContainerId);
+			scannerState = "starting";
+			setStatus("Starting scanner...");
+
+			scanner
+				.start(
+					{ facingMode: "environment" },
+					{ fps: 8, qrbox: { width: 230, height: 230 } },
+					function (decodedText) {
+						tokenInput.value = decodedText;
+						setStatus("QR detected. Review details and submit.");
+						stopScanner();
+					},
+					function () {
+						// Ignore transient decode errors while scanning.
+					}
+				)
+				.then(function () {
+					scannerState = "running";
+				})
+				.catch(function () {
+					scannerState = "idle";
+					setStatus("Camera start failed. Paste token manually.");
+					try {
+						scanner.clear();
+					} catch (error) {
+						// Ignore cleanup failures.
+					}
+					scanner = null;
+				});
+		});
+
+		stopBtn.addEventListener("click", function () {
+			stopScanner();
+		});
+
+		submitBtn.addEventListener("click", function () {
+			if (Date.now() - studentLastSubmitAt < studentSubmitCooldownMs) {
+				setSubmitResult("Please wait before submitting again.", "result-warning");
+				return;
+			}
+
+			studentLastSubmitAt = Date.now();
+
+			var studentId = studentIdInput.value.trim();
+			var studentName = studentNameInput.value.trim();
+			var token = tokenInput.value.trim();
+			var idPattern = /^[A-Za-z0-9\-]{2,32}$/;
+			var namePattern = /^[A-Za-z][A-Za-z .'-]{1,118}$/;
+
+			if (!studentId || !studentName || !token) {
+				setSubmitResult("Student ID, student name, and token are required.", "result-error");
+				return;
+			}
+
+			if (!idPattern.test(studentId)) {
+				setSubmitResult("Student ID should be 2-32 characters using letters, numbers, and dashes.", "result-error");
+				return;
+			}
+
+			if (!namePattern.test(studentName)) {
+				setSubmitResult("Student name contains unsupported characters.", "result-error");
+				return;
+			}
+
+			if (token.length < 20 || token.length > 4096) {
+				setSubmitResult("Token size is invalid.", "result-error");
+				return;
+			}
+
+			var tokenPayload = parseSessionToken(token);
+			if (!tokenPayload || typeof tokenPayload.sessionId !== "string") {
+				setSubmitResult("Invalid QR token format.", "result-error");
+				return;
+			}
+
+			if (typeof tokenPayload.expiresAt !== "number" || Date.now() > tokenPayload.expiresAt) {
+				setSubmitResult("QR token already expired. Ask your teacher for a fresh QR.", "result-error");
+				return;
+			}
+
+			var activeSession = getActiveQrSession();
+			if (!activeSession || activeSession.sessionId !== tokenPayload.sessionId) {
+				setSubmitResult("This QR is not active for the current class session.", "result-error");
+				return;
+			}
+
+			var checkins = getCheckinsForSession(activeSession.sessionId);
+			var alreadyPresent = checkins.some(function (entry) {
+				return entry.studentId.toLowerCase() === studentId.toLowerCase();
+			});
+
+			if (alreadyPresent) {
+				setSubmitResult("Already marked present for this session.", "result-warning");
+				return;
+			}
+
+			checkins.push({
+				studentId: studentId,
+				studentName: studentName,
+				scannedAt: Date.now()
+			});
+
+			saveCheckinsForSession(activeSession.sessionId, checkins);
+			setSubmitResult("Attendance submitted for " + activeSession.subjectCode + " (" + activeSession.periodLabel + ").", "result-success");
+		});
+
+		window.addEventListener("beforeunload", function () {
+			if (scanner) {
+				stopScanner();
+			}
+		});
+	}
+
 	// Initialize all features when the DOM is fully loaded.
 	document.addEventListener("DOMContentLoaded", function () {
 		restoreScrollAfterPostback();
 		initializePostbackScrollRetention();
 		initializeTimetableQuickAdd();
+		initializeTeacherQrPage();
+		initializeStudentScanPage();
 
 		// Skip animations if user prefers reduced motion or library unavailable.
 		if (prefersReducedMotion() || !supportsAnime()) {

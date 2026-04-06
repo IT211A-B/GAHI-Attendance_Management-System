@@ -5,18 +5,33 @@
       "commandName": "Project",
       "dotnetRunMessages": true,
       "launchBrowser": true,
-      "applicationUrl": "http://localhost:5002",
+      "applicationUrl": "http://localhost:5003",
       "environmentVariables": {
-        "ASPNETCORE_ENVIRONMENT": "Development"
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "ConnectionStrings__Default": "Host=localhost;Port=5432;Database=attendance_qrtest;Username=postgres;Password=postgres",
+        "DevAuth__Enabled": "true"
       }
     },
     "https": {
       "commandName": "Project",
       "dotnetRunMessages": true,
       "launchBrowser": true,
-      "applicationUrl": "https://localhost:7050;http://localhost:5002",
+      "applicationUrl": "https://localhost:7050;http://localhost:5003",
       "environmentVariables": {
-        "ASPNETCORE_ENVIRONMENT": "Development"
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "ConnectionStrings__Default": "Host=localhost;Port=5432;Database=attendance_qrtest;Username=postgres;Password=postgres",
+        "DevAuth__Enabled": "true"
+      }
+    },
+    "manual-qa": {
+      "commandName": "Project",
+      "dotnetRunMessages": true,
+      "launchBrowser": true,
+      "applicationUrl": "http://localhost:5003",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "ConnectionStrings__Default": "Host=localhost;Port=5432;Database=attendance_qrtest;Username=postgres;Password=postgres",
+        "DevAuth__Enabled": "true"
       }
     }
   }

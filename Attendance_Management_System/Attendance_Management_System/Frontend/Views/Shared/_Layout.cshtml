@@ -49,6 +49,8 @@
                 {
                     <a class="sidebar-link @(currentController == "SectionManagement" ? "active" : "")"
                        asp-controller="SectionManagement" asp-action="Index">Sections</a>
+                          <a class="sidebar-link @(currentController == "AttendanceManagement" && currentAction == "Qr" ? "active" : "")"
+                              asp-controller="AttendanceManagement" asp-action="Qr">Attendance QR</a>
                     <a class="sidebar-link @(currentController == "SubjectsManagement" ? "active" : "")"
                        asp-controller="SubjectsManagement" asp-action="Index">Subjects</a>
                     <a class="sidebar-link @(currentController == "ScheduleManagement" ? "active" : "")"
@@ -77,6 +79,8 @@
                 {
                     <a class="sidebar-link @(currentController == "Enrollments" ? "active" : "")"
                        asp-controller="Enrollments" asp-action="Index">Enrollments</a>
+                          <a class="sidebar-link @(currentController == "AttendanceManagement" && currentAction == "Scan" ? "active" : "")"
+                              asp-controller="AttendanceManagement" asp-action="Scan">Scan QR</a>
                 }
 
                 <a class="sidebar-link @(currentController == "Settings" ? "active" : "")" asp-controller="Settings"
