@@ -333,11 +333,11 @@
             }
         </section>
 
-        @if (Model.IsTeacher)
+        @if (Model.IsTeacher || Model.IsAdmin)
         {
             <section class="panel">
                 <h3>Attendance Checklist</h3>
-                <p class="muted">Choose a schedule and date, then mark attendance directly from the student list.</p>
+            <p class="muted">Choose a schedule and date, then mark or correct attendance directly from the student list.</p>
 
                 @if (TempData["SectionAttendanceSuccess"] is string attendanceSuccess)
                 {
@@ -415,6 +415,10 @@
                             <p class="stat-title">Absent</p>
                             <p class="stat-value danger">@Model.AttendanceAbsentCount</p>
                         </article>
+                        <article class="stat-card">
+                            <p class="stat-title">Unmarked</p>
+                            <p class="stat-value">@Model.AttendanceUnmarkedCount</p>
+                        </article>
                     </section>
 
                     <div class="table-wrap">
@@ -449,26 +453,21 @@
                                         <td>@student.ExistingRemarks</td>
                                         <td>@student.MarkerName</td>
                                         <td>
-                                            @if (student.IsMarked)
-                                            {
-                                                <span class="muted">Already marked</span>
-                                            }
-                                            else
-                                            {
-                                                <form asp-controller="SectionManagement" asp-action="MarkSectionAttendance" method="post"
-                                                      class="stack-form">
-                                                    @Html.AntiForgeryToken()
-                                                    <input type="hidden" name="SectionId" value="@Model.SelectedSectionId" />
-                                                    <input type="hidden" name="ScheduleId" value="@Model.SelectedAttendanceScheduleId" />
-                                                    <input type="hidden" name="StudentId" value="@student.StudentId" />
-                                                    <input type="hidden" name="Date"
-                                                           value="@Model.SelectedAttendanceDate.ToString("yyyy-MM-dd")" />
-                                                    <input type="time" name="TimeIn" class="input-select compact-input" />
-                                                    <input type="text" name="Remarks" class="input-select compact-input"
-                                                           placeholder="Optional remarks" />
-                                                    <button type="submit" class="btn-primary btn-xs">Mark</button>
-                                                </form>
-                                            }
+                                            <form asp-controller="SectionManagement" asp-action="MarkSectionAttendance" method="post"
+                                                  class="stack-form">
+                                                @Html.AntiForgeryToken()
+                                                <input type="hidden" name="SectionId" value="@Model.SelectedSectionId" />
+                                                <input type="hidden" name="ScheduleId" value="@Model.SelectedAttendanceScheduleId" />
+                                                <input type="hidden" name="StudentId" value="@student.StudentId" />
+                                                <input type="hidden" name="Date"
+                                                       value="@Model.SelectedAttendanceDate.ToString("yyyy-MM-dd")" />
+                                                <input type="time" name="TimeIn" class="input-select compact-input"
+                                                       value="@student.ExistingTimeInValue" />
+                                                <input type="text" name="Remarks" class="input-select compact-input"
+                                                       value="@student.EditableRemarksValue"
+                                                       placeholder="Optional remarks" />
+                                                <button type="submit" class="btn-primary btn-xs">@student.ActionLabel</button>
+                                            </form>
                                         </td>
                                     </tr>
                                 }

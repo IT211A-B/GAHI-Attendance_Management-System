@@ -1,7 +1,11 @@
 using Attendance_Management_System.Backend.DTOs.Responses;
+using Attendance_Management_System.Backend.Configuration;
+using Attendance_Management_System.Backend.Enums;
+using Attendance_Management_System.Backend.Helpers;
 using Attendance_Management_System.Backend.Interfaces.Services;
 using Attendance_Management_System.Backend.Persistence;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 
 namespace Attendance_Management_System.Backend.Services;
 
@@ -10,10 +14,14 @@ namespace Attendance_Management_System.Backend.Services;
 public class TeacherHistoryService : ITeacherHistoryService
 {
     private readonly AppDbContext _context;
+    private readonly AttendanceSettings _attendanceSettings;
 
-    public TeacherHistoryService(AppDbContext context)
+    public TeacherHistoryService(AppDbContext context, IOptions<AttendanceSettings> attendanceSettings)
     {
         _context = context;
+        _attendanceSettings = attendanceSettings.Value?.IsValid() == true
+            ? attendanceSettings.Value
+            : AttendanceSettings.Default;
     }
 
     // Get all schedule slots for sections the teacher is assigned to
@@ -101,7 +109,7 @@ public class TeacherHistoryService : ITeacherHistoryService
         // Use provided date or default to today
         var filterDate = date ?? DateOnly.FromDateTime(DateTime.Today);
 
-        // Get attendance records for the schedule and date
+        // Get attendance records for the schedule and date.
         var attendances = await _context.Attendances
             .AsNoTracking()
             .Include(a => a.Student)
@@ -116,7 +124,18 @@ public class TeacherHistoryService : ITeacherHistoryService
             .Where(s => s.SectionId == schedule.SectionId && s.IsActive)
             .ToListAsync();
 
-        // Build ScheduleInfoDto
+        var markerUserIds = attendances
+            .Where(attendance => attendance.MarkedBy > 0)
+            .Select(attendance => attendance.MarkedBy)
+            .Distinct()
+            .ToHashSet();
+
+        var teacherNames = await _context.Teachers
+            .AsNoTracking()
+            .Where(teacher => markerUserIds.Contains(teacher.UserId))
+            .ToDictionaryAsync(teacher => teacher.UserId, teacher => $"{teacher.FirstName} {teacher.LastName}");
+
+        // Build ScheduleInfoDto.
         var scheduleInfo = new ScheduleInfoDto
         {
             SubjectName = schedule.Subject?.Name ?? string.Empty,
@@ -127,32 +146,44 @@ public class TeacherHistoryService : ITeacherHistoryService
             EndTime = schedule.EndTime.ToString("HH:mm")
         };
 
-        // Calculate late threshold (15 minutes after start time)
-        var lateThreshold = schedule.StartTime.AddMinutes(15);
-
-        // Map attendance records to AttendanceDto
-        var records = attendances.Select(a => new AttendanceDto
+        var recordsWithStatus = new List<(AttendanceDto Record, AttendanceStatusKind Status)>();
+        foreach (var attendance in attendances)
         {
-            Id = a.Id,
-            ScheduleId = a.ScheduleId,
-            SubjectName = schedule.Subject?.Name,
-            StudentId = a.StudentId,
-            StudentName = a.Student != null ? $"{a.Student.FirstName} {a.Student.LastName}" : null,
-            SectionId = a.SectionId,
-            SectionName = schedule.Section?.Name,
-            Date = a.Date,
-            TimeIn = a.TimeIn,
-            TimeOut = a.TimeOut,
-            Remarks = a.Remarks,
-            MarkedAt = a.MarkedAt,
-            MarkedBy = a.MarkedBy
-        }).ToList();
+            teacherNames.TryGetValue(attendance.MarkedBy, out var markerName);
+            var status = AttendancePolicy.GetMarkedStatus(attendance.TimeIn, schedule.StartTime, _attendanceSettings);
 
-        // Add absent students (students without attendance records)
-        var attendedStudentIds = attendances.Select(a => a.StudentId).ToHashSet();
-        var absentStudents = sectionStudents.Where(s => !attendedStudentIds.Contains(s.Id));
+            recordsWithStatus.Add((new AttendanceDto
+            {
+                Id = attendance.Id,
+                ScheduleId = attendance.ScheduleId,
+                SubjectName = schedule.Subject?.Name,
+                StudentId = attendance.StudentId,
+                StudentName = attendance.Student != null ? $"{attendance.Student.FirstName} {attendance.Student.LastName}" : null,
+                SectionId = attendance.SectionId,
+                SectionName = schedule.Section?.Name,
+                Date = attendance.Date,
+                TimeIn = attendance.TimeIn,
+                TimeOut = attendance.TimeOut,
+                Remarks = string.IsNullOrWhiteSpace(attendance.Remarks)
+                    ? AttendancePolicy.ToLabel(status)
+                    : attendance.Remarks,
+                MarkedAt = attendance.MarkedAt,
+                MarkedBy = attendance.MarkedBy,
+                MarkerName = markerName,
+                IsMarked = true,
+                IsLate = status == AttendanceStatusKind.Late,
+                StatusLabel = AttendancePolicy.ToLabel(status),
+                StatusClass = AttendancePolicy.ToCssClass(status)
+            }, status));
+        }
 
-        foreach (var student in absentStudents)
+        var records = recordsWithStatus.Select(row => row.Record).ToList();
+
+        // Add unmarked students (students without attendance records).
+        var attendedStudentIds = attendances.Select(attendance => attendance.StudentId).ToHashSet();
+        var unmarkedStudents = sectionStudents.Where(student => !attendedStudentIds.Contains(student.Id));
+
+        foreach (var student in unmarkedStudents)
         {
             records.Add(new AttendanceDto
             {
@@ -166,22 +197,28 @@ public class TeacherHistoryService : ITeacherHistoryService
                 Date = filterDate,
                 TimeIn = null,
                 TimeOut = null,
-                Remarks = "Absent",
-                MarkedAt = DateTimeOffset.UtcNow,
-                MarkedBy = 0
+                Remarks = "Unmarked",
+                MarkedAt = DateTimeOffset.MinValue,
+                MarkedBy = 0,
+                MarkerName = null,
+                IsMarked = false,
+                IsLate = false,
+                StatusLabel = AttendancePolicy.ToLabel(AttendanceStatusKind.Unmarked),
+                StatusClass = AttendancePolicy.ToCssClass(AttendanceStatusKind.Unmarked)
             });
         }
 
-        // Calculate summary statistics
-        var presentCount = attendances.Count(a => a.TimeIn.HasValue);
-        var lateCount = attendances.Count(a => a.TimeIn.HasValue && a.TimeIn.Value > lateThreshold);
-        var absentCount = sectionStudents.Count - presentCount;
+        var presentCount = recordsWithStatus.Count(row => AttendancePolicy.CountsAsPresent(row.Status));
+        var lateCount = recordsWithStatus.Count(row => row.Status == AttendanceStatusKind.Late);
+        var absentCount = recordsWithStatus.Count(row => row.Status == AttendanceStatusKind.Absent);
+        var unmarkedCount = sectionStudents.Count - recordsWithStatus.Count;
 
         var summary = new AttendanceSummaryDto
         {
             TotalStudents = sectionStudents.Count,
             PresentCount = presentCount,
             AbsentCount = absentCount,
+            UnmarkedCount = unmarkedCount,
             LateCount = lateCount,
             Records = new List<AttendanceDto>() // Not used in this context
         };

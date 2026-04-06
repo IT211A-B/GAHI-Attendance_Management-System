@@ -1,10 +1,14 @@
 using Attendance_Management_System.Backend.DTOs.Requests;
 using Attendance_Management_System.Backend.DTOs.Responses;
+using Attendance_Management_System.Backend.Configuration;
 using Attendance_Management_System.Backend.Entities;
+using Attendance_Management_System.Backend.Enums;
+using Attendance_Management_System.Backend.Helpers;
 using Attendance_Management_System.Backend.Interfaces.Services;
 using Attendance_Management_System.Backend.Persistence;
 using Attendance_Management_System.Backend.ValueObjects;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 
 namespace Attendance_Management_System.Backend.Services;
 
@@ -12,78 +16,51 @@ namespace Attendance_Management_System.Backend.Services;
 public class AttendanceService : IAttendanceService
 {
     private readonly AppDbContext _context;
+    private readonly AttendanceSettings _attendanceSettings;
 
-    public AttendanceService(AppDbContext context)
+    public AttendanceService(AppDbContext context, IOptions<AttendanceSettings> attendanceSettings)
     {
         _context = context;
+        _attendanceSettings = attendanceSettings.Value?.IsValid() == true
+            ? attendanceSettings.Value
+            : AttendanceSettings.Default;
     }
 
-    // Marks attendance for a single student after validating all business rules
     public async Task<ApiResponse<AttendanceDto>> MarkAttendanceAsync(MarkAttendanceRequest request, TeacherContext teacherContext)
     {
-        // Validate section assignment for non-admin users (teachers must be assigned to the section)
-        if (!teacherContext.IsAdmin)
-        {
-            var sectionValidationId = teacherContext.GetSectionValidationId();
-            if (!sectionValidationId.HasValue)
-            {
-                return ApiResponse<AttendanceDto>.ErrorResponse(
-                    "FORBIDDEN",
-                    "Teacher profile not found.");
-            }
-
-            // Verify teacher is assigned to the section using Teacher.Id (not User.Id)
-            var isAssigned = await _context.SectionTeachers
-                .AnyAsync(st => st.TeacherId == sectionValidationId.Value && st.SectionId == request.SectionId);
-
-            if (!isAssigned)
-            {
-                return ApiResponse<AttendanceDto>.ErrorResponse(
-                    "FORBIDDEN",
-                    "You are not assigned to this section.");
-            }
-        }
-
-        // Verify schedule belongs to the section
-        var schedule = await _context.Schedules
-            .Include(s => s.Subject)
-            .FirstOrDefaultAsync(s => s.Id == request.ScheduleId && s.SectionId == request.SectionId);
-
-        if (schedule == null)
+        var scheduleValidation = await ValidateScheduleForMarkingAsync(
+            request.SectionId,
+            request.ScheduleId,
+            request.Date,
+            teacherContext);
+        if (!scheduleValidation.Success || scheduleValidation.Schedule is null)
         {
             return ApiResponse<AttendanceDto>.ErrorResponse(
-                "NOT_FOUND",
-                "Schedule not found for this section.");
+                scheduleValidation.ErrorCode!,
+                scheduleValidation.ErrorMessage!);
         }
 
-        // Verify student belongs to the section
+        var schedule = scheduleValidation.Schedule;
+
         var student = await _context.Students
-            .FirstOrDefaultAsync(s => s.Id == request.StudentId && s.SectionId == request.SectionId);
+            .FirstOrDefaultAsync(s =>
+                s.Id == request.StudentId
+                && s.SectionId == request.SectionId
+                && s.IsActive);
 
         if (student == null)
         {
             return ApiResponse<AttendanceDto>.ErrorResponse(
                 "NOT_FOUND",
-                "Student not found in this section.");
+                "Active student not found in this section.");
         }
 
-        // Check for duplicate attendance record for same student/schedule/date
         var existingAttendance = await _context.Attendances
-            .AnyAsync(a => a.ScheduleId == request.ScheduleId
+            .FirstOrDefaultAsync(a => a.ScheduleId == request.ScheduleId
                 && a.StudentId == request.StudentId
                 && a.Date == request.Date);
 
-        if (existingAttendance)
-        {
-            return ApiResponse<AttendanceDto>.ErrorResponse(
-                "DUPLICATE",
-                "Attendance already marked for this student on this date.");
-        }
-
-        // Get the active academic year for the enrollment period
-        var academicYear = await _context.AcademicYears
-            .FirstOrDefaultAsync(ay => ay.IsActive);
-
+        var academicYear = await GetActiveAcademicYearAsync();
         if (academicYear == null)
         {
             return ApiResponse<AttendanceDto>.ErrorResponse(
@@ -91,95 +68,104 @@ public class AttendanceService : IAttendanceService
                 "No active academic year found.");
         }
 
-        // Get section for response
         var section = await _context.Sections.FindAsync(request.SectionId);
-
-        // Get marker name for response
         var markerName = await GetMarkerNameAsync(teacherContext.UserId);
+        var now = DateTimeOffset.UtcNow;
+        var normalizedRemarks = NormalizeRemarks(request.TimeIn, request.Remarks);
+        var afterStatus = AttendancePolicy.GetMarkedStatus(request.TimeIn, schedule.StartTime, _attendanceSettings);
 
-        // Create attendance record - use UserId for MarkedBy (FK to User table)
-        // If no TimeIn provided, student is marked as absent
-        var attendance = new Attendance
+        Attendance attendance;
+        AttendanceAudit audit;
+
+        if (existingAttendance == null)
         {
-            ScheduleId = request.ScheduleId,
-            StudentId = request.StudentId,
-            SectionId = request.SectionId,
-            AcademicYearId = academicYear.Id,
-            Date = request.Date,
-            TimeIn = request.TimeIn,
-            Remarks = request.TimeIn.HasValue ? request.Remarks : "Absent",
-            MarkedBy = teacherContext.GetMarkerId(),
-            MarkedAt = DateTimeOffset.UtcNow
-        };
+            attendance = new Attendance
+            {
+                ScheduleId = request.ScheduleId,
+                StudentId = request.StudentId,
+                SectionId = request.SectionId,
+                AcademicYearId = academicYear.Id,
+                Date = request.Date,
+                TimeIn = request.TimeIn,
+                Remarks = normalizedRemarks,
+                MarkedBy = teacherContext.GetMarkerId(),
+                MarkedAt = now
+            };
 
-        _context.Attendances.Add(attendance);
+            _context.Attendances.Add(attendance);
+            await _context.SaveChangesAsync();
+
+            audit = BuildAttendanceAudit(
+                attendance,
+                "created",
+                beforeTimeIn: null,
+                beforeRemarks: null,
+                beforeStatus: null,
+                afterTimeIn: attendance.TimeIn,
+                afterRemarks: attendance.Remarks,
+                afterStatus: afterStatus,
+                actorUserId: teacherContext.GetMarkerId(),
+                actionAt: now);
+        }
+        else
+        {
+            var beforeTimeIn = existingAttendance.TimeIn;
+            var beforeRemarks = existingAttendance.Remarks;
+            var beforeStatus = AttendancePolicy.GetMarkedStatus(beforeTimeIn, schedule.StartTime, _attendanceSettings);
+
+            existingAttendance.TimeIn = request.TimeIn;
+            existingAttendance.Remarks = normalizedRemarks;
+            existingAttendance.MarkedBy = teacherContext.GetMarkerId();
+            existingAttendance.MarkedAt = now;
+
+            await _context.SaveChangesAsync();
+
+            attendance = existingAttendance;
+            audit = BuildAttendanceAudit(
+                attendance,
+                "updated",
+                beforeTimeIn: beforeTimeIn,
+                beforeRemarks: beforeRemarks,
+                beforeStatus: beforeStatus,
+                afterTimeIn: attendance.TimeIn,
+                afterRemarks: attendance.Remarks,
+                afterStatus: afterStatus,
+                actorUserId: teacherContext.GetMarkerId(),
+                actionAt: now);
+        }
+
+        _context.AttendanceAudits.Add(audit);
         await _context.SaveChangesAsync();
 
-        // Build response DTO with all related data
-        var attendanceDto = new AttendanceDto
-        {
-            Id = attendance.Id,
-            ScheduleId = attendance.ScheduleId,
-            SubjectName = schedule.Subject?.Name,
-            StudentId = attendance.StudentId,
-            StudentName = $"{student.FirstName} {student.LastName}",
-            SectionId = attendance.SectionId,
-            SectionName = section?.Name,
-            Date = attendance.Date,
-            TimeIn = attendance.TimeIn,
-            TimeOut = attendance.TimeOut,
-            Remarks = attendance.Remarks,
-            MarkedAt = attendance.MarkedAt,
-            MarkedBy = attendance.MarkedBy,
-            MarkerName = markerName
-        };
+        var attendanceDto = BuildAttendanceDto(
+            attendance,
+            schedule,
+            student,
+            section?.Name,
+            markerName,
+            afterStatus,
+            isMarked: true);
 
         return ApiResponse<AttendanceDto>.SuccessResponse(attendanceDto);
     }
 
-    // Marks attendance for multiple students in a single transaction
-
     public async Task<ApiResponse<List<AttendanceDto>>> MarkBulkAttendanceAsync(BulkAttendanceRequest request, TeacherContext teacherContext)
     {
-        // Validate section assignment for non-admin users (teachers must be assigned to the section)
-        if (!teacherContext.IsAdmin)
-        {
-            var sectionValidationId = teacherContext.GetSectionValidationId();
-            if (!sectionValidationId.HasValue)
-            {
-                return ApiResponse<List<AttendanceDto>>.ErrorResponse(
-                    "FORBIDDEN",
-                    "Teacher profile not found.");
-            }
-
-            // Verify teacher is assigned to the section using Teacher.Id (not User.Id)
-            var isAssigned = await _context.SectionTeachers
-                .AnyAsync(st => st.TeacherId == sectionValidationId.Value && st.SectionId == request.SectionId);
-
-            if (!isAssigned)
-            {
-                return ApiResponse<List<AttendanceDto>>.ErrorResponse(
-                    "FORBIDDEN",
-                    "You are not assigned to this section.");
-            }
-        }
-
-        // Verify schedule belongs to the section
-        var schedule = await _context.Schedules
-            .Include(s => s.Subject)
-            .FirstOrDefaultAsync(s => s.Id == request.ScheduleId && s.SectionId == request.SectionId);
-
-        if (schedule == null)
+        var scheduleValidation = await ValidateScheduleForMarkingAsync(
+            request.SectionId,
+            request.ScheduleId,
+            request.Date,
+            teacherContext);
+        if (!scheduleValidation.Success || scheduleValidation.Schedule is null)
         {
             return ApiResponse<List<AttendanceDto>>.ErrorResponse(
-                "NOT_FOUND",
-                "Schedule not found for this section.");
+                scheduleValidation.ErrorCode!,
+                scheduleValidation.ErrorMessage!);
         }
 
-        // Get the active academic year for the enrollment period
-        var academicYear = await _context.AcademicYears
-            .FirstOrDefaultAsync(ay => ay.IsActive);
+        var schedule = scheduleValidation.Schedule;
 
+        var academicYear = await GetActiveAcademicYearAsync();
         if (academicYear == null)
         {
             return ApiResponse<List<AttendanceDto>>.ErrorResponse(
@@ -187,50 +173,46 @@ public class AttendanceService : IAttendanceService
                 "No active academic year found.");
         }
 
-        // Pre-load all data needed for bulk operation to avoid multiple database round-trips
         var section = await _context.Sections.FindAsync(request.SectionId);
         var markerName = await GetMarkerNameAsync(teacherContext.UserId);
-        var studentIds = request.Entries.Select(e => e.StudentId).ToHashSet();
+        var now = DateTimeOffset.UtcNow;
 
-        // Load all students in one query for efficient validation
+        var normalizedEntries = request.Entries
+            .GroupBy(entry => entry.StudentId)
+            .Select(group => group.Last())
+            .ToList();
+
+        var studentIds = normalizedEntries.Select(entry => entry.StudentId).ToHashSet();
         var students = await _context.Students
-            .Where(s => studentIds.Contains(s.Id) && s.SectionId == request.SectionId)
-            .ToDictionaryAsync(s => s.Id);
+            .Where(student => studentIds.Contains(student.Id)
+                && student.SectionId == request.SectionId
+                && student.IsActive)
+            .ToDictionaryAsync(student => student.Id);
 
-        // Check for existing attendances in one query to detect duplicates
         var existingAttendances = await _context.Attendances
-            .Where(a => a.ScheduleId == request.ScheduleId
-                && a.Date == request.Date
-                && studentIds.Contains(a.StudentId))
-            .Select(a => a.StudentId)
-            .ToHashSetAsync();
+            .Where(attendance => attendance.ScheduleId == request.ScheduleId
+                && attendance.Date == request.Date
+                && studentIds.Contains(attendance.StudentId))
+            .ToDictionaryAsync(attendance => attendance.StudentId);
 
-        var attendanceDtos = new List<AttendanceDto>();
+        var processedRows = new List<BulkAttendanceMutation>();
         var errors = new List<string>();
 
-        // Use transaction to ensure atomic operation - all records succeed or fail together
-        await using var transaction = await _context.Database.BeginTransactionAsync();
-        try
+        foreach (var entry in normalizedEntries)
         {
-            var attendanceRecords = new List<Attendance>();
-
-            foreach (var entry in request.Entries)
+            if (!students.TryGetValue(entry.StudentId, out var student))
             {
-                // Verify student belongs to the section
-                if (!students.TryGetValue(entry.StudentId, out var student))
-                {
-                    errors.Add($"Student {entry.StudentId} not found in this section.");
-                    continue;
-                }
+                errors.Add($"Student {entry.StudentId} is not an active member of this section.");
+                continue;
+            }
 
-                // Skip if attendance already marked for this student
-                if (existingAttendances.Contains(entry.StudentId))
-                {
-                    errors.Add($"Attendance already marked for student {entry.StudentId} on this date.");
-                    continue;
-                }
+            existingAttendances.TryGetValue(entry.StudentId, out var existingAttendance);
 
-                // Create attendance record - if no TimeIn provided, student is marked as absent
+            var normalizedRemarks = NormalizeRemarks(entry.TimeIn, entry.Remarks);
+            var afterStatus = AttendancePolicy.GetMarkedStatus(entry.TimeIn, schedule.StartTime, _attendanceSettings);
+
+            if (existingAttendance == null)
+            {
                 var attendance = new Attendance
                 {
                     ScheduleId = request.ScheduleId,
@@ -239,70 +221,93 @@ public class AttendanceService : IAttendanceService
                     AcademicYearId = academicYear.Id,
                     Date = request.Date,
                     TimeIn = entry.TimeIn,
-                    Remarks = entry.TimeIn.HasValue ? entry.Remarks : "Absent",
+                    Remarks = normalizedRemarks,
                     MarkedBy = teacherContext.GetMarkerId(),
-                    MarkedAt = DateTimeOffset.UtcNow
+                    MarkedAt = now
                 };
 
-                attendanceRecords.Add(attendance);
                 _context.Attendances.Add(attendance);
-            }
 
-            // Single SaveChanges for all records to improve performance
-            if (attendanceRecords.Any())
-            {
-                await _context.SaveChangesAsync();
-            }
-
-            // Commit transaction if all operations succeeded
-            await transaction.CommitAsync();
-
-            // Build response DTOs after successful save
-            foreach (var attendance in attendanceRecords)
-            {
-                var student = students[attendance.StudentId];
-                attendanceDtos.Add(new AttendanceDto
+                processedRows.Add(new BulkAttendanceMutation
                 {
-                    Id = attendance.Id,
-                    ScheduleId = attendance.ScheduleId,
-                    SubjectName = schedule.Subject?.Name,
-                    StudentId = attendance.StudentId,
-                    StudentName = $"{student.FirstName} {student.LastName}",
-                    SectionId = attendance.SectionId,
-                    SectionName = section?.Name,
-                    Date = attendance.Date,
-                    TimeIn = attendance.TimeIn,
-                    TimeOut = attendance.TimeOut,
-                    Remarks = attendance.Remarks,
-                    MarkedAt = attendance.MarkedAt,
-                    MarkedBy = attendance.MarkedBy,
-                    MarkerName = markerName
+                    Attendance = attendance,
+                    Student = student,
+                    Action = "created",
+                    BeforeTimeIn = null,
+                    BeforeRemarks = null,
+                    BeforeStatus = null,
+                    AfterStatus = afterStatus
                 });
+
+                continue;
             }
-        }
-        catch (Exception)
-        {
-            // Rollback transaction on any error to maintain data consistency
-            await transaction.RollbackAsync();
-            throw;
+
+            var beforeTimeIn = existingAttendance.TimeIn;
+            var beforeRemarks = existingAttendance.Remarks;
+            var beforeStatus = AttendancePolicy.GetMarkedStatus(beforeTimeIn, schedule.StartTime, _attendanceSettings);
+
+            existingAttendance.TimeIn = entry.TimeIn;
+            existingAttendance.Remarks = normalizedRemarks;
+            existingAttendance.MarkedBy = teacherContext.GetMarkerId();
+            existingAttendance.MarkedAt = now;
+
+            processedRows.Add(new BulkAttendanceMutation
+            {
+                Attendance = existingAttendance,
+                Student = student,
+                Action = "updated",
+                BeforeTimeIn = beforeTimeIn,
+                BeforeRemarks = beforeRemarks,
+                BeforeStatus = beforeStatus,
+                AfterStatus = afterStatus
+            });
         }
 
-        // Return error if all entries failed
-        if (errors.Any() && !attendanceDtos.Any())
+        if (!processedRows.Any())
         {
-            return ApiResponse<List<AttendanceDto>>.ErrorResponse(
-                "BULK_FAILED",
-                string.Join(" ", errors));
+            var errorMessage = errors.Any()
+                ? string.Join(" ", errors)
+                : "No attendance entries were processed.";
+
+            return ApiResponse<List<AttendanceDto>>.ErrorResponse("BULK_FAILED", errorMessage);
         }
+
+        await _context.SaveChangesAsync();
+
+        var audits = processedRows
+            .Select(row => BuildAttendanceAudit(
+                row.Attendance,
+                row.Action,
+                row.BeforeTimeIn,
+                row.BeforeRemarks,
+                row.BeforeStatus,
+                row.Attendance.TimeIn,
+                row.Attendance.Remarks,
+                row.AfterStatus,
+                teacherContext.GetMarkerId(),
+                now))
+            .ToList();
+
+        _context.AttendanceAudits.AddRange(audits);
+        await _context.SaveChangesAsync();
+
+        var attendanceDtos = processedRows
+            .Select(row => BuildAttendanceDto(
+                row.Attendance,
+                schedule,
+                row.Student,
+                section?.Name,
+                markerName,
+                row.AfterStatus,
+                isMarked: true))
+            .OrderBy(row => row.StudentName)
+            .ToList();
 
         return ApiResponse<List<AttendanceDto>>.SuccessResponse(attendanceDtos);
     }
 
-    // Gets attendance summary for all students in a section on a specific date
-    // Includes both present and absent students with late calculation
     public async Task<ApiResponse<AttendanceSummaryDto>> GetSectionAttendanceAsync(int sectionId, DateOnly date, int scheduleId)
     {
-        // Get section info
         var section = await _context.Sections
             .Include(s => s.Subject)
             .FirstOrDefaultAsync(s => s.Id == sectionId);
@@ -314,76 +319,65 @@ public class AttendanceService : IAttendanceService
                 "Section not found.");
         }
 
-        // Get all active students in the section
+        var schedule = await _context.Schedules
+            .Include(s => s.Subject)
+            .FirstOrDefaultAsync(s => s.Id == scheduleId && s.SectionId == sectionId);
+
+        if (schedule == null)
+        {
+            return ApiResponse<AttendanceSummaryDto>.ErrorResponse(
+                "NOT_FOUND",
+                "Schedule not found for this section.");
+        }
+
         var students = await _context.Students
-            .Where(s => s.SectionId == sectionId && s.IsActive)
+            .Where(student => student.SectionId == sectionId && student.IsActive)
             .ToListAsync();
 
-        // Get attendance records for the specific date and schedule
         var attendances = await _context.Attendances
-            .Include(a => a.Schedule)
-                .ThenInclude(s => s!.Subject)
             .Include(a => a.Student)
-            .Include(a => a.Marker)
             .Where(a => a.SectionId == sectionId && a.Date == date && a.ScheduleId == scheduleId)
             .ToListAsync();
 
-        // Pre-load marker names to avoid N+1 query problem inside loops
         var markerUserIds = attendances
-            .Where(a => a.MarkedBy > 0)
-            .Select(a => a.MarkedBy)
+            .Where(attendance => attendance.MarkedBy > 0)
+            .Select(attendance => attendance.MarkedBy)
             .Distinct()
             .ToHashSet();
 
         var teacherNames = await _context.Teachers
-            .Where(t => markerUserIds.Contains(t.UserId))
-            .ToDictionaryAsync(t => t.UserId, t => $"{t.FirstName} {t.LastName}");
+            .Where(teacher => markerUserIds.Contains(teacher.UserId))
+            .ToDictionaryAsync(teacher => teacher.UserId, teacher => $"{teacher.FirstName} {teacher.LastName}");
 
-        // Get schedule to determine late threshold (15 minutes after start time)
-        var schedule = await _context.Schedules
-            .Include(s => s.Subject)
-            .FirstOrDefaultAsync(s => s.Id == scheduleId);
-        var lateThreshold = schedule?.StartTime.AddMinutes(15) ?? new TimeOnly(8, 15);
-
-        // Map attendance records to DTOs using pre-loaded data
-        var records = attendances.Select(a =>
+        var markedRecords = new List<(AttendanceDto Record, AttendanceStatusKind Status)>();
+        foreach (var attendance in attendances)
         {
-            string? markerName = null;
-            if (a.MarkedBy > 0 && teacherNames.TryGetValue(a.MarkedBy, out var name))
-            {
-                markerName = name;
-            }
+            teacherNames.TryGetValue(attendance.MarkedBy, out var markerName);
 
-            return new AttendanceDto
-            {
-                Id = a.Id,
-                ScheduleId = a.ScheduleId,
-                SubjectName = a.Schedule?.Subject?.Name,
-                StudentId = a.StudentId,
-                StudentName = a.Student != null ? $"{a.Student.FirstName} {a.Student.LastName}" : null,
-                SectionId = a.SectionId,
-                SectionName = section.Name,
-                Date = a.Date,
-                TimeIn = a.TimeIn,
-                TimeOut = a.TimeOut,
-                Remarks = a.Remarks,
-                MarkedAt = a.MarkedAt,
-                MarkedBy = a.MarkedBy,
-                MarkerName = markerName
-            };
-        }).ToList();
+            var status = AttendancePolicy.GetMarkedStatus(attendance.TimeIn, schedule.StartTime, _attendanceSettings);
+            var record = BuildAttendanceDto(
+                attendance,
+                schedule,
+                attendance.Student,
+                section.Name,
+                markerName,
+                status,
+                isMarked: true);
 
-        // Add absent students (students without attendance records for this date/schedule)
-        var attendedStudentIds = attendances.Select(a => a.StudentId).ToHashSet();
-        var absentStudents = students.Where(s => !attendedStudentIds.Contains(s.Id));
+            markedRecords.Add((record, status));
+        }
 
-        foreach (var student in absentStudents)
+        var attendedStudentIds = attendances.Select(attendance => attendance.StudentId).ToHashSet();
+        var unmarkedStudents = students.Where(student => !attendedStudentIds.Contains(student.Id));
+
+        var records = markedRecords.Select(row => row.Record).ToList();
+        foreach (var student in unmarkedStudents)
         {
             records.Add(new AttendanceDto
             {
                 Id = 0,
                 ScheduleId = scheduleId,
-                SubjectName = schedule?.Subject?.Name ?? section.Subject?.Name,
+                SubjectName = schedule.Subject?.Name ?? section.Subject?.Name,
                 StudentId = student.Id,
                 StudentName = $"{student.FirstName} {student.LastName}",
                 SectionId = sectionId,
@@ -391,107 +385,245 @@ public class AttendanceService : IAttendanceService
                 Date = date,
                 TimeIn = null,
                 TimeOut = null,
-                Remarks = "Absent",
-                MarkedAt = DateTimeOffset.UtcNow,
+                Remarks = "Unmarked",
+                MarkedAt = DateTimeOffset.MinValue,
                 MarkedBy = 0,
-                MarkerName = null
+                MarkerName = null,
+                IsMarked = false,
+                IsLate = false,
+                StatusLabel = AttendancePolicy.ToLabel(AttendanceStatusKind.Unmarked),
+                StatusClass = AttendancePolicy.ToCssClass(AttendanceStatusKind.Unmarked)
             });
         }
 
-        // Calculate attendance summary statistics
-        var presentCount = attendances.Count(a => a.TimeIn.HasValue);
-        var lateCount = attendances.Count(a => a.TimeIn.HasValue && a.TimeIn.Value > lateThreshold);
-        var absentCount = students.Count - presentCount;
+        var presentCount = markedRecords.Count(row => AttendancePolicy.CountsAsPresent(row.Status));
+        var lateCount = markedRecords.Count(row => row.Status == AttendanceStatusKind.Late);
+        var absentCount = markedRecords.Count(row => row.Status == AttendanceStatusKind.Absent);
+        var unmarkedCount = students.Count - markedRecords.Count;
 
         var summary = new AttendanceSummaryDto
         {
             TotalStudents = students.Count,
             PresentCount = presentCount,
             AbsentCount = absentCount,
+            UnmarkedCount = unmarkedCount,
             LateCount = lateCount,
-            Records = records.OrderBy(r => r.StudentName).ToList()
+            Records = records.OrderBy(record => record.StudentName).ToList()
         };
 
         return ApiResponse<AttendanceSummaryDto>.SuccessResponse(summary);
     }
 
-    // Gets attendance history for a specific student with optional filtering by section and date range
     public async Task<ApiResponse<List<AttendanceDto>>> GetStudentAttendanceAsync(int studentId, int? sectionId, DateOnly? from, DateOnly? to)
     {
-        // Build base query with related data
         var query = _context.Attendances
-            .Include(a => a.Schedule)
-                .ThenInclude(s => s!.Subject)
-            .Include(a => a.Student)
-            .Include(a => a.Section)
-            .Where(a => a.StudentId == studentId);
+            .Include(attendance => attendance.Schedule)
+                .ThenInclude(schedule => schedule!.Subject)
+            .Include(attendance => attendance.Student)
+            .Include(attendance => attendance.Section)
+            .Where(attendance => attendance.StudentId == studentId);
 
-        // Apply optional section filter
         if (sectionId.HasValue)
         {
-            query = query.Where(a => a.SectionId == sectionId.Value);
+            query = query.Where(attendance => attendance.SectionId == sectionId.Value);
         }
 
-        // Apply optional date range filters
         if (from.HasValue)
         {
-            query = query.Where(a => a.Date >= from.Value);
+            query = query.Where(attendance => attendance.Date >= from.Value);
         }
 
         if (to.HasValue)
         {
-            query = query.Where(a => a.Date <= to.Value);
+            query = query.Where(attendance => attendance.Date <= to.Value);
         }
 
-        // Get results ordered by most recent first
         var attendances = await query
-            .OrderByDescending(a => a.Date)
+            .OrderByDescending(attendance => attendance.Date)
             .ToListAsync();
 
-        // Pre-load marker names to avoid N+1 query problem
         var markerUserIds = attendances
-            .Where(a => a.MarkedBy > 0)
-            .Select(a => a.MarkedBy)
+            .Where(attendance => attendance.MarkedBy > 0)
+            .Select(attendance => attendance.MarkedBy)
             .Distinct()
             .ToHashSet();
 
         var teacherNames = await _context.Teachers
-            .Where(t => markerUserIds.Contains(t.UserId))
-            .ToDictionaryAsync(t => t.UserId, t => $"{t.FirstName} {t.LastName}");
+            .Where(teacher => markerUserIds.Contains(teacher.UserId))
+            .ToDictionaryAsync(teacher => teacher.UserId, teacher => $"{teacher.FirstName} {teacher.LastName}");
 
-        // Map attendance records to DTOs using pre-loaded data
-        var records = attendances.Select(a =>
+        var records = attendances.Select(attendance =>
         {
-            string? markerName = null;
-            if (a.MarkedBy > 0 && teacherNames.TryGetValue(a.MarkedBy, out var name))
-            {
-                markerName = name;
-            }
+            teacherNames.TryGetValue(attendance.MarkedBy, out var markerName);
+
+            var scheduleStart = attendance.Schedule?.StartTime ?? new TimeOnly(0, 0);
+            var status = AttendancePolicy.GetMarkedStatus(attendance.TimeIn, scheduleStart, _attendanceSettings);
 
             return new AttendanceDto
             {
-                Id = a.Id,
-                ScheduleId = a.ScheduleId,
-                SubjectName = a.Schedule?.Subject?.Name,
-                StudentId = a.StudentId,
-                StudentName = a.Student != null ? $"{a.Student.FirstName} {a.Student.LastName}" : null,
-                SectionId = a.SectionId,
-                SectionName = a.Section?.Name,
-                Date = a.Date,
-                TimeIn = a.TimeIn,
-                TimeOut = a.TimeOut,
-                Remarks = a.Remarks,
-                MarkedAt = a.MarkedAt,
-                MarkedBy = a.MarkedBy,
-                MarkerName = markerName
+                Id = attendance.Id,
+                ScheduleId = attendance.ScheduleId,
+                SubjectName = attendance.Schedule?.Subject?.Name,
+                StudentId = attendance.StudentId,
+                StudentName = attendance.Student != null ? $"{attendance.Student.FirstName} {attendance.Student.LastName}" : null,
+                SectionId = attendance.SectionId,
+                SectionName = attendance.Section?.Name,
+                Date = attendance.Date,
+                TimeIn = attendance.TimeIn,
+                TimeOut = attendance.TimeOut,
+                Remarks = attendance.Remarks,
+                MarkedAt = attendance.MarkedAt,
+                MarkedBy = attendance.MarkedBy,
+                MarkerName = markerName,
+                IsMarked = true,
+                IsLate = status == AttendanceStatusKind.Late,
+                StatusLabel = AttendancePolicy.ToLabel(status),
+                StatusClass = AttendancePolicy.ToCssClass(status)
             };
         }).ToList();
 
         return ApiResponse<List<AttendanceDto>>.SuccessResponse(records);
     }
 
-    // Gets the marker's name from their UserId
-    // Returns teacher's name if found, otherwise null
+    private async Task<ScheduleValidationResult> ValidateScheduleForMarkingAsync(
+        int sectionId,
+        int scheduleId,
+        DateOnly date,
+        TeacherContext teacherContext)
+    {
+        var schedule = await _context.Schedules
+            .Include(s => s.Subject)
+            .FirstOrDefaultAsync(s => s.Id == scheduleId && s.SectionId == sectionId);
+
+        if (schedule == null)
+        {
+            return ScheduleValidationResult.Fail("NOT_FOUND", "Schedule not found for this section.");
+        }
+
+        if ((int)date.DayOfWeek != schedule.DayOfWeek)
+        {
+            return ScheduleValidationResult.Fail("VALIDATION_ERROR", "Attendance date must match the schedule weekday.");
+        }
+
+        if (date < schedule.EffectiveFrom || (schedule.EffectiveTo.HasValue && date > schedule.EffectiveTo.Value))
+        {
+            return ScheduleValidationResult.Fail(
+                "VALIDATION_ERROR",
+                "Attendance date is outside the schedule effective date range.");
+        }
+
+        if (teacherContext.IsAdmin)
+        {
+            return ScheduleValidationResult.Pass(schedule);
+        }
+
+        var teacherId = teacherContext.GetSectionValidationId();
+        if (!teacherId.HasValue)
+        {
+            return ScheduleValidationResult.Fail("FORBIDDEN", "Teacher profile not found.");
+        }
+
+        if (!schedule.TeacherId.HasValue || schedule.TeacherId.Value != teacherId.Value)
+        {
+            return ScheduleValidationResult.Fail(
+                "FORBIDDEN",
+                "Only the schedule owner teacher can mark or correct attendance for this schedule.");
+        }
+
+        var schoolToday = AttendancePolicy.GetSchoolDate(_attendanceSettings, DateTimeOffset.UtcNow);
+        if (date > schoolToday)
+        {
+            return ScheduleValidationResult.Fail(
+                "VALIDATION_ERROR",
+                "Teachers cannot mark attendance for future dates.");
+        }
+
+        if (!AttendancePolicy.IsWithinTeacherWindow(_attendanceSettings, date, schoolToday))
+        {
+            return ScheduleValidationResult.Fail(
+                "VALIDATION_ERROR",
+                $"Teachers can only mark attendance from today back to {_attendanceSettings.TeacherBackfillDays} days.");
+        }
+
+        return ScheduleValidationResult.Pass(schedule);
+    }
+
+    private async Task<AcademicYear?> GetActiveAcademicYearAsync()
+    {
+        return await _context.AcademicYears.FirstOrDefaultAsync(academicYear => academicYear.IsActive);
+    }
+
+    private static string? NormalizeRemarks(TimeOnly? timeIn, string? remarks)
+    {
+        var trimmed = remarks?.Trim();
+
+        if (!timeIn.HasValue)
+        {
+            return string.IsNullOrWhiteSpace(trimmed) ? "Absent" : trimmed;
+        }
+
+        return string.IsNullOrWhiteSpace(trimmed) ? null : trimmed;
+    }
+
+    private static AttendanceAudit BuildAttendanceAudit(
+        Attendance attendance,
+        string action,
+        TimeOnly? beforeTimeIn,
+        string? beforeRemarks,
+        AttendanceStatusKind? beforeStatus,
+        TimeOnly? afterTimeIn,
+        string? afterRemarks,
+        AttendanceStatusKind afterStatus,
+        int actorUserId,
+        DateTimeOffset actionAt)
+    {
+        return new AttendanceAudit
+        {
+            AttendanceId = attendance.Id,
+            Action = action,
+            BeforeTimeIn = beforeTimeIn,
+            BeforeRemarks = beforeRemarks,
+            BeforeStatus = beforeStatus.HasValue ? AttendancePolicy.ToLabel(beforeStatus.Value) : null,
+            AfterTimeIn = afterTimeIn,
+            AfterRemarks = afterRemarks,
+            AfterStatus = AttendancePolicy.ToLabel(afterStatus),
+            ActorUserId = actorUserId,
+            ActionAt = actionAt
+        };
+    }
+
+    private static AttendanceDto BuildAttendanceDto(
+        Attendance attendance,
+        Schedule schedule,
+        Student? student,
+        string? sectionName,
+        string? markerName,
+        AttendanceStatusKind status,
+        bool isMarked)
+    {
+        return new AttendanceDto
+        {
+            Id = attendance.Id,
+            ScheduleId = attendance.ScheduleId,
+            SubjectName = schedule.Subject?.Name,
+            StudentId = attendance.StudentId,
+            StudentName = student != null ? $"{student.FirstName} {student.LastName}" : null,
+            SectionId = attendance.SectionId,
+            SectionName = sectionName,
+            Date = attendance.Date,
+            TimeIn = attendance.TimeIn,
+            TimeOut = attendance.TimeOut,
+            Remarks = attendance.Remarks,
+            MarkedAt = attendance.MarkedAt,
+            MarkedBy = attendance.MarkedBy,
+            MarkerName = markerName,
+            IsMarked = isMarked,
+            IsLate = status == AttendanceStatusKind.Late,
+            StatusLabel = AttendancePolicy.ToLabel(status),
+            StatusClass = AttendancePolicy.ToCssClass(status)
+        };
+    }
+
     private async Task<string?> GetMarkerNameAsync(int userId)
     {
         var teacher = await _context.Teachers
@@ -499,5 +631,28 @@ public class AttendanceService : IAttendanceService
             .FirstOrDefaultAsync(t => t.UserId == userId);
 
         return teacher != null ? $"{teacher.FirstName} {teacher.LastName}" : null;
+    }
+
+    private sealed class BulkAttendanceMutation
+    {
+        public Attendance Attendance { get; set; } = null!;
+        public Student Student { get; set; } = null!;
+        public string Action { get; set; } = string.Empty;
+        public TimeOnly? BeforeTimeIn { get; set; }
+        public string? BeforeRemarks { get; set; }
+        public AttendanceStatusKind? BeforeStatus { get; set; }
+        public AttendanceStatusKind AfterStatus { get; set; }
+    }
+
+    private readonly record struct ScheduleValidationResult(
+        bool Success,
+        Schedule? Schedule,
+        string? ErrorCode,
+        string? ErrorMessage)
+    {
+        public static ScheduleValidationResult Pass(Schedule schedule) => new(true, schedule, null, null);
+
+        public static ScheduleValidationResult Fail(string errorCode, string errorMessage)
+            => new(false, null, errorCode, errorMessage);
     }
 }

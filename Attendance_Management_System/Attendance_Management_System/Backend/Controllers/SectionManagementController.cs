@@ -463,7 +463,7 @@ public class SectionManagementController : Controller
     }
 
     [HttpPost("attendance/mark")]
-    [Authorize(Policy = "TeacherOnly")]
+    [Authorize(Policy = "AdminOrTeacher")]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> MarkSectionAttendance([FromForm] SectionMarkAttendanceFormViewModel form)
     {
@@ -655,8 +655,15 @@ public class SectionManagementController : Controller
             return;
         }
 
-        var scheduleOptions = schedulesResult.Data
-            .Where(schedule => schedule.SectionId == selectedSectionId)
+        var allowedSchedules = schedulesResult.Data
+            .Where(schedule => schedule.SectionId == selectedSectionId);
+
+        if (string.Equals(role, "teacher", StringComparison.OrdinalIgnoreCase))
+        {
+            allowedSchedules = allowedSchedules.Where(schedule => schedule.IsMine);
+        }
+
+        var scheduleOptions = allowedSchedules
             .OrderBy(schedule => schedule.DayOfWeek)
             .ThenBy(schedule => schedule.StartTime)
             .Select(schedule => new SectionAttendanceScheduleOptionViewModel
@@ -706,6 +713,7 @@ public class SectionManagementController : Controller
         viewModel.AttendancePresentCount = summaryResult.Data.PresentCount;
         viewModel.AttendanceLateCount = summaryResult.Data.LateCount;
         viewModel.AttendanceAbsentCount = summaryResult.Data.AbsentCount;
+        viewModel.AttendanceUnmarkedCount = summaryResult.Data.UnmarkedCount;
 
         var recordsByStudentId = summaryResult.Data.Records
             .GroupBy(record => record.StudentId)
@@ -731,8 +739,10 @@ public class SectionManagementController : Controller
             ? "-"
             : $"{student.CourseCode} {student.CourseName}".Trim();
 
-        var isMarked = record is not null && record.MarkedBy > 0;
-        var isPresent = isMarked && record?.TimeIn.HasValue == true;
+        var hasRecord = record is not null;
+        var isMarked = hasRecord && record!.IsMarked;
+        var statusLabel = hasRecord ? record!.StatusLabel : "Unmarked";
+        var statusClass = hasRecord ? record!.StatusClass : "inactive";
 
         return new SectionAttendanceStudentRowViewModel
         {
@@ -742,15 +752,18 @@ public class SectionManagementController : Controller
             YearLevel = student.YearLevel,
             CourseText = courseText,
             IsMarked = isMarked,
-            StatusLabel = !isMarked ? "Not Marked" : isPresent ? "Present" : "Absent",
-            StatusClass = isPresent ? "active" : "",
-            ExistingTimeIn = isPresent ? record?.TimeIn?.ToString("HH:mm") ?? "-" : "-",
+            StatusLabel = statusLabel,
+            StatusClass = statusClass,
+            ExistingTimeIn = isMarked ? record!.TimeIn?.ToString("HH:mm") ?? "-" : "-",
+            ExistingTimeInValue = isMarked ? record!.TimeIn?.ToString("HH:mm") ?? string.Empty : string.Empty,
             ExistingRemarks = isMarked
-                ? string.IsNullOrWhiteSpace(record?.Remarks) ? "-" : record!.Remarks!
+                ? string.IsNullOrWhiteSpace(record!.Remarks) ? "-" : record.Remarks!
                 : "-",
+            EditableRemarksValue = isMarked ? record!.Remarks ?? string.Empty : string.Empty,
             MarkerName = isMarked
-                ? string.IsNullOrWhiteSpace(record?.MarkerName) ? "-" : record!.MarkerName!
-                : "-"
+                ? string.IsNullOrWhiteSpace(record!.MarkerName) ? "-" : record.MarkerName!
+                : "-",
+            ActionLabel = isMarked ? "Save Correction" : "Mark"
         };
     }
 

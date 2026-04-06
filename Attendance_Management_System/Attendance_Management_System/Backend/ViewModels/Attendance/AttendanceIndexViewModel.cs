@@ -14,6 +14,7 @@ public class AttendanceIndexViewModel
     public int PresentCount { get; set; }
     public int LateCount { get; set; }
     public int AbsentCount { get; set; }
+    public int UnmarkedCount { get; set; }
     public MarkAttendanceFormViewModel MarkForm { get; set; } = new();
     public string? ErrorMessage { get; set; }
 }

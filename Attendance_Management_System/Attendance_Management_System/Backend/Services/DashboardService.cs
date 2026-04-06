@@ -1,8 +1,12 @@
 using Attendance_Management_System.Backend.Entities;
+using Attendance_Management_System.Backend.Configuration;
+using Attendance_Management_System.Backend.Enums;
+using Attendance_Management_System.Backend.Helpers;
 using Attendance_Management_System.Backend.Interfaces.Services;
 using Attendance_Management_System.Backend.Persistence;
 using Attendance_Management_System.Backend.ViewModels.Dashboard;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 
 namespace Attendance_Management_System.Backend.Services;
 
@@ -19,10 +23,14 @@ public class DashboardService : IDashboardService
     private const string WindowCustom = "custom";
 
     private readonly AppDbContext _context;
+    private readonly AttendanceSettings _attendanceSettings;
 
-    public DashboardService(AppDbContext context)
+    public DashboardService(AppDbContext context, IOptions<AttendanceSettings> attendanceSettings)
     {
         _context = context;
+        _attendanceSettings = attendanceSettings.Value?.IsValid() == true
+            ? attendanceSettings.Value
+            : AttendanceSettings.Default;
     }
 
     public async Task<DashboardIndexViewModel> BuildIndexViewModelAsync(int userId, string role, string? window, DateOnly? from, DateOnly? to)
@@ -94,9 +102,13 @@ public class DashboardService : IDashboardService
             })
             .ToListAsync();
 
-        var presentCount = summaryRows.Count(r => r.TimeIn.HasValue);
-        var lateCount = summaryRows.Count(r => r.TimeIn.HasValue && r.TimeIn!.Value > r.StartTime.AddMinutes(15));
-        var absentCount = summaryRows.Count - presentCount;
+        var summaryStatuses = summaryRows
+            .Select(row => AttendancePolicy.GetMarkedStatus(row.TimeIn, row.StartTime, _attendanceSettings))
+            .ToList();
+
+        var presentCount = summaryStatuses.Count(AttendancePolicy.CountsAsPresent);
+        var lateCount = summaryStatuses.Count(status => status == AttendanceStatusKind.Late);
+        var absentCount = summaryStatuses.Count(status => status == AttendanceStatusKind.Absent);
         var attendanceRate = summaryRows.Count == 0
             ? 0m
             : decimal.Round((decimal)presentCount / summaryRows.Count * 100m, 1);
@@ -230,9 +242,13 @@ public class DashboardService : IDashboardService
             })
             .ToListAsync();
 
-        var presentCount = rows.Count(row => row.TimeIn.HasValue);
-        var lateCount = rows.Count(row => row.TimeIn.HasValue && row.TimeIn!.Value > row.StartTime.AddMinutes(15));
-        var absentCount = rows.Count - presentCount;
+        var statuses = rows
+            .Select(row => AttendancePolicy.GetMarkedStatus(row.TimeIn, row.StartTime, _attendanceSettings))
+            .ToList();
+
+        var presentCount = statuses.Count(AttendancePolicy.CountsAsPresent);
+        var lateCount = statuses.Count(status => status == AttendanceStatusKind.Late);
+        var absentCount = statuses.Count(status => status == AttendanceStatusKind.Absent);
 
         return (presentCount, lateCount, absentCount);
     }
@@ -473,9 +489,10 @@ public class DashboardService : IDashboardService
             .FirstOrDefaultAsync();
     }
 
-    private static StudentAttendanceRecordViewModel MapStudentAttendanceRecord(Attendance attendance)
+    private StudentAttendanceRecordViewModel MapStudentAttendanceRecord(Attendance attendance)
     {
-        var (statusLabel, statusClass) = ResolveAttendanceStatus(attendance);
+        var scheduleStart = attendance.Schedule?.StartTime ?? new TimeOnly(0, 0);
+        var status = AttendancePolicy.GetMarkedStatus(attendance.TimeIn, scheduleStart, _attendanceSettings);
 
         return new StudentAttendanceRecordViewModel
         {
@@ -483,34 +500,9 @@ public class DashboardService : IDashboardService
             SubjectName = attendance.Schedule?.Subject?.Name ?? "-",
             SectionName = attendance.Section?.Name ?? "-",
             TimeInText = attendance.TimeIn?.ToString("HH:mm") ?? "-",
-            StatusLabel = statusLabel,
-            StatusClass = statusClass
+            StatusLabel = AttendancePolicy.ToLabel(status),
+            StatusClass = AttendancePolicy.ToCssClass(status)
         };
-    }
-
-    private static bool IsLateRecord(Attendance attendance)
-    {
-        if (!attendance.TimeIn.HasValue || attendance.Schedule is null)
-        {
-            return false;
-        }
-
-        return attendance.TimeIn.Value > attendance.Schedule.StartTime.AddMinutes(15);
-    }
-
-    private static (string Label, string CssClass) ResolveAttendanceStatus(Attendance attendance)
-    {
-        if (!attendance.TimeIn.HasValue)
-        {
-            return ("Absent", "danger");
-        }
-
-        if (IsLateRecord(attendance))
-        {
-            return ("Late", "warning");
-        }
-
-        return ("Present", "success");
     }
 
     private static string BuildName(string firstName, string? middleName, string lastName)

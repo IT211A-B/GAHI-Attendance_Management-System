@@ -74,6 +74,10 @@
                     <p class="stat-title">Absent</p>
                     <p class="stat-value danger">@Model.AbsentCount</p>
                 </article>
+                <article class="stat-card">
+                    <p class="stat-title">Unmarked</p>
+                    <p class="stat-value">@Model.UnmarkedCount</p>
+                </article>
             </section>
 
             @if (!Model.Records.Any())

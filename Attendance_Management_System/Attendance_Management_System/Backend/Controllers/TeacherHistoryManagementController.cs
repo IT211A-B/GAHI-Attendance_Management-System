@@ -77,6 +77,7 @@ public class TeacherHistoryManagementController : Controller
         viewModel.PresentCount = historyResult.Data.Summary.PresentCount;
         viewModel.LateCount = historyResult.Data.Summary.LateCount;
         viewModel.AbsentCount = historyResult.Data.Summary.AbsentCount;
+        viewModel.UnmarkedCount = historyResult.Data.Summary.UnmarkedCount;
 
         viewModel.Records = historyResult.Data.Records
             .OrderBy(r => r.StudentName)
@@ -86,7 +87,7 @@ public class TeacherHistoryManagementController : Controller
                 StudentName = string.IsNullOrWhiteSpace(record.StudentName) ? "-" : record.StudentName,
                 TimeInText = record.TimeIn?.ToString("HH:mm") ?? "-",
                 TimeOutText = record.TimeOut?.ToString("HH:mm") ?? "-",
-                Remarks = string.IsNullOrWhiteSpace(record.Remarks) ? "Present" : record.Remarks
+                Remarks = string.IsNullOrWhiteSpace(record.Remarks) ? record.StatusLabel : record.Remarks
             })
             .ToList();
 

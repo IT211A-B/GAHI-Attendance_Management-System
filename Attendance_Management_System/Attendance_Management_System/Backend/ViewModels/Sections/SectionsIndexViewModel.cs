@@ -29,6 +29,7 @@ public class SectionsIndexViewModel
     public int AttendancePresentCount { get; set; }
     public int AttendanceLateCount { get; set; }
     public int AttendanceAbsentCount { get; set; }
+    public int AttendanceUnmarkedCount { get; set; }
     public string? ErrorMessage { get; set; }
     public string? CreateSectionOptionsErrorMessage { get; set; }
     public string? TeacherOptionsErrorMessage { get; set; }
@@ -111,11 +112,14 @@ public class SectionAttendanceStudentRowViewModel
     public int YearLevel { get; set; }
     public string CourseText { get; set; } = "-";
     public bool IsMarked { get; set; }
-    public string StatusLabel { get; set; } = "Not Marked";
-    public string StatusClass { get; set; } = "muted";
+    public string StatusLabel { get; set; } = "Unmarked";
+    public string StatusClass { get; set; } = "inactive";
     public string ExistingTimeIn { get; set; } = "-";
+    public string ExistingTimeInValue { get; set; } = string.Empty;
     public string ExistingRemarks { get; set; } = "-";
+    public string EditableRemarksValue { get; set; } = string.Empty;
     public string MarkerName { get; set; } = "-";
+    public string ActionLabel { get; set; } = "Mark";
 }
 
 public class SectionMarkAttendanceFormViewModel
