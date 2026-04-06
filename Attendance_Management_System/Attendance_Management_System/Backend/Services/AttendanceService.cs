@@ -340,7 +340,9 @@ public class AttendanceService : IAttendanceService
             .ToDictionaryAsync(t => t.UserId, t => $"{t.FirstName} {t.LastName}");
 
         // Get schedule to determine late threshold (15 minutes after start time)
-        var schedule = await _context.Schedules.FindAsync(scheduleId);
+        var schedule = await _context.Schedules
+            .Include(s => s.Subject)
+            .FirstOrDefaultAsync(s => s.Id == scheduleId);
         var lateThreshold = schedule?.StartTime.AddMinutes(15) ?? new TimeOnly(8, 15);
 
         // Map attendance records to DTOs using pre-loaded data
@@ -381,7 +383,7 @@ public class AttendanceService : IAttendanceService
             {
                 Id = 0,
                 ScheduleId = scheduleId,
-                SubjectName = section.Subject?.Name,
+                SubjectName = schedule?.Subject?.Name ?? section.Subject?.Name,
                 StudentId = student.Id,
                 StudentName = $"{student.FirstName} {student.LastName}",
                 SectionId = sectionId,

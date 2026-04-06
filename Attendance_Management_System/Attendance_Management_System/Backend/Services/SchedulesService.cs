@@ -299,7 +299,6 @@ public class SchedulesService : ISchedulesService
         var newDayOfWeek = request.DayOfWeek ?? schedule.DayOfWeek;
         var newStartTime = request.StartTime ?? schedule.StartTime;
         var newEndTime = request.EndTime ?? schedule.EndTime;
-        var newSubjectId = request.SubjectId ?? schedule.SubjectId;
 
         // Validate time range
         if (newEndTime <= newStartTime)

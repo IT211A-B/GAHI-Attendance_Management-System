@@ -130,6 +130,7 @@
 
 		var form = document.getElementById("quick-add-form");
 		var sectionInput = document.getElementById("quick-add-section-id");
+		var subjectInput = document.getElementById("quick-add-subject-id");
 		var startInput = document.getElementById("quick-add-start-time");
 		var endInput = document.getElementById("quick-add-end-time");
 		var hint = document.getElementById("quick-add-hint");
@@ -162,17 +163,25 @@
 			endInput.min = addMinutesToTime(startTime, 30);
 			endInput.max = "19:00";
 
+			if (subjectInput) {
+				subjectInput.value = "";
+			}
+
 			dayCheckboxes.forEach(function (checkbox) {
 				checkbox.checked = checkbox.value === dayOfWeek;
 			});
 
 			if (hint) {
-				hint.textContent = "Add " + dayName + " from " + startTime + " and optionally repeat on other days.";
+				hint.textContent = "Choose a subject, then add " + dayName + " from " + startTime + " and optionally repeat on other days.";
 			}
 
 			panel.hidden = false;
 			panel.classList.add("is-open");
-			endInput.focus();
+			if (subjectInput && !subjectInput.disabled) {
+				subjectInput.focus();
+			} else {
+				endInput.focus();
+			}
 		}
 
 		triggers.forEach(function (trigger) {

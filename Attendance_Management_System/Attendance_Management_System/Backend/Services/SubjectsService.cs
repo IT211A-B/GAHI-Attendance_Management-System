@@ -187,7 +187,7 @@ public class SubjectsService : ISubjectsService
         return ApiResponse<SubjectDto>.SuccessResponse(dto);
     }
 
-    public async Task<ApiResponse<bool>> DeleteSubjectAsync(int id)
+    public async Task<ApiResponse<bool>> DeleteSubjectAsync(int id, int? replacementSubjectId = null)
     {
         var subject = await _context.Subjects.FindAsync(id);
 
@@ -196,11 +196,69 @@ public class SubjectsService : ISubjectsService
             return ApiResponse<bool>.ErrorResponse("NOT_FOUND", "Subject not found.");
         }
 
-        // Check if subject is in use by any section
-        var isInUse = await _context.Sections.AnyAsync(s => s.SubjectId == id);
-        if (isInUse)
+        var sectionsInUseCount = await _context.Sections.CountAsync(s => s.SubjectId == id);
+        var schedulesInUseCount = await _context.Schedules.CountAsync(s => s.SubjectId == id);
+        var hasDependencies = sectionsInUseCount > 0 || schedulesInUseCount > 0;
+
+        if (hasDependencies)
         {
-            return ApiResponse<bool>.ErrorResponse("IN_USE", "Cannot delete subject that is assigned to sections.");
+            Subject? resolvedReplacementSubject;
+
+            if (replacementSubjectId.HasValue && replacementSubjectId.Value > 0)
+            {
+                if (replacementSubjectId.Value == id)
+                {
+                    return ApiResponse<bool>.ErrorResponse("VALIDATION_ERROR", "Replacement subject must be different from the subject being deleted.");
+                }
+
+                resolvedReplacementSubject = await _context.Subjects.FindAsync(replacementSubjectId.Value);
+                if (resolvedReplacementSubject == null)
+                {
+                    return ApiResponse<bool>.ErrorResponse("NOT_FOUND", "Replacement subject not found.");
+                }
+            }
+            else
+            {
+                resolvedReplacementSubject = await _context.Subjects
+                    .Where(s => s.Id != id && s.CourseId == subject.CourseId)
+                    .OrderBy(s => s.Name)
+                    .ThenBy(s => s.Code)
+                    .FirstOrDefaultAsync();
+
+                if (resolvedReplacementSubject == null)
+                {
+                    resolvedReplacementSubject = await _context.Subjects
+                        .Where(s => s.Id != id)
+                        .OrderBy(s => s.Name)
+                        .ThenBy(s => s.Code)
+                        .FirstOrDefaultAsync();
+                }
+
+                if (resolvedReplacementSubject == null)
+                {
+                    return ApiResponse<bool>.ErrorResponse(
+                        "IN_USE",
+                        $"Cannot delete subject because it is used by {sectionsInUseCount} section(s) and {schedulesInUseCount} schedule slot(s), and no fallback subject is available. Create another subject first or select a replacement.");
+                }
+            }
+
+            var sectionsToUpdate = await _context.Sections
+                .Where(section => section.SubjectId == id)
+                .ToListAsync();
+
+            foreach (var section in sectionsToUpdate)
+            {
+                section.SubjectId = resolvedReplacementSubject.Id;
+            }
+
+            var schedulesToUpdate = await _context.Schedules
+                .Where(schedule => schedule.SubjectId == id)
+                .ToListAsync();
+
+            foreach (var schedule in schedulesToUpdate)
+            {
+                schedule.SubjectId = resolvedReplacementSubject.Id;
+            }
         }
 
         _context.Subjects.Remove(subject);

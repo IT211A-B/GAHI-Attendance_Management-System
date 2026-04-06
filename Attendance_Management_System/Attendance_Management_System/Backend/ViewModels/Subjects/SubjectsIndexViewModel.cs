@@ -5,8 +5,15 @@ namespace Attendance_Management_System.Backend.ViewModels.Subjects;
 public class SubjectsIndexViewModel
 {
     public IReadOnlyList<SubjectListItemViewModel> Subjects { get; set; } = [];
+    public IReadOnlyList<SubjectCourseOptionViewModel> Courses { get; set; } = [];
     public CreateSubjectFormViewModel CreateForm { get; set; } = new();
     public string? ErrorMessage { get; set; }
+}
+
+public class SubjectCourseOptionViewModel
+{
+    public int Id { get; set; }
+    public string Label { get; set; } = string.Empty;
 }
 
 public class SubjectListItemViewModel
@@ -15,7 +22,7 @@ public class SubjectListItemViewModel
     public string Name { get; set; } = string.Empty;
     public string Code { get; set; } = string.Empty;
     public int CourseId { get; set; }
-    public string CourseName { get; set; } = "-";
+    public string CourseLabel { get; set; } = "-";
     public int Units { get; set; }
 }
 
@@ -29,9 +36,9 @@ public class CreateSubjectFormViewModel
     [Display(Name = "Code")]
     public string Code { get; set; } = string.Empty;
 
-    [Required(ErrorMessage = "Course ID is required")]
-    [Range(1, int.MaxValue, ErrorMessage = "Course ID must be greater than 0")]
-    [Display(Name = "Course ID")]
+    [Required(ErrorMessage = "Course is required")]
+    [Range(1, int.MaxValue, ErrorMessage = "Please select a valid course")]
+    [Display(Name = "Course")]
     public int CourseId { get; set; }
 
     [Required(ErrorMessage = "Units is required")]
@@ -50,9 +57,9 @@ public class UpdateSubjectFormViewModel
     [Display(Name = "Code")]
     public string Code { get; set; } = string.Empty;
 
-    [Required(ErrorMessage = "Course ID is required")]
-    [Range(1, int.MaxValue, ErrorMessage = "Course ID must be greater than 0")]
-    [Display(Name = "Course ID")]
+    [Required(ErrorMessage = "Course is required")]
+    [Range(1, int.MaxValue, ErrorMessage = "Please select a valid course")]
+    [Display(Name = "Course")]
     public int CourseId { get; set; }
 
     [Required(ErrorMessage = "Units is required")]

@@ -6,6 +6,8 @@ public class SectionsIndexViewModel
 {
     public IReadOnlyList<SectionListItemViewModel> Sections { get; set; } = [];
     public IReadOnlyList<SectionOptionViewModel> SectionOptions { get; set; } = [];
+    public IReadOnlyList<SectionReferenceOptionViewModel> TimetableSubjects { get; set; } = [];
+    public IReadOnlyList<SectionTeacherOptionViewModel> TeacherOptions { get; set; } = [];
     public IReadOnlyList<SectionReferenceOptionViewModel> AcademicPeriods { get; set; } = [];
     public IReadOnlyList<SectionReferenceOptionViewModel> Courses { get; set; } = [];
     public IReadOnlyList<SectionSubjectReferenceOptionViewModel> Subjects { get; set; } = [];
@@ -22,13 +24,16 @@ public class SectionsIndexViewModel
     public string SelectedSectionSubjectName { get; set; } = string.Empty;
     public bool IsAdmin { get; set; }
     public bool IsTeacher { get; set; }
+    public bool IsCurrentTeacherAssignedToSelectedSection { get; set; }
     public int AttendanceTotalStudents { get; set; }
     public int AttendancePresentCount { get; set; }
     public int AttendanceLateCount { get; set; }
     public int AttendanceAbsentCount { get; set; }
     public string? ErrorMessage { get; set; }
     public string? CreateSectionOptionsErrorMessage { get; set; }
+    public string? TeacherOptionsErrorMessage { get; set; }
     public string? TimetableErrorMessage { get; set; }
+    public string? TimetableSubjectsErrorMessage { get; set; }
     public string? AttendanceErrorMessage { get; set; }
 }
 
@@ -42,6 +47,11 @@ public class SectionReferenceOptionViewModel
 {
     public int Id { get; set; }
     public string Label { get; set; } = string.Empty;
+}
+
+public class SectionTeacherOptionViewModel : SectionReferenceOptionViewModel
+{
+    public string ShortLabel { get; set; } = string.Empty;
 }
 
 public class SectionSubjectReferenceOptionViewModel : SectionReferenceOptionViewModel
@@ -82,6 +92,8 @@ public class SectionListItemViewModel
     public string SubjectName { get; set; } = "-";
     public string ClassroomName { get; set; } = "-";
     public int CurrentEnrollmentCount { get; set; }
+    public IReadOnlyList<SectionTeacherOptionViewModel> AssignedTeachers { get; set; } = [];
+    public string AssignedTeacherSummary { get; set; } = "No teacher assigned";
 }
 
 public class SectionAttendanceScheduleOptionViewModel
@@ -174,8 +186,8 @@ public class UpdateSectionFormViewModel
 
 public class AssignSectionTeacherFormViewModel
 {
-    [Required(ErrorMessage = "Teacher ID is required")]
-    [Range(1, int.MaxValue, ErrorMessage = "Teacher ID must be greater than 0")]
-    [Display(Name = "Teacher ID")]
+    [Required(ErrorMessage = "Teacher is required")]
+    [Range(1, int.MaxValue, ErrorMessage = "Please select a valid teacher")]
+    [Display(Name = "Teacher")]
     public int TeacherId { get; set; }
 }

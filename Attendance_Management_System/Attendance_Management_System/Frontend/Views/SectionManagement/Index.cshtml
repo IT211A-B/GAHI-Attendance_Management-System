@@ -54,9 +54,36 @@
                         Section: <strong>@Model.SelectedSectionName</strong>
                         @if (!string.IsNullOrWhiteSpace(Model.SelectedSectionSubjectName))
                         {
-                            <span> | Subject: <strong>@Model.SelectedSectionSubjectName</strong></span>
+                            <span> | Primary Subject: <strong>@Model.SelectedSectionSubjectName</strong></span>
                         }
                     </p>
+
+                    @if (Model.IsTeacher)
+                    {
+                        @if (Model.IsCurrentTeacherAssignedToSelectedSection)
+                        {
+                            <form asp-controller="SectionManagement" asp-action="SelfUnassignTeacher" asp-route-id="@Model.SelectedSectionId"
+                                  method="post" class="inline-form">
+                                @Html.AntiForgeryToken()
+                                <input type="hidden" name="selectedSectionId" value="@Model.SelectedSectionId" />
+                                <button type="submit" class="btn-secondary btn-xs">Unassign Myself From Section</button>
+                            </form>
+                        }
+                        else
+                        {
+                            <form asp-controller="SectionManagement" asp-action="SelfAssignTeacher" asp-route-id="@Model.SelectedSectionId"
+                                  method="post" class="inline-form">
+                                @Html.AntiForgeryToken()
+                                <input type="hidden" name="selectedSectionId" value="@Model.SelectedSectionId" />
+                                <button type="submit" class="btn-secondary btn-xs">Assign Myself to Section</button>
+                            </form>
+                        }
+                    }
+                }
+
+                @if (!string.IsNullOrWhiteSpace(Model.TimetableSubjectsErrorMessage))
+                {
+                    <p class="form-validation">@Model.TimetableSubjectsErrorMessage</p>
                 }
 
                 @if (!string.IsNullOrWhiteSpace(Model.TimetableErrorMessage))
@@ -107,6 +134,30 @@
                                                                             @Html.AntiForgeryToken()
                                                                             <input type="hidden" name="selectedSectionId"
                                                                                    value="@Model.SelectedSectionId" />
+                                                                            <label for="subject-@cell.ScheduleId">Subject</label>
+                                                                            <select id="subject-@cell.ScheduleId" name="subjectId"
+                                                                                    class="input-select compact-input" required>
+                                                                                @if (Model.TimetableSubjects.Any())
+                                                                                {
+                                                                                    @foreach (var subjectOption in Model.TimetableSubjects)
+                                                                                    {
+                                                                                        <option value="@subjectOption.Id"
+                                                                                                selected="@(subjectOption.Id == cell.SubjectId)">@subjectOption.Label
+                                                                                        </option>
+                                                                                    }
+
+                                                                                    @if (!Model.TimetableSubjects.Any(subjectOption => subjectOption.Id ==
+                                                                                                                                cell.SubjectId))
+                                                                                    {
+                                                                                        <option value="@cell.SubjectId" selected>@cell.SubjectName (Current)
+                                                                                        </option>
+                                                                                    }
+                                                                                }
+                                                                                else
+                                                                                {
+                                                                                    <option value="@cell.SubjectId">@cell.SubjectName</option>
+                                                                                }
+                                                                            </select>
                                                                             <label for="day-@cell.ScheduleId">Day</label>
                                                                             <select id="day-@cell.ScheduleId" name="dayOfWeek"
                                                                                     class="input-select compact-input">
@@ -153,9 +204,14 @@
                                                         <button type="button" class="btn-secondary btn-xs" data-quick-add-trigger="true"
                                                                 data-section-id="@Model.SelectedSectionId" data-day-of-week="@cell.DayOfWeek"
                                                                 data-day-name="@cell.DayName" data-start-time="@row.StartTime"
-                                                                data-default-end-time="@row.EndTime">
+                                                                data-default-end-time="@row.EndTime" disabled="@(!Model.TimetableSubjects.Any())">
                                                             Add
                                                         </button>
+
+                                                        @if (!Model.TimetableSubjects.Any())
+                                                        {
+                                                            <p class="slot-note">No subjects available.</p>
+                                                        }
 
                                                         <noscript>
                                                             <form asp-controller="SectionManagement" asp-action="AddTimetableSlot" method="post"
@@ -163,10 +219,27 @@
                                                                 @Html.AntiForgeryToken()
                                                                 <input type="hidden" name="sectionId" value="@Model.SelectedSectionId" />
                                                                 <input type="hidden" name="selectedSectionId" value="@Model.SelectedSectionId" />
+                                                                <label>Subject</label>
+                                                                <select name="subjectId" class="input-select compact-input" required
+                                                                        disabled="@(!Model.TimetableSubjects.Any())">
+                                                                    @if (!Model.TimetableSubjects.Any())
+                                                                    {
+                                                                        <option value="">No subjects available</option>
+                                                                    }
+                                                                    else
+                                                                    {
+                                                                        <option value="">Choose subject</option>
+                                                                        @foreach (var subjectOption in Model.TimetableSubjects)
+                                                                        {
+                                                                            <option value="@subjectOption.Id">@subjectOption.Label</option>
+                                                                        }
+                                                                    }
+                                                                </select>
                                                                 <input type="hidden" name="dayOfWeek" value="@cell.DayOfWeek" />
                                                                 <input type="hidden" name="startTime" value="@row.StartTime" />
                                                                 <input type="hidden" name="endTime" value="@row.EndTime" />
-                                                                <button type="submit" class="btn-secondary btn-xs">Add 30m</button>
+                                                                <button type="submit" class="btn-secondary btn-xs"
+                                                                        disabled="@(!Model.TimetableSubjects.Any())">Add 30m</button>
                                                             </form>
                                                         </noscript>
                                                     </div>
@@ -193,7 +266,7 @@
                                             data-quick-add-close="true">Close</button>
                                 </div>
 
-                                <p id="quick-add-hint" class="footer-note">Select an end time and optional repeat days.</p>
+                                <p id="quick-add-hint" class="footer-note">Select a subject, end time, and optional repeat days.</p>
 
                                 <form asp-controller="SectionManagement" asp-action="AddTimetableSlotRange" method="post" class="stack-form"
                                       id="quick-add-form">
@@ -203,6 +276,23 @@
                                     <input type="hidden" name="selectedSectionId" value="@Model.SelectedSectionId" />
 
                                     <div class="quick-add-grid">
+                                        <div>
+                                            <label for="quick-add-subject-id">Subject</label>
+                                            <select id="quick-add-subject-id" name="subjectId" class="input-select compact-input" required>
+                                                @if (!Model.TimetableSubjects.Any())
+                                                {
+                                                    <option value="">No subjects available</option>
+                                                }
+                                                else
+                                                {
+                                                    <option value="">Choose subject</option>
+                                                    @foreach (var subjectOption in Model.TimetableSubjects)
+                                                    {
+                                                        <option value="@subjectOption.Id">@subjectOption.Label</option>
+                                                    }
+                                                }
+                                            </select>
+                                        </div>
                                         <div>
                                             <label for="quick-add-start-time">Start</label>
                                             <input id="quick-add-start-time" type="time" name="startTime" class="input-select compact-input"
@@ -231,7 +321,8 @@
                                     </fieldset>
 
                                     <div class="quick-add-actions">
-                                        <button type="submit" class="btn-primary btn-inline">Add Slot(s)</button>
+                                        <button type="submit" class="btn-primary btn-inline"
+                                                disabled="@(!Model.TimetableSubjects.Any())">Add Slot(s)</button>
                                         <button type="button" class="btn-secondary btn-inline" data-quick-add-close="true">Cancel</button>
                                     </div>
                                 </form>
@@ -402,6 +493,11 @@
                         <p class="form-validation">@Model.CreateSectionOptionsErrorMessage</p>
                     }
 
+                    @if (!string.IsNullOrWhiteSpace(Model.TeacherOptionsErrorMessage))
+                    {
+                        <p class="form-validation">@Model.TeacherOptionsErrorMessage</p>
+                    }
+
                     <form asp-controller="SectionManagement" asp-action="Create" method="post" class="filters-grid three">
                         @Html.AntiForgeryToken()
                         <div asp-validation-summary="ModelOnly" class="form-validation"></div>
@@ -436,17 +532,19 @@
                                     <option value="@course.Id">@course.Label</option>
                                 }
                             </select>
+                            <p class="field-helper compact">Choose the course first to unlock matching subjects.</p>
                             <span asp-validation-for="CreateForm.CourseId" class="field-validation"></span>
                         </div>
                         <div>
                             <label asp-for="CreateForm.SubjectId"></label>
                             <select asp-for="CreateForm.SubjectId" class="input-select">
-                                <option value="">Choose subject</option>
+                                <option value="">Choose course first</option>
                                 @foreach (var subject in Model.Subjects)
                                 {
                                     <option value="@subject.Id" data-course-id="@subject.CourseId">@subject.Label</option>
                                 }
                             </select>
+                            <p class="field-helper compact">Only subjects under the selected course will appear.</p>
                             <span asp-validation-for="CreateForm.SubjectId" class="field-validation"></span>
                         </div>
                         <div>
@@ -481,6 +579,7 @@
                                     <th>Subject</th>
                                     <th>Classroom</th>
                                     <th>Enrolled</th>
+                                    <th>Teachers</th>
                                     <th>Actions</th>
                                 </tr>
                             </thead>
@@ -494,6 +593,21 @@
                                         <td>@item.SubjectName</td>
                                         <td>@item.ClassroomName</td>
                                         <td>@item.CurrentEnrollmentCount</td>
+                                        <td>
+                                            @if (!item.AssignedTeachers.Any())
+                                            {
+                                                <span class="muted">No teacher assigned</span>
+                                            }
+                                            else
+                                            {
+                                                <div class="teacher-chip-list">
+                                                    @foreach (var teacher in item.AssignedTeachers)
+                                                    {
+                                                        <span class="teacher-chip" title="@teacher.Label">@teacher.ShortLabel</span>
+                                                    }
+                                                </div>
+                                            }
+                                        </td>
                                         <td>
                                             <div class="action-stack">
                                                 <form asp-controller="SectionManagement" asp-action="Update" asp-route-id="@item.Id"
@@ -509,17 +623,40 @@
                                                 <form asp-controller="SectionManagement" asp-action="AssignTeacher" asp-route-id="@item.Id"
                                                       method="post" class="stack-form">
                                                     @Html.AntiForgeryToken()
-                                                    <input type="number" name="AssignForm.TeacherId" min="1"
-                                                           class="input-select compact-input" placeholder="Teacher ID to assign" />
-                                                    <button type="submit" class="btn-secondary">Assign Teacher</button>
+                                                    <select name="AssignForm.TeacherId" class="input-select compact-input"
+                                                            disabled="@(!Model.TeacherOptions.Any())">
+                                                        <option value="">Select teacher to assign</option>
+                                                        @foreach (var teacher in Model.TeacherOptions)
+                                                        {
+                                                            <option value="@teacher.Id">@teacher.Label</option>
+                                                        }
+                                                    </select>
+                                                    <p class="field-helper compact">Active teachers only.</p>
+                                                    <button type="submit" class="btn-secondary"
+                                                            disabled="@(!Model.TeacherOptions.Any())">Assign Teacher</button>
                                                 </form>
 
                                                 <form asp-controller="SectionManagement" asp-action="RemoveTeacher" asp-route-id="@item.Id"
                                                       method="post" class="stack-form">
                                                     @Html.AntiForgeryToken()
-                                                    <input type="number" name="teacherId" min="1" class="input-select compact-input"
-                                                           placeholder="Teacher ID to remove" />
-                                                    <button type="submit" class="btn-secondary">Remove Teacher</button>
+                                                    <select name="teacherId" class="input-select compact-input"
+                                                            disabled="@(!item.AssignedTeachers.Any())">
+                                                        @if (!item.AssignedTeachers.Any())
+                                                        {
+                                                            <option value="">No assigned teacher</option>
+                                                        }
+                                                        else
+                                                        {
+                                                            <option value="">Select assigned teacher</option>
+                                                            @foreach (var teacher in item.AssignedTeachers)
+                                                            {
+                                                                <option value="@teacher.Id">@teacher.ShortLabel</option>
+                                                            }
+                                                        }
+                                                    </select>
+                                                    <p class="field-helper compact">Only teachers assigned to this section are listed.</p>
+                                                    <button type="submit" class="btn-secondary"
+                                                            disabled="@(!item.AssignedTeachers.Any())">Remove Teacher</button>
                                                 </form>
 
                                                 <form asp-controller="SectionManagement" asp-action="Delete" asp-route-id="@item.Id"
@@ -551,16 +688,30 @@
                     }
 
                     const allSubjectOptions = Array.from(subjectSelect.options)
-                        .filter(option => option.value === "" || option.dataset.courseId);
+                        .filter(option => option.dataset.courseId);
+
+                    const createPlaceholderOption = (text) => {
+                        const option = document.createElement("option");
+                        option.value = "";
+                        option.textContent = text;
+                        return option;
+                    };
 
                     const refreshSubjectOptions = () => {
                         const selectedCourseId = courseSelect.value;
                         const selectedSubjectId = subjectSelect.value;
+                        const filteredOptions = allSubjectOptions
+                            .filter(option => option.dataset.courseId === selectedCourseId);
 
                         subjectSelect.innerHTML = "";
 
-                        for (const option of allSubjectOptions) {
-                            if (option.value === "" || option.dataset.courseId === selectedCourseId) {
+                        if (selectedCourseId === "") {
+                            subjectSelect.appendChild(createPlaceholderOption("Choose course first"));
+                        } else if (filteredOptions.length === 0) {
+                            subjectSelect.appendChild(createPlaceholderOption("No subjects available for this course"));
+                        } else {
+                            subjectSelect.appendChild(createPlaceholderOption("Choose subject"));
+                            for (const option of filteredOptions) {
                                 subjectSelect.appendChild(option);
                             }
                         }
@@ -569,7 +720,7 @@
                             .some(option => option.value === selectedSubjectId);
 
                         subjectSelect.value = hasPreviousSelection ? selectedSubjectId : "";
-                        subjectSelect.disabled = selectedCourseId === "";
+                        subjectSelect.disabled = selectedCourseId === "" || filteredOptions.length === 0;
                     };
 
                     courseSelect.addEventListener("change", refreshSubjectOptions);

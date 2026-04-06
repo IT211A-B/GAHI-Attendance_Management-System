@@ -11,10 +11,12 @@ namespace Attendance_Management_System.Backend.Controllers;
 public class SubjectsManagementController : Controller
 {
     private readonly ISubjectsService _subjectsService;
+    private readonly ICoursesService _coursesService;
 
-    public SubjectsManagementController(ISubjectsService subjectsService)
+    public SubjectsManagementController(ISubjectsService subjectsService, ICoursesService coursesService)
     {
         _subjectsService = subjectsService;
+        _coursesService = coursesService;
     }
 
     [HttpGet("")]
@@ -47,7 +49,7 @@ public class SubjectsManagementController : Controller
 
         if (!result.Success)
         {
-            ModelState.AddModelError("CreateForm.Name", result.Error?.Message ?? "Unable to create subject right now.");
+            ModelState.AddModelError("CreateForm.CourseId", result.Error?.Message ?? "Unable to create subject right now.");
             return View(nameof(Index), viewModel);
         }
 
@@ -87,9 +89,9 @@ public class SubjectsManagementController : Controller
     [HttpPost("{id:int}/delete")]
     [Authorize(Policy = "AdminOrTeacher")]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> Delete(int id)
+    public async Task<IActionResult> Delete(int id, int? replacementSubjectId)
     {
-        var result = await _subjectsService.DeleteSubjectAsync(id);
+        var result = await _subjectsService.DeleteSubjectAsync(id, replacementSubjectId);
 
         if (!result.Success)
         {
@@ -103,9 +105,29 @@ public class SubjectsManagementController : Controller
 
     private async Task<SubjectsIndexViewModel> BuildIndexViewModelAsync()
     {
-        var result = await _subjectsService.GetAllSubjectsAsync();
-
         var viewModel = new SubjectsIndexViewModel();
+        var coursesResult = await _coursesService.GetAllCoursesAsync();
+
+        if (!coursesResult.Success || coursesResult.Data is null)
+        {
+            viewModel.ErrorMessage = coursesResult.Error?.Message ?? "Unable to load courses right now.";
+            return viewModel;
+        }
+
+        viewModel.Courses = coursesResult.Data
+            .OrderBy(course => course.Name)
+            .Select(course => new SubjectCourseOptionViewModel
+            {
+                Id = course.Id,
+                Label = BuildCourseOptionLabel(course.Code, course.Name)
+            })
+            .ToList();
+
+        var courseLabelsById = viewModel.Courses
+            .GroupBy(course => course.Id)
+            .ToDictionary(group => group.Key, group => group.First().Label);
+
+        var result = await _subjectsService.GetAllSubjectsAsync();
 
         if (!result.Success || result.Data is null)
         {
@@ -122,11 +144,21 @@ public class SubjectsManagementController : Controller
                 Name = subject.Name,
                 Code = subject.Code,
                 CourseId = subject.CourseId,
-                CourseName = string.IsNullOrWhiteSpace(subject.CourseName) ? "-" : subject.CourseName,
+                CourseLabel = courseLabelsById.TryGetValue(subject.CourseId, out var label)
+                    ? label
+                    : string.IsNullOrWhiteSpace(subject.CourseName) ? "-" : subject.CourseName,
                 Units = subject.Units
             })
             .ToList();
 
         return viewModel;
+    }
+
+    private static string BuildCourseOptionLabel(string? code, string? name)
+    {
+        var courseName = string.IsNullOrWhiteSpace(name) ? "Unnamed course" : name.Trim();
+        return string.IsNullOrWhiteSpace(code)
+            ? courseName
+            : $"{code.Trim()} - {courseName}";
     }
 }

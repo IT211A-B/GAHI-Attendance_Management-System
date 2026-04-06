@@ -54,6 +54,56 @@ public class SectionsService : ISectionsService
         return ApiResponse<List<SectionDto>>.SuccessResponse(sections);
     }
 
+    public async Task<ApiResponse<List<SectionDto>>> GetSectionsByTeacherUserIdAsync(int teacherUserId)
+    {
+        var teacherId = await _context.Teachers
+            .Where(teacher => teacher.UserId == teacherUserId)
+            .Select(teacher => (int?)teacher.Id)
+            .FirstOrDefaultAsync();
+
+        if (!teacherId.HasValue)
+        {
+            return ApiResponse<List<SectionDto>>.ErrorResponse(ErrorCodes.NotFound, "Teacher profile not found.");
+        }
+
+        // Include both explicit section assignments and legacy/owned schedules.
+        // This keeps /student(s) in sync even if section links were not created historically.
+        var sectionIds = await _context.SectionTeachers
+            .Where(assignment => assignment.TeacherId == teacherId.Value)
+            .Select(assignment => assignment.SectionId)
+            .Union(_context.Schedules
+                .Where(schedule => schedule.TeacherId == teacherId.Value)
+                .Select(schedule => schedule.SectionId))
+            .Distinct()
+            .ToListAsync();
+
+        var sections = await _context.Sections
+            .Include(section => section.AcademicYear)
+            .Include(section => section.Course)
+            .Include(section => section.Subject)
+            .Include(section => section.Classroom)
+            .Where(section => sectionIds.Contains(section.Id))
+            .OrderBy(section => section.Name)
+            .Select(section => new SectionDto
+            {
+                Id = section.Id,
+                Name = section.Name,
+                YearLevel = section.YearLevel,
+                AcademicYearId = section.AcademicYearId,
+                AcademicYearLabel = section.AcademicYear != null ? section.AcademicYear.YearLabel : null,
+                CourseId = section.CourseId,
+                CourseName = section.Course != null ? section.Course.Name : null,
+                SubjectId = section.SubjectId,
+                SubjectName = section.Subject != null ? section.Subject.Name : null,
+                ClassroomId = section.ClassroomId,
+                ClassroomName = section.Classroom != null ? section.Classroom.Name : null,
+                CreatedAt = section.CreatedAt
+            })
+            .ToListAsync();
+
+        return ApiResponse<List<SectionDto>>.SuccessResponse(sections);
+    }
+
     // Retrieves a single section by ID with related entity details
     public async Task<ApiResponse<SectionDto>> GetSectionByIdAsync(int id)
     {
@@ -469,7 +519,7 @@ public class SectionsService : ISectionsService
         return ApiResponse<SectionTeacherDto>.SuccessResponse(dto);
     }
 
-    public async Task<ApiResponse<bool>> RemoveTeacherFromSectionAsync(int sectionId, int teacherId, bool isAdmin = false)
+    public async Task<ApiResponse<bool>> RemoveTeacherFromSectionAsync(int sectionId, int teacherId, bool isAdmin = false, bool removeOwnedSchedules = false)
     {
         var sectionTeacher = await _context.SectionTeachers
             .FirstOrDefaultAsync(st => st.SectionId == sectionId && st.TeacherId == teacherId);
@@ -479,8 +529,34 @@ public class SectionsService : ISectionsService
             return ApiResponse<bool>.ErrorResponse(ErrorCodes.NotFound, "Teacher assignment not found.");
         }
 
+        var teacherSchedulesQuery = _context.Schedules
+            .Where(schedule => schedule.SectionId == sectionId && schedule.TeacherId == teacherId);
+
+        if (removeOwnedSchedules)
+        {
+            var ownedScheduleIds = await teacherSchedulesQuery
+                .Select(schedule => schedule.Id)
+                .ToListAsync();
+
+            if (ownedScheduleIds.Count > 0)
+            {
+                var hasAttendance = await _context.Attendances
+                    .AnyAsync(attendance => ownedScheduleIds.Contains(attendance.ScheduleId));
+
+                if (hasAttendance)
+                {
+                    return ApiResponse<bool>.ErrorResponse(
+                        ErrorCodes.Conflict,
+                        "Cannot unassign because one or more of your schedules already have attendance records.");
+                }
+
+                var ownedSchedules = await teacherSchedulesQuery.ToListAsync();
+                _context.Schedules.RemoveRange(ownedSchedules);
+            }
+        }
+
         // Non-admin users cannot remove teachers from sections that have schedules
-        if (!isAdmin)
+        if (!isAdmin && !removeOwnedSchedules)
         {
             var hasSchedules = await _context.Schedules.AnyAsync(s => s.SectionId == sectionId);
             if (hasSchedules)

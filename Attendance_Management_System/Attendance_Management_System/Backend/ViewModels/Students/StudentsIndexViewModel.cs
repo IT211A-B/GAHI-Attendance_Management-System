@@ -5,6 +5,8 @@ public class StudentsIndexViewModel
     public IReadOnlyList<StudentsSectionOptionViewModel> Sections { get; set; } = [];
     public IReadOnlyList<StudentListItemViewModel> Students { get; set; } = [];
     public int? SelectedSectionId { get; set; }
+    public bool IsTeacher { get; set; }
+    public bool IsCurrentTeacherAssignedToSelectedSection { get; set; }
     public string? ErrorMessage { get; set; }
 }
 

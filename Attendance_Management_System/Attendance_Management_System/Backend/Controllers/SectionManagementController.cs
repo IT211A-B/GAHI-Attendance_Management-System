@@ -163,7 +163,7 @@ public class SectionManagementController : Controller
     {
         if (!ModelState.IsValid)
         {
-            TempData["SectionsError"] = "Please provide a valid teacher ID.";
+            TempData["SectionsError"] = "Please select a valid teacher.";
             return RedirectToAction(nameof(Index));
         }
 
@@ -180,6 +180,98 @@ public class SectionManagementController : Controller
 
         TempData["SectionsSuccess"] = "Teacher assigned successfully.";
         return RedirectToAction(nameof(Index));
+    }
+
+    [HttpPost("{id:int}/teachers/self-assign")]
+    [Authorize(Policy = "TeacherOnly")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> SelfAssignTeacher(int id, int? selectedSectionId)
+    {
+        var context = GetUserContext();
+        if (!context.IsValid)
+        {
+            return Challenge();
+        }
+
+        var teacherContext = await BuildTeacherContextAsync(context.UserId, context.Role);
+        if (!teacherContext.Success || !teacherContext.Context.TeacherId.HasValue)
+        {
+            TempData["SectionsError"] = teacherContext.Error ?? "Teacher profile not found for the current account.";
+            return RedirectToAction(nameof(Index), new { sectionId = selectedSectionId ?? id });
+        }
+
+        var teacherId = teacherContext.Context.TeacherId.Value;
+
+        var sectionTeachersResult = await _sectionsService.GetSectionTeachersAsync(id);
+        if (sectionTeachersResult.Success && sectionTeachersResult.Data is not null
+            && sectionTeachersResult.Data.Any(assignment => assignment.TeacherId == teacherId))
+        {
+            TempData["SectionsSuccess"] = "You are already assigned to this section.";
+            return RedirectToAction(nameof(Index), new { sectionId = selectedSectionId ?? id });
+        }
+
+        var assignResult = await _sectionsService.AssignTeacherToSectionAsync(id, new AssignTeacherRequest
+        {
+            TeacherId = teacherId
+        });
+
+        if (!assignResult.Success)
+        {
+            TempData["SectionsError"] = assignResult.Error?.Message ?? "Unable to self-assign to this section right now.";
+            return RedirectToAction(nameof(Index), new { sectionId = selectedSectionId ?? id });
+        }
+
+        TempData["SectionsSuccess"] = "You are now assigned to this section.";
+        return RedirectToAction(nameof(Index), new { sectionId = selectedSectionId ?? id });
+    }
+
+    [HttpPost("{id:int}/teachers/self-unassign")]
+    [Authorize(Policy = "TeacherOnly")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> SelfUnassignTeacher(int id, int? selectedSectionId)
+    {
+        var context = GetUserContext();
+        if (!context.IsValid)
+        {
+            return Challenge();
+        }
+
+        var teacherContext = await BuildTeacherContextAsync(context.UserId, context.Role);
+        if (!teacherContext.Success || !teacherContext.Context.TeacherId.HasValue)
+        {
+            TempData["SectionsError"] = teacherContext.Error ?? "Teacher profile not found for the current account.";
+            return RedirectToAction(nameof(Index), new { sectionId = selectedSectionId ?? id });
+        }
+
+        var teacherId = teacherContext.Context.TeacherId.Value;
+
+        var sectionTeachersResult = await _sectionsService.GetSectionTeachersAsync(id);
+        if (!sectionTeachersResult.Success || sectionTeachersResult.Data is null)
+        {
+            TempData["SectionsError"] = sectionTeachersResult.Error?.Message ?? "Unable to load section teacher assignments right now.";
+            return RedirectToAction(nameof(Index), new { sectionId = selectedSectionId ?? id });
+        }
+
+        if (!sectionTeachersResult.Data.Any(assignment => assignment.TeacherId == teacherId))
+        {
+            TempData["SectionsSuccess"] = "You are not assigned to this section.";
+            return RedirectToAction(nameof(Index), new { sectionId = selectedSectionId ?? id });
+        }
+
+        // Self-unassign also removes schedules owned by this teacher in the section.
+        var removeResult = await _sectionsService.RemoveTeacherFromSectionAsync(
+            id,
+            teacherId,
+            isAdmin: true,
+            removeOwnedSchedules: true);
+        if (!removeResult.Success)
+        {
+            TempData["SectionsError"] = removeResult.Error?.Message ?? "Unable to unassign from this section right now.";
+            return RedirectToAction(nameof(Index), new { sectionId = selectedSectionId ?? id });
+        }
+
+        TempData["SectionsSuccess"] = "You are no longer assigned to this section and your schedules were removed.";
+        return RedirectToAction(nameof(Index), new { sectionId = selectedSectionId ?? id });
     }
 
     [HttpPost("{id:int}/teachers/remove")]
@@ -205,7 +297,7 @@ public class SectionManagementController : Controller
     [HttpPost("timetable/slots/add")]
     [Authorize(Policy = "TeacherOnly")]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> AddTimetableSlot(int sectionId, int dayOfWeek, TimeOnly startTime, TimeOnly endTime, int? selectedSectionId)
+    public async Task<IActionResult> AddTimetableSlot(int sectionId, int subjectId, int dayOfWeek, TimeOnly startTime, TimeOnly endTime, int? selectedSectionId)
     {
         var context = GetUserContext();
         if (!context.IsValid)
@@ -219,17 +311,10 @@ public class SectionManagementController : Controller
             return RedirectToAction(nameof(Index), new { sectionId = selectedSectionId ?? sectionId });
         }
 
-        var sectionResult = await _sectionsService.GetSectionByIdAsync(sectionId);
-        if (!sectionResult.Success || sectionResult.Data is null)
+        var subjectSelectionValidation = await ValidateSubjectSelectionForSectionAsync(sectionId, subjectId);
+        if (!subjectSelectionValidation.IsValid)
         {
-            TempData["SectionsError"] = sectionResult.Error?.Message ?? "Unable to load the selected section.";
-            return RedirectToAction(nameof(Index), new { sectionId = selectedSectionId ?? sectionId });
-        }
-
-        var subjectId = sectionResult.Data.SubjectId;
-        if (subjectId <= 0)
-        {
-            TempData["SectionsError"] = "Selected section does not have an assigned subject.";
+            TempData["SectionsError"] = subjectSelectionValidation.ErrorMessage;
             return RedirectToAction(nameof(Index), new { sectionId = selectedSectionId ?? sectionId });
         }
 
@@ -256,7 +341,7 @@ public class SectionManagementController : Controller
     [HttpPost("timetable/slots/add-range")]
     [Authorize(Policy = "TeacherOnly")]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> AddTimetableSlotRange(int sectionId, TimeOnly startTime, TimeOnly endTime, [FromForm] List<int>? selectedDays, int? selectedSectionId)
+    public async Task<IActionResult> AddTimetableSlotRange(int sectionId, int subjectId, TimeOnly startTime, TimeOnly endTime, [FromForm] List<int>? selectedDays, int? selectedSectionId)
     {
         var context = GetUserContext();
         if (!context.IsValid)
@@ -282,17 +367,10 @@ public class SectionManagementController : Controller
             return RedirectToAction(nameof(Index), new { sectionId = selectedSectionId ?? sectionId });
         }
 
-        var sectionResult = await _sectionsService.GetSectionByIdAsync(sectionId);
-        if (!sectionResult.Success || sectionResult.Data is null)
+        var subjectSelectionValidation = await ValidateSubjectSelectionForSectionAsync(sectionId, subjectId);
+        if (!subjectSelectionValidation.IsValid)
         {
-            TempData["SectionsError"] = sectionResult.Error?.Message ?? "Unable to load the selected section.";
-            return RedirectToAction(nameof(Index), new { sectionId = selectedSectionId ?? sectionId });
-        }
-
-        var subjectId = sectionResult.Data.SubjectId;
-        if (subjectId <= 0)
-        {
-            TempData["SectionsError"] = "Selected section does not have an assigned subject.";
+            TempData["SectionsError"] = subjectSelectionValidation.ErrorMessage;
             return RedirectToAction(nameof(Index), new { sectionId = selectedSectionId ?? sectionId });
         }
 
@@ -323,7 +401,7 @@ public class SectionManagementController : Controller
     [HttpPost("timetable/slots/{scheduleId:int}/update")]
     [Authorize(Policy = "TeacherOnly")]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> UpdateTimetableSlot(int scheduleId, int dayOfWeek, TimeOnly startTime, TimeOnly endTime, int? selectedSectionId)
+    public async Task<IActionResult> UpdateTimetableSlot(int scheduleId, int subjectId, int dayOfWeek, TimeOnly startTime, TimeOnly endTime, int? selectedSectionId)
     {
         var context = GetUserContext();
         if (!context.IsValid)
@@ -337,8 +415,15 @@ public class SectionManagementController : Controller
             return RedirectToAction(nameof(Index), new { sectionId = selectedSectionId });
         }
 
+        if (subjectId <= 0)
+        {
+            TempData["SectionsError"] = "Select a subject before saving the timetable slot.";
+            return RedirectToAction(nameof(Index), new { sectionId = selectedSectionId });
+        }
+
         var result = await _schedulesService.UpdateScheduleAsync(scheduleId, new UpdateScheduleRequest
         {
+            SubjectId = subjectId,
             DayOfWeek = dayOfWeek,
             StartTime = startTime,
             EndTime = endTime
@@ -486,6 +571,7 @@ public class SectionManagementController : Controller
             .ToList();
 
         await PopulateCreateSectionOptionsAsync(viewModel);
+        await PopulateTeacherOptionsAsync(viewModel);
 
         if (!viewModel.SectionOptions.Any())
         {
@@ -507,6 +593,9 @@ public class SectionManagementController : Controller
                 ? "-"
                 : selectedSection.SubjectName;
         }
+
+        await PopulateTimetableSubjectOptionsAsync(viewModel, selectedSection);
+        await PopulateTeacherAssignmentStateAsync(viewModel, currentUserId, role, selectedSectionId);
 
         var timetableResult = await _sectionsService.GetTimetableAsync(selectedSectionId, currentUserId);
         if (!timetableResult.Success || timetableResult.Data is null)
@@ -672,16 +761,15 @@ public class SectionManagementController : Controller
             return;
         }
 
-        var academicPeriodsTask = _academicYearsService.GetAllAcademicYearsAsync();
-        var coursesTask = _coursesService.GetAllCoursesAsync();
-        var subjectsTask = _subjectsService.GetAllSubjectsAsync();
-        var classroomsTask = _classroomsService.GetAllClassroomsAsync();
-
-        await Task.WhenAll(academicPeriodsTask, coursesTask, subjectsTask, classroomsTask);
+        // These lookups share a request-scoped DbContext under the hood.
+        // Run them sequentially to avoid concurrent DbContext operations.
+        var academicPeriodsResult = await _academicYearsService.GetAllAcademicYearsAsync();
+        var coursesResult = await _coursesService.GetAllCoursesAsync();
+        var subjectsResult = await _subjectsService.GetAllSubjectsAsync();
+        var classroomsResult = await _classroomsService.GetAllClassroomsAsync();
 
         var lookupLoadFailures = new List<string>();
 
-        var academicPeriodsResult = await academicPeriodsTask;
         if (!academicPeriodsResult.Success || academicPeriodsResult.Data is null)
         {
             lookupLoadFailures.Add("academic periods");
@@ -698,7 +786,6 @@ public class SectionManagementController : Controller
                 .ToList();
         }
 
-        var coursesResult = await coursesTask;
         if (!coursesResult.Success || coursesResult.Data is null)
         {
             lookupLoadFailures.Add("courses");
@@ -717,7 +804,6 @@ public class SectionManagementController : Controller
                 .ToList();
         }
 
-        var subjectsResult = await subjectsTask;
         if (!subjectsResult.Success || subjectsResult.Data is null)
         {
             lookupLoadFailures.Add("subjects");
@@ -735,7 +821,6 @@ public class SectionManagementController : Controller
                 .ToList();
         }
 
-        var classroomsResult = await classroomsTask;
         if (!classroomsResult.Success || classroomsResult.Data is null)
         {
             lookupLoadFailures.Add("classrooms");
@@ -761,6 +846,159 @@ public class SectionManagementController : Controller
             $"Some create form options could not be loaded ({string.Join(", ", lookupLoadFailures)}).";
     }
 
+    private async Task PopulateTimetableSubjectOptionsAsync(SectionsIndexViewModel viewModel, SectionDto? selectedSection)
+    {
+        viewModel.TimetableSubjects = [];
+        viewModel.TimetableSubjectsErrorMessage = null;
+
+        if (selectedSection is null)
+        {
+            return;
+        }
+
+        var subjectsResult = await _subjectsService.GetAllSubjectsAsync();
+        if (!subjectsResult.Success || subjectsResult.Data is null)
+        {
+            viewModel.TimetableSubjectsErrorMessage = subjectsResult.Error?.Message ?? "Unable to load timetable subject options right now.";
+            return;
+        }
+
+        viewModel.TimetableSubjects = subjectsResult.Data
+            .OrderBy(subject => subject.Name)
+            .Select(subject => new SectionReferenceOptionViewModel
+            {
+                Id = subject.Id,
+                Label = BuildSubjectOptionLabel(subject)
+            })
+            .ToList();
+    }
+
+    private async Task PopulateTeacherAssignmentStateAsync(SectionsIndexViewModel viewModel, int currentUserId, string role, int selectedSectionId)
+    {
+        viewModel.IsCurrentTeacherAssignedToSelectedSection = false;
+
+        if (!string.Equals(role, "teacher", StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        var teachersResult = await _teachersService.GetAllTeachersAsync();
+        if (!teachersResult.Success || teachersResult.Data is null)
+        {
+            return;
+        }
+
+        var teacherId = teachersResult.Data
+            .FirstOrDefault(teacher => teacher.UserId == currentUserId)
+            ?.Id;
+
+        if (!teacherId.HasValue)
+        {
+            return;
+        }
+
+        var sectionTeachersResult = await _sectionsService.GetSectionTeachersAsync(selectedSectionId);
+        if (!sectionTeachersResult.Success || sectionTeachersResult.Data is null)
+        {
+            return;
+        }
+
+        viewModel.IsCurrentTeacherAssignedToSelectedSection = sectionTeachersResult.Data
+            .Any(assignment => assignment.TeacherId == teacherId.Value);
+    }
+
+    private async Task PopulateTeacherOptionsAsync(SectionsIndexViewModel viewModel)
+    {
+        if (!viewModel.IsAdmin)
+        {
+            return;
+        }
+
+        var teachersResult = await _teachersService.GetAllTeachersWithSectionsAsync();
+        if (!teachersResult.Success || teachersResult.Data is null)
+        {
+            viewModel.TeacherOptionsErrorMessage = teachersResult.Error?.Message ?? "Unable to load teacher options right now.";
+            return;
+        }
+
+        var activeTeachers = teachersResult.Data
+            .Where(teacher => teacher.IsActive)
+            .OrderBy(teacher => teacher.LastName)
+            .ThenBy(teacher => teacher.FirstName)
+            .ToList();
+
+        viewModel.TeacherOptions = activeTeachers
+            .Select(teacher => new SectionTeacherOptionViewModel
+            {
+                Id = teacher.Id,
+                Label = BuildTeacherOptionLabel(teacher),
+                ShortLabel = BuildTeacherShortLabel(teacher)
+            })
+            .ToList();
+
+        var assignedTeacherLookup = activeTeachers
+            .SelectMany(teacher => teacher.Sections.Select(section => new { section.SectionId, Teacher = teacher }))
+            .GroupBy(entry => entry.SectionId)
+            .ToDictionary(
+                group => group.Key,
+                group => (IReadOnlyList<SectionTeacherOptionViewModel>)group
+                    .OrderBy(entry => entry.Teacher.LastName)
+                    .ThenBy(entry => entry.Teacher.FirstName)
+                    .Select(entry => new SectionTeacherOptionViewModel
+                    {
+                        Id = entry.Teacher.Id,
+                        Label = BuildTeacherOptionLabel(entry.Teacher),
+                        ShortLabel = BuildTeacherShortLabel(entry.Teacher)
+                    })
+                    .ToList());
+
+        foreach (var section in viewModel.Sections)
+        {
+            if (assignedTeacherLookup.TryGetValue(section.Id, out var assignedTeachers))
+            {
+                section.AssignedTeachers = assignedTeachers;
+                section.AssignedTeacherSummary = string.Join(", ", assignedTeachers.Select(teacher => teacher.ShortLabel));
+                continue;
+            }
+
+            section.AssignedTeachers = [];
+            section.AssignedTeacherSummary = "No teacher assigned";
+        }
+    }
+
+    private static string BuildTeacherOptionLabel(TeacherListDto teacher)
+    {
+        var fullName = BuildTeacherFullName(teacher.FirstName, teacher.MiddleName, teacher.LastName);
+        var employeeNumber = string.IsNullOrWhiteSpace(teacher.EmployeeNumber)
+            ? "No employee number"
+            : teacher.EmployeeNumber.Trim();
+        var department = string.IsNullOrWhiteSpace(teacher.Department)
+            ? "No department"
+            : teacher.Department.Trim();
+
+        return $"{fullName} ({employeeNumber}) - {department}";
+    }
+
+    private static string BuildTeacherShortLabel(TeacherListDto teacher)
+    {
+        var fullName = BuildTeacherFullName(teacher.FirstName, teacher.MiddleName, teacher.LastName);
+        return string.IsNullOrWhiteSpace(teacher.EmployeeNumber)
+            ? fullName
+            : $"{fullName} ({teacher.EmployeeNumber.Trim()})";
+    }
+
+    private static string BuildTeacherFullName(string? firstName, string? middleName, string? lastName)
+    {
+        var fullName = string.Join(" ", new[]
+        {
+            firstName?.Trim(),
+            middleName?.Trim(),
+            lastName?.Trim()
+        }.Where(part => !string.IsNullOrWhiteSpace(part)));
+
+        return string.IsNullOrWhiteSpace(fullName) ? "Unnamed teacher" : fullName;
+    }
+
     private static string BuildSubjectOptionLabel(SubjectDto subject)
     {
         var baseLabel = string.IsNullOrWhiteSpace(subject.Code)
@@ -770,6 +1008,28 @@ public class SectionManagementController : Controller
         return string.IsNullOrWhiteSpace(subject.CourseName)
             ? baseLabel
             : $"{baseLabel} ({subject.CourseName})";
+    }
+
+    private async Task<(bool IsValid, string ErrorMessage)> ValidateSubjectSelectionForSectionAsync(int sectionId, int subjectId)
+    {
+        if (subjectId <= 0)
+        {
+            return (false, "Select a subject before adding a timetable slot.");
+        }
+
+        var sectionResult = await _sectionsService.GetSectionByIdAsync(sectionId);
+        if (!sectionResult.Success || sectionResult.Data is null)
+        {
+            return (false, sectionResult.Error?.Message ?? "Unable to load the selected section.");
+        }
+
+        var subjectResult = await _subjectsService.GetSubjectByIdAsync(subjectId);
+        if (!subjectResult.Success || subjectResult.Data is null)
+        {
+            return (false, subjectResult.Error?.Message ?? "Selected subject was not found.");
+        }
+
+        return (true, string.Empty);
     }
 
     private async Task<(bool Success, TeacherContext Context, string? Error)> BuildTeacherContextAsync(int userId, string role)

@@ -356,6 +356,68 @@ a {
   color: #991b1b;
 }
 
+.status-pill.success {
+  border: 1px solid #bbf7d0;
+  background: #f0fdf4;
+  color: #166534;
+}
+
+.status-pill.warning {
+  border: 1px solid #fde68a;
+  background: #fffbeb;
+  color: #92400e;
+}
+
+.status-pill.danger {
+  border: 1px solid #fecaca;
+  background: #fef2f2;
+  color: #991b1b;
+}
+
+.role-hero {
+  margin-top: 0;
+}
+
+.dashboard-eyebrow {
+  margin: 0 0 0.45rem;
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.student-hero {
+  background: linear-gradient(130deg, #0f766e 0%, #0284c7 55%, #0f172a 100%);
+}
+
+.teacher-hero {
+  background: linear-gradient(130deg, #92400e 0%, #b45309 45%, #1d4ed8 100%);
+}
+
+.admin-hero {
+  background: linear-gradient(130deg, #1e3a8a 0%, #0f766e 45%, #0f172a 100%);
+}
+
+.mini-kpi-strip {
+  margin-top: 0.6rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.dashboard-filter-panel {
+  margin-top: 1rem;
+}
+
+.dashboard-filter-grid {
+  align-items: end;
+}
+
+.dashboard-filter-grid .btn-primary {
+  grid-column: 1 / -1;
+}
+
 .muted {
   color: var(--muted);
 }
@@ -723,6 +785,46 @@ a {
   font-size: 0.8rem;
 }
 
+.field-helper {
+  margin: 0.28rem 0 0;
+  color: #64748b;
+  font-size: 0.76rem;
+  line-height: 1.35;
+}
+
+.field-helper.compact {
+  font-size: 0.72rem;
+  margin-top: 0.2rem;
+}
+
+.entity-pill {
+  display: inline-block;
+  border: 1px solid #cbd5e1;
+  background: #f8fafc;
+  color: #334155;
+  border-radius: 999px;
+  padding: 0.15rem 0.5rem;
+  font-size: 0.76rem;
+  font-weight: 600;
+}
+
+.teacher-chip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+
+.teacher-chip {
+  display: inline-block;
+  border: 1px solid #bfdbfe;
+  background: #eff6ff;
+  color: #1e3a8a;
+  border-radius: 999px;
+  padding: 0.16rem 0.52rem;
+  font-size: 0.74rem;
+  font-weight: 600;
+}
+
 .timetable-wrap {
   margin-top: 0.9rem;
   overflow: auto;
@@ -896,7 +998,7 @@ a {
 
 .quick-add-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0.55rem;
 }
 

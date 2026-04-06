@@ -10,5 +10,5 @@ public interface ISubjectsService
     Task<ApiResponse<List<SubjectDto>>> GetSubjectsByCourseIdAsync(int courseId);
     Task<ApiResponse<SubjectDto>> CreateSubjectAsync(CreateSubjectRequest request);
     Task<ApiResponse<SubjectDto>> UpdateSubjectAsync(int id, UpdateSubjectRequest request);
-    Task<ApiResponse<bool>> DeleteSubjectAsync(int id);
+    Task<ApiResponse<bool>> DeleteSubjectAsync(int id, int? replacementSubjectId = null);
 }
