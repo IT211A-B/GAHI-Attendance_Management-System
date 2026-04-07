@@ -399,8 +399,42 @@ public class SchedulesService : ISchedulesService
             return ApiResponse<bool>.ErrorResponse(ErrorCodes.Conflict, "Cannot delete schedule with existing attendance records.");
         }
 
+        var nowUtc = DateTimeOffset.UtcNow;
+
+        // Deletion is blocked when the schedule still has an active QR session or historical check-ins.
+        var hasBlockingQrSessions = await _context.AttendanceQrSessions
+            .Where(session => session.ScheduleId == id)
+            .AnyAsync(session =>
+                (session.IsActive && session.ExpiresAtUtc > nowUtc)
+                || _context.AttendanceQrCheckins.Any(checkin => checkin.AttendanceQrSessionId == session.Id));
+
+        if (hasBlockingQrSessions)
+        {
+            return ApiResponse<bool>.ErrorResponse(ErrorCodes.Conflict, "Cannot delete schedule with active or checked-in QR attendance sessions.");
+        }
+
+        // Remove stale QR sessions that are inactive/expired and have no check-ins so FK restrict does not block schedule deletion.
+        var removableQrSessions = await _context.AttendanceQrSessions
+            .Where(session => session.ScheduleId == id)
+            .Where(session => !session.IsActive || session.ExpiresAtUtc <= nowUtc)
+            .Where(session => !_context.AttendanceQrCheckins.Any(checkin => checkin.AttendanceQrSessionId == session.Id))
+            .ToListAsync();
+
+        if (removableQrSessions.Count > 0)
+        {
+            _context.AttendanceQrSessions.RemoveRange(removableQrSessions);
+        }
+
         _context.Schedules.Remove(schedule);
-        await _context.SaveChangesAsync();
+
+        try
+        {
+            await _context.SaveChangesAsync();
+        }
+        catch (DbUpdateException exception) when (IsScheduleLinkedToQrSessions(exception))
+        {
+            return ApiResponse<bool>.ErrorResponse(ErrorCodes.Conflict, "Cannot delete schedule with active or checked-in QR attendance sessions.");
+        }
 
         return ApiResponse<bool>.SuccessResponse(true);
     }
@@ -588,5 +622,12 @@ public class SchedulesService : ISchedulesService
             dtos.Add(await BuildScheduleDtoAsync(schedule, userId));
         }
         return dtos;
+    }
+
+    private static bool IsScheduleLinkedToQrSessions(DbUpdateException exception)
+    {
+        var message = exception.InnerException?.Message ?? exception.Message;
+
+        return message.Contains("FK_AttendanceQrSessions_Schedules_ScheduleId", StringComparison.OrdinalIgnoreCase);
     }
 }

@@ -36,6 +36,9 @@ public static class DependencyInjection
         // Bind attendance settings from configuration to strongly-typed class
         services.Configure<AttendanceSettings>(configuration.GetSection(AttendanceSettings.SectionName));
 
+        // Bind QR attendance settings from configuration to strongly-typed class
+        services.Configure<AttendanceQrSettings>(configuration.GetSection(AttendanceQrSettings.SectionName));
+
         // Configure ASP.NET Core Identity with password requirements
         services.AddIdentity<User, IdentityRole<int>>(options =>
         {
@@ -72,6 +75,7 @@ public static class DependencyInjection
         services.AddScoped<IAuthService, AuthService>();
         services.AddScoped<IDashboardService, DashboardService>();
         services.AddScoped<IAttendanceService, AttendanceService>();
+        services.AddScoped<IAttendanceQrService, AttendanceQrService>();
         services.AddScoped<IEnrollmentService, EnrollmentService>();
         services.AddScoped<ISectionAllocationService, SectionAllocationService>();
         services.AddScoped<ITeachersService, TeachersService>();

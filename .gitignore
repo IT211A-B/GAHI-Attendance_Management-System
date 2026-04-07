@@ -128,3 +128,4 @@ Thumbs.db
 # - Ignore generated artifacts and local machine-specific configs
 # - Avoid committing secrets / local environment files
 implementation_plan.md
+tests
