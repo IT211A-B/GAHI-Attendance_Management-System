@@ -689,16 +689,17 @@ a {
 .auth-page {
   min-height: 100vh;
   display: grid;
-  place-items: center;
+  align-items: start;
 }
 
 .auth-wrapper {
-  width: min(1050px, calc(100% - 2rem));
-  margin: 2rem auto;
+  width: min(1160px, calc(100% - 2rem));
+  margin: 1.25rem auto 2rem;
   display: grid;
   /* Split hero storytelling and sign-in form into a 2-column auth canvas. */
-  grid-template-columns: 1.15fr 0.85fr;
+  grid-template-columns: minmax(0, 1fr) minmax(460px, 1fr);
   gap: 1rem;
+  align-items: start;
 }
 
 .auth-hero,
@@ -808,6 +809,7 @@ a {
 .auth-field {
   display: grid;
   gap: 0.25rem;
+  min-width: 0;
 }
 
 .auth-field-wide {
@@ -832,6 +834,9 @@ a {
   padding: 0.66rem 0.72rem;
   font: inherit;
   background: #fff;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .auth-form input[type="email"]:focus,
@@ -846,8 +851,8 @@ a {
 }
 
 .signup-card {
-  max-height: calc(100vh - 4rem);
-  overflow-y: auto;
+  max-height: none;
+  overflow: visible;
 }
 
 .auth-form-grid {
@@ -1280,6 +1285,10 @@ a {
   padding: 0.85rem;
   display: grid;
   gap: 0.65rem;
+}
+
+.chat-widget-panel[hidden] {
+  display: none !important;
 }
 
 .chat-widget-header {
