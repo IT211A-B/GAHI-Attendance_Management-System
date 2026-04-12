@@ -224,6 +224,426 @@
 		});
 	}
 
+	// Initialize floating help chat with role-filtered predefined Q&A entries.
+	function initializePredefinedChatWidget() {
+		var widget = document.getElementById("predefined-chat-widget");
+		if (!widget) {
+			return;
+		}
+
+		var launcher = document.getElementById("chat-widget-launcher");
+		var panel = document.getElementById("chat-widget-panel");
+		var closeBtn = panel ? panel.querySelector("[data-chat-widget-close='true']") : null;
+		var questionList = document.getElementById("chat-widget-question-list");
+		var answer = document.getElementById("chat-widget-answer");
+		var searchInput = document.getElementById("chat-widget-search");
+		var categoryTabs = document.getElementById("chat-widget-categories");
+
+		if (!launcher || !panel || !questionList || !answer) {
+			return;
+		}
+
+		var currentRole = (widget.getAttribute("data-user-role") || "guest").toLowerCase();
+		var apiUrl = (widget.getAttribute("data-chat-api-url") || "").trim();
+		var activeQuestionId = null;
+		var activeCategory = "all";
+		var entries = [];
+
+		// Keep these entries as plain objects so an API payload can swap in later.
+		var fallbackEntries = [
+			{
+				id: "scan_qr",
+				roles: ["student"],
+				question: "How do I scan my attendance QR code?",
+				answer: "Open Scan QR in the left menu, allow camera access, and point your camera at the teacher's QR. If camera fails, paste the token manually and submit.",
+				tags: ["scan", "qr", "attendance", "camera"],
+				category: "attendance"
+			},
+			{
+				id: "attendance_missing",
+				roles: ["student"],
+				question: "What should I do if my attendance is missing?",
+				answer: "Open your attendance details and note the date and subject, then message your teacher with the session information so they can review the check-in log.",
+				tags: ["attendance", "missing", "record"],
+				category: "attendance"
+			},
+			{
+				id: "late_policy",
+				roles: ["student", "teacher"],
+				question: "What if I am marked late?",
+				answer: "Late status is based on the session window set by your teacher. If you think it is incorrect, contact your teacher immediately for attendance review.",
+				tags: ["late", "status", "attendance"],
+				category: "attendance"
+			},
+			{
+				id: "create_qr",
+				roles: ["teacher"],
+				question: "How do I create a QR attendance session?",
+				answer: "Go to Attendance QR, pick section, subject, and academic period, then click Generate Session QR. Share the displayed code with students before the session expires.",
+				tags: ["teacher", "generate", "session", "qr"],
+				category: "attendance"
+			},
+			{
+				id: "session_expired",
+				roles: ["teacher", "student"],
+				question: "Why is the QR session expired?",
+				answer: "Each attendance QR has a time limit for security. Teachers should regenerate a new QR session and students should scan immediately.",
+				tags: ["qr", "expired", "session", "attendance"],
+				category: "attendance"
+			},
+			{
+				id: "schedule_conflict",
+				roles: ["teacher", "admin"],
+				question: "Why can I not save this schedule slot?",
+				answer: "A slot may fail if times overlap, required fields are missing, or ownership rules block updates. Check section, subject, day, and time range, then try again.",
+				tags: ["schedule", "conflict", "save"],
+				category: "schedule"
+			},
+			{
+				id: "schedule_quick_add",
+				roles: ["teacher", "admin"],
+				question: "How can I add classes faster in timetable?",
+				answer: "Use the quick-add slots in the timetable grid. Pick the subject, verify start and end time, then apply to selected days before saving.",
+				tags: ["quick add", "timetable", "schedule"],
+				category: "schedule"
+			},
+			{
+				id: "teacher_ownership",
+				roles: ["teacher"],
+				question: "Why can I not edit another teacher's schedule?",
+				answer: "Schedule ownership rules restrict teachers to their assigned schedules. Contact an admin if reassignment is needed.",
+				tags: ["teacher", "ownership", "schedule"],
+				category: "schedule"
+			},
+			{
+				id: "password_update",
+				roles: ["student", "teacher", "admin"],
+				question: "How can I change my password?",
+				answer: "Open Settings, enter your current password, then set a new password with confirmation and save changes.",
+				tags: ["password", "settings", "account"],
+				category: "account"
+			},
+			{
+				id: "profile_update",
+				roles: ["student", "teacher", "admin"],
+				question: "How do I update my profile details?",
+				answer: "Go to Settings, edit allowed fields, and save. Some fields may be locked by system policy.",
+				tags: ["profile", "settings", "account"],
+				category: "account"
+			},
+			{
+				id: "manage_users",
+				roles: ["admin"],
+				question: "How do I manage user accounts?",
+				answer: "Go to Users from the sidebar. You can review user details, update roles, and maintain access based on school policy.",
+				tags: ["users", "admin", "roles", "accounts"],
+				category: "account"
+			},
+			{
+				id: "enrollments_manage",
+				roles: ["admin", "student"],
+				question: "Where do I check enrollment status?",
+				answer: "Open Enrollments in the sidebar to view current status and required actions for your account or managed students.",
+				tags: ["enrollment", "status", "student"],
+				category: "account"
+			},
+			{
+				id: "report_export",
+				roles: ["teacher", "admin"],
+				question: "How do I view attendance reports?",
+				answer: "Open Reports, apply your filters (period, section, subject), then run the report. Export options depend on your role and current report type.",
+				tags: ["reports", "attendance", "export"],
+				category: "attendance"
+			},
+			{
+				id: "programs_periods",
+				roles: ["admin"],
+				question: "When should I configure programs and academic periods?",
+				answer: "Set academic periods first, then programs and sections. This order keeps enrollment, schedule, and reporting consistent.",
+				tags: ["programs", "periods", "admin", "setup"],
+				category: "schedule"
+			}
+		];
+
+		function createFallbackId(index) {
+			return "faq_" + String(index + 1);
+		}
+
+		function normalizeEntry(raw, index) {
+			if (!raw || typeof raw !== "object") {
+				return null;
+			}
+
+			var roles = Array.isArray(raw.roles) && raw.roles.length
+				? raw.roles.map(function (role) { return String(role).toLowerCase(); })
+				: ["student", "teacher", "admin"];
+
+			var question = String(raw.question || "").trim();
+			var response = String(raw.answer || "").trim();
+			if (!question || !response) {
+				return null;
+			}
+
+			var category = String(raw.category || "all").trim().toLowerCase();
+			if (!category) {
+				category = "all";
+			}
+
+			var tags = Array.isArray(raw.tags)
+				? raw.tags.map(function (tag) { return String(tag).toLowerCase(); })
+				: [];
+
+			return {
+				id: String(raw.id || createFallbackId(index)),
+				roles: roles,
+				question: question,
+				answer: response,
+				tags: tags,
+				category: category
+			};
+		}
+
+		function normalizeEntries(rawItems) {
+			if (!Array.isArray(rawItems)) {
+				return [];
+			}
+
+			return rawItems
+				.map(function (item, index) {
+					return normalizeEntry(item, index);
+				})
+				.filter(function (item) {
+					return item !== null;
+				});
+		}
+
+		function loadEntries() {
+			if (!apiUrl) {
+				return Promise.resolve(normalizeEntries(fallbackEntries));
+			}
+
+			return fetch(apiUrl, {
+				method: "GET",
+				headers: {
+					Accept: "application/json"
+				},
+				credentials: "same-origin"
+			})
+				.then(function (response) {
+					if (!response.ok) {
+						throw new Error("Failed to load chat entries.");
+					}
+
+					return response.json();
+				})
+				.then(function (payload) {
+					var rawItems = Array.isArray(payload)
+						? payload
+						: payload && Array.isArray(payload.items)
+							? payload.items
+							: [];
+
+					var normalized = normalizeEntries(rawItems);
+					if (normalized.length) {
+						return normalized;
+					}
+
+					throw new Error("Empty chat data payload.");
+				})
+				.catch(function () {
+					return normalizeEntries(fallbackEntries);
+				});
+		}
+
+		function canAccess(entry) {
+			return entry.roles.indexOf(currentRole) >= 0;
+		}
+
+		function matchesCategory(entry) {
+			if (activeCategory === "all") {
+				return true;
+			}
+
+			return entry.category === activeCategory;
+		}
+
+		function matchesSearch(entry, query) {
+			if (!query) {
+				return true;
+			}
+
+			var normalized = query.toLowerCase();
+			if (entry.question.toLowerCase().indexOf(normalized) >= 0) {
+				return true;
+			}
+
+			return entry.tags.some(function (tag) {
+				return tag.indexOf(normalized) >= 0;
+			});
+		}
+
+		function getVisibleEntries() {
+			var query = searchInput ? searchInput.value.trim() : "";
+			return entries.filter(function (entry) {
+				return canAccess(entry) && matchesCategory(entry) && matchesSearch(entry, query);
+			});
+		}
+
+		function setAnswer(entry) {
+			if (!entry) {
+				answer.textContent = "No answer available.";
+				return;
+			}
+
+			activeQuestionId = entry.id;
+			answer.replaceChildren();
+
+			var questionText = document.createElement("p");
+			var questionLabel = document.createElement("strong");
+			questionLabel.textContent = "Q: ";
+			questionText.appendChild(questionLabel);
+			questionText.appendChild(document.createTextNode(entry.question));
+
+			var answerText = document.createElement("p");
+			var answerLabel = document.createElement("strong");
+			answerLabel.textContent = "A: ";
+			answerText.appendChild(answerLabel);
+			answerText.appendChild(document.createTextNode(entry.answer));
+
+			answer.appendChild(questionText);
+			answer.appendChild(answerText);
+			refreshActiveState();
+		}
+
+		function refreshActiveState() {
+			var buttons = questionList.querySelectorAll(".chat-widget-question");
+			buttons.forEach(function (button) {
+				var isActive = button.getAttribute("data-question-id") === activeQuestionId;
+				button.classList.toggle("active", isActive);
+				button.setAttribute("aria-selected", isActive ? "true" : "false");
+			});
+		}
+
+		function renderQuestions() {
+			var visible = getVisibleEntries();
+			questionList.replaceChildren();
+
+			if (!visible.length) {
+				activeQuestionId = null;
+				answer.textContent = "No predefined questions matched your search.";
+				var emptyNote = document.createElement("p");
+				emptyNote.className = "chat-widget-empty";
+				emptyNote.textContent = "No questions found.";
+				questionList.appendChild(emptyNote);
+				return;
+			}
+
+			visible.forEach(function (entry) {
+				var button = document.createElement("button");
+				button.type = "button";
+				button.className = "chat-widget-question";
+				button.setAttribute("role", "option");
+				button.setAttribute("data-question-id", entry.id);
+				button.textContent = entry.question;
+				button.addEventListener("click", function () {
+					setAnswer(entry);
+				});
+				questionList.appendChild(button);
+			});
+
+			var activeEntry = visible.find(function (entry) {
+				return entry.id === activeQuestionId;
+			});
+
+			if (!activeEntry) {
+				setAnswer(visible[0]);
+			} else {
+				refreshActiveState();
+			}
+		}
+
+		function refreshCategoryState() {
+			if (!categoryTabs) {
+				return;
+			}
+
+			var tabs = categoryTabs.querySelectorAll("[data-chat-category]");
+			tabs.forEach(function (tab) {
+				var isActive = tab.getAttribute("data-chat-category") === activeCategory;
+				tab.classList.toggle("active", isActive);
+				tab.setAttribute("aria-selected", isActive ? "true" : "false");
+			});
+		}
+
+		function openWidget() {
+			panel.hidden = false;
+			widget.setAttribute("data-widget-state", "open");
+			launcher.setAttribute("aria-expanded", "true");
+			if (searchInput) {
+				searchInput.focus();
+			}
+		}
+
+		function closeWidget() {
+			panel.hidden = true;
+			widget.setAttribute("data-widget-state", "closed");
+			launcher.setAttribute("aria-expanded", "false");
+		}
+
+		launcher.addEventListener("click", function () {
+			if (panel.hidden) {
+				openWidget();
+				return;
+			}
+
+			closeWidget();
+		});
+
+		if (closeBtn) {
+			closeBtn.addEventListener("click", closeWidget);
+		}
+
+		document.addEventListener("keydown", function (event) {
+			if (event.key === "Escape" && !panel.hidden) {
+				closeWidget();
+			}
+		});
+
+		document.addEventListener("click", function (event) {
+			if (panel.hidden) {
+				return;
+			}
+
+			var clickedInsideWidget = widget.contains(event.target);
+			if (!clickedInsideWidget) {
+				closeWidget();
+			}
+		});
+
+		if (searchInput) {
+			searchInput.addEventListener("input", renderQuestions);
+		}
+
+		if (categoryTabs) {
+			categoryTabs.addEventListener("click", function (event) {
+				var tab = event.target.closest("[data-chat-category]");
+				if (!tab) {
+					return;
+				}
+
+				activeCategory = String(tab.getAttribute("data-chat-category") || "all").toLowerCase();
+				refreshCategoryState();
+				renderQuestions();
+			});
+		}
+
+		loadEntries().then(function (loadedEntries) {
+			entries = loadedEntries;
+			refreshCategoryState();
+			renderQuestions();
+		});
+	}
+
 	// Determine whether the content area or window is the primary scroll container.
 	function getPrimaryScrollTarget() {
 		var content = document.querySelector(".content");
@@ -1219,8 +1639,6 @@
 				return;
 			}
 
-			studentLastSubmitAt = Date.now();
-
 			var token = tokenInput.value.trim();
 			if (!token) {
 				setSubmitResult("QR token is required.", "result-error");
@@ -1236,6 +1654,8 @@
 				setSubmitResult("Check-in endpoint is unavailable.", "result-error");
 				return;
 			}
+
+			studentLastSubmitAt = Date.now();
 
 			setSubmitResult("Submitting attendance...", null);
 			postApi(checkinUrl, {
@@ -1270,6 +1690,7 @@
 		restoreScrollAfterPostback();
 		initializePostbackScrollRetention();
 		initializeTimetableQuickAdd();
+		initializePredefinedChatWidget();
 		initializeTeacherQrPage();
 		initializeStudentScanPage();
 

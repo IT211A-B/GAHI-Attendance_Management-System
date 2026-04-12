@@ -65,6 +65,30 @@ public static class DependencyInjection
             options.Cookie.HttpOnly = cookieSettings.HttpOnly;
             options.Cookie.SameSite = ParseSameSite(cookieSettings.SameSite);
             options.Cookie.SecurePolicy = ParseSecurePolicy(cookieSettings.SecurePolicy);
+
+            options.Events.OnRedirectToLogin = context =>
+            {
+                if (IsQrApiRequest(context.Request))
+                {
+                    context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+                    return Task.CompletedTask;
+                }
+
+                context.Response.Redirect(context.RedirectUri);
+                return Task.CompletedTask;
+            };
+
+            options.Events.OnRedirectToAccessDenied = context =>
+            {
+                if (IsQrApiRequest(context.Request))
+                {
+                    context.Response.StatusCode = StatusCodes.Status403Forbidden;
+                    return Task.CompletedTask;
+                }
+
+                context.Response.Redirect(context.RedirectUri);
+                return Task.CompletedTask;
+            };
         });
 
         // Register generic repository pattern for data access
@@ -128,5 +152,15 @@ public static class DependencyInjection
             "sameasrequest" => CookieSecurePolicy.SameAsRequest,
             _ => CookieSecurePolicy.SameAsRequest
         };
+    }
+
+    private static bool IsQrApiRequest(HttpRequest request)
+    {
+        if (!request.Path.StartsWithSegments("/attendance/qr", out var remaining))
+        {
+            return false;
+        }
+
+        return remaining.HasValue && remaining.Value != "/";
     }
 }

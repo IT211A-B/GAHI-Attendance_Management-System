@@ -19,6 +19,13 @@
     @{
         var currentController = ViewContext.RouteData.Values["controller"]?.ToString() ?? string.Empty;
         var currentAction = ViewContext.RouteData.Values["action"]?.ToString() ?? string.Empty;
+        var currentUserRole = User.IsInRole("admin")
+            ? "admin"
+            : User.IsInRole("teacher")
+                ? "teacher"
+                : User.IsInRole("student")
+                    ? "student"
+                    : "guest";
     }
     <div class="app-shell">
         <aside class="app-sidebar">
@@ -119,6 +126,66 @@
             </main>
         </div>
     </div>
+
+    @if (User.Identity?.IsAuthenticated == true)
+    {
+        <div id="predefined-chat-widget"
+             class="chat-widget"
+             data-user-role="@currentUserRole"
+               data-chat-api-url=""
+             data-widget-state="closed">
+            <button type="button"
+                    class="chat-widget-launcher"
+                    id="chat-widget-launcher"
+                    aria-controls="chat-widget-panel"
+                    aria-expanded="false">
+                Help Chat
+            </button>
+
+            <section id="chat-widget-panel"
+                     class="chat-widget-panel"
+                     role="dialog"
+                     aria-modal="false"
+                     aria-labelledby="chat-widget-title"
+                     hidden>
+                <header class="chat-widget-header">
+                    <div>
+                        <h3 id="chat-widget-title">Quick Help</h3>
+                        <p class="chat-widget-subtitle">Tap a question and get an instant answer.</p>
+                    </div>
+                    <button type="button"
+                            class="btn-secondary chat-widget-close"
+                            data-chat-widget-close="true"
+                            aria-label="Close help chat">
+                        Close
+                    </button>
+                </header>
+
+                <label for="chat-widget-search" class="chat-widget-search-label">Find a question</label>
+                <input id="chat-widget-search"
+                       type="search"
+                       class="input-select chat-widget-search"
+                       placeholder="Attendance, schedule, account..."
+                       autocomplete="off" />
+
+                  <div id="chat-widget-categories"
+                    class="chat-widget-categories"
+                    role="tablist"
+                    aria-label="Question categories">
+                      <button type="button" class="chat-widget-tab active" role="tab" data-chat-category="all" aria-selected="true">All</button>
+                      <button type="button" class="chat-widget-tab" role="tab" data-chat-category="attendance" aria-selected="false">Attendance</button>
+                      <button type="button" class="chat-widget-tab" role="tab" data-chat-category="schedule" aria-selected="false">Schedule</button>
+                      <button type="button" class="chat-widget-tab" role="tab" data-chat-category="account" aria-selected="false">Account</button>
+                  </div>
+
+                <div id="chat-widget-question-list" class="chat-widget-question-list" role="listbox" aria-label="Predefined questions"></div>
+
+                <article id="chat-widget-answer" class="chat-widget-answer" aria-live="polite">
+                    <p>Select a question to view the predefined answer.</p>
+                </article>
+            </section>
+        </div>
+    }
 
     <script src="~/lib/jquery/dist/jquery.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/animejs@3.2.2/lib/anime.min.js"></script>
