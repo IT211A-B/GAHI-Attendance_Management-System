@@ -1,0 +1,100 @@
+@model Attendance_Management_System.Backend.ViewModels.Programs.ProgramsIndexViewModel
+@{
+    ViewData["Title"] = "Programs";
+}
+
+<section class="panel">
+    <h3>Programs</h3>
+    <p class="muted">C# MVC management of academic programs and course codes.</p>
+
+    @if (TempData["ProgramsSuccess"] is string successMessage)
+    {
+        <p class="status-pill active">@successMessage</p>
+    }
+
+    @if (TempData["ProgramsError"] is string errorMessage)
+    {
+        <p class="form-validation">@errorMessage</p>
+    }
+
+    <article class="panel">
+        <h3>Create Program</h3>
+        <form asp-controller="Programs" asp-action="Create" method="post" class="filters-grid three">
+            @Html.AntiForgeryToken()
+            <div asp-validation-summary="ModelOnly" class="form-validation"></div>
+
+            <div>
+                <label asp-for="CreateForm.Code"></label>
+                <input asp-for="CreateForm.Code" class="input-select" />
+                <span asp-validation-for="CreateForm.Code" class="field-validation"></span>
+            </div>
+            <div>
+                <label asp-for="CreateForm.Name"></label>
+                <input asp-for="CreateForm.Name" class="input-select" />
+                <span asp-validation-for="CreateForm.Name" class="field-validation"></span>
+            </div>
+            <div>
+                <label asp-for="CreateForm.Description"></label>
+                <input asp-for="CreateForm.Description" class="input-select" />
+                <span asp-validation-for="CreateForm.Description" class="field-validation"></span>
+            </div>
+
+            <button type="submit" class="btn-primary btn-inline">Create Program</button>
+        </form>
+    </article>
+
+    @if (!string.IsNullOrWhiteSpace(Model.ErrorMessage))
+    {
+        <p class="form-validation">@Model.ErrorMessage</p>
+    }
+    else if (!Model.Programs.Any())
+    {
+        <p class="footer-note">No programs found.</p>
+    }
+    else
+    {
+        <div class="table-wrap">
+            <table class="app-table">
+                <thead>
+                    <tr>
+                        <th>Code</th>
+                        <th>Name</th>
+                        <th>Description</th>
+                        <th>Created</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var item in Model.Programs)
+                    {
+                        <tr>
+                            <td><span class="role-pill">@item.Code</span></td>
+                            <td>@item.Name</td>
+                            <td>@item.Description</td>
+                            <td>@item.CreatedAt</td>
+                            <td>
+                                <div class="action-stack">
+                                    <form asp-controller="Programs" asp-action="Update" asp-route-id="@item.Id" method="post" class="stack-form">
+                                        @Html.AntiForgeryToken()
+                                        <input type="text" name="UpdateForm.Code" value="@item.Code" class="input-select compact-input" placeholder="Code" />
+                                        <input type="text" name="UpdateForm.Name" value="@item.Name" class="input-select compact-input" placeholder="Name" />
+                                        <input type="text" name="UpdateForm.Description" value="@(item.Description == "-" ? string.Empty : item.Description)" class="input-select compact-input" placeholder="Description" />
+                                        <button type="submit" class="btn-secondary">Save</button>
+                                    </form>
+                                    <form asp-controller="Programs" asp-action="Delete" asp-route-id="@item.Id" method="post" class="inline-form">
+                                        @Html.AntiForgeryToken()
+                                        <button type="submit" class="btn-danger">Delete</button>
+                                    </form>
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</section>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}
