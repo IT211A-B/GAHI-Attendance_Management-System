@@ -1,45 +1,85 @@
+@model Attendance_Management_System.Backend.ViewModels.Attendance.AttendanceQrPageViewModel
 @{
     ViewData["Title"] = "Attendance QR";
+    var sectionsUrl = Url.Action("SearchQrSections", "AttendanceManagement") ?? "/attendance/qr/options/sections";
+    var subjectsUrl = Url.Action("SearchQrSubjects", "AttendanceManagement") ?? "/attendance/qr/options/subjects";
+    var periodsUrl = Url.Action("SearchQrPeriods", "AttendanceManagement") ?? "/attendance/qr/options/periods";
+    var createSessionUrl = Url.Action("CreateQrSession", "AttendanceManagement") ?? "/attendance/qr/sessions";
+    var refreshSessionUrlTemplate = Url.Action("RefreshQrSession", "AttendanceManagement", new { sessionId = "__SESSION__" }) ?? "/attendance/qr/sessions/__SESSION__/refresh";
+    var closeSessionUrlTemplate = Url.Action("CloseQrSession", "AttendanceManagement", new { sessionId = "__SESSION__" }) ?? "/attendance/qr/sessions/__SESSION__/close";
+    var feedUrlTemplate = Url.Action("GetQrSessionCheckins", "AttendanceManagement", new { sessionId = "__SESSION__" }) ??
+"/attendance/qr/sessions/__SESSION__/checkins";
 }
 
-<section class="panel attendance-qr-page" data-attendance-qr-page="teacher">
+<section class="panel attendance-qr-page" data-attendance-qr-page="teacher" data-sections-url="@sectionsUrl"
+         data-subjects-url="@subjectsUrl" data-periods-url="@periodsUrl" data-create-session-url="@createSessionUrl"
+         data-refresh-session-url-template="@refreshSessionUrlTemplate" data-close-session-url-template="@closeSessionUrlTemplate"
+         data-feed-url-template="@feedUrlTemplate"
+         data-feed-poll-seconds="@Model.LiveFeedPollSeconds" data-refresh-threshold-seconds="@Model.RefreshThresholdSeconds">
     <h3>Teacher QR Attendance</h3>
     <p class="muted">
-        Generate a short-lived QR for the active class period. Students scan and submit attendance for this period only.
+        Search from your assigned sections. Subject and period options are limited to your owned schedules for today,
+        then generate a short-lived QR for that locked class time.
     </p>
 
-    <div class="filters-grid three">
-        <div>
-            <label for="qr-section-code">Section</label>
-            <input id="qr-section-code" class="input-select" type="text" maxlength="64" value="11-STEM-A" />
+    <div class="filters-grid three qr-filter-grid">
+        <div class="qr-typeahead">
+            <label for="qr-section-search">Section</label>
+            <input id="qr-section-search" class="input-select" type="text" maxlength="120" autocomplete="off"
+                   placeholder="Search assigned section (all assignments)" />
+            <input id="qr-section-id" type="hidden" />
+            <div id="qr-section-suggestions" class="qr-suggestions" role="listbox" aria-label="Section suggestions">
+            </div>
+            <p class="field-helper compact">Shows all sections assigned to your account.</p>
         </div>
-        <div>
-            <label for="qr-subject-code">Subject</label>
-            <input id="qr-subject-code" class="input-select" type="text" maxlength="64" value="MATH101" />
+
+        <div class="qr-typeahead">
+            <label for="qr-subject-search">Subject</label>
+            <input id="qr-subject-search" class="input-select" type="text" maxlength="120" autocomplete="off"
+                   placeholder="Search owned subject for today" disabled />
+            <input id="qr-subject-id" type="hidden" />
+            <div id="qr-subject-suggestions" class="qr-suggestions" role="listbox" aria-label="Subject suggestions">
+            </div>
         </div>
-        <div>
-            <label for="qr-period-label">Period</label>
-            <input id="qr-period-label" class="input-select" type="text" maxlength="64" value="08:00-09:00" />
+
+        <div class="qr-typeahead">
+            <label for="qr-period-search">Period</label>
+            <input id="qr-period-search" class="input-select" type="text" maxlength="120" autocomplete="off"
+                   placeholder="Select matching period" disabled />
+            <input id="qr-schedule-id" type="hidden" />
+            <div id="qr-period-suggestions" class="qr-suggestions" role="listbox" aria-label="Period suggestions"></div>
         </div>
     </div>
 
+    <article class="qr-time-lock-card">
+        <h4>Locked Time</h4>
+        <p id="qr-time-range" class="footer-note">Select a period to lock class time.</p>
+    </article>
+
     <div class="row-actions">
-        <button type="button" class="btn-primary" id="qr-generate-btn">Generate QR</button>
+        <button type="button" class="btn-primary" id="qr-generate-btn" disabled>Generate QR</button>
         <button type="button" class="btn-secondary" id="qr-reset-btn">Reset Session</button>
     </div>
 
     <section class="grid-2 compact-gap attendance-qr-grid">
         <article class="panel qr-panel">
             <h4>Active QR</h4>
-            <p id="qr-status" class="footer-note">Generate a session to display QR.</p>
-            <div id="qr-render-target" class="qr-render-target" aria-live="polite"></div>
-            <p class="footer-note"><strong>Session:</strong> <span id="qr-session-id">-</span></p>
+            <p id="qr-status" class="footer-note">Search section, subject, and period to generate a session.</p>
+            <div class="qr-active-layout">
+                <div id="qr-render-target" class="qr-render-target" aria-live="polite"></div>
+                <article class="qr-token-card">
+                    <h5>QR Token</h5>
+                    <textarea id="qr-token-value" class="qr-token-value input-select" rows="9" readonly
+                              aria-label="Active QR token"></textarea>
+                </article>
+            </div>
+            <p class="footer-note"><strong>Session ID:</strong> <span id="qr-session-id">-</span></p>
             <p class="footer-note"><strong>Expires In:</strong> <span id="qr-countdown">-</span></p>
         </article>
 
         <article class="panel">
             <h4>Live Check-ins</h4>
-            <p class="footer-note">Updates every second for this demo frontend session.</p>
+            <p class="footer-note">Auto-updates while the session is active.</p>
             <div class="table-wrap">
                 <table class="app-table">
                     <thead>
@@ -47,11 +87,12 @@
                             <th>Student ID</th>
                             <th>Student Name</th>
                             <th>Scanned At</th>
+                            <th>Status</th>
                         </tr>
                     </thead>
                     <tbody id="qr-checkins-body">
                         <tr>
-                            <td colspan="3" class="muted">No check-ins yet.</td>
+                            <td colspan="4" class="muted">No check-ins yet.</td>
                         </tr>
                     </tbody>
                 </table>

@@ -25,6 +25,8 @@ public class AppDbContext : IdentityDbContext<User, IdentityRole<int>, int>
     public DbSet<Schedule> Schedules { get; set; } = null!;
     public DbSet<Attendance> Attendances { get; set; } = null!;
     public DbSet<AttendanceAudit> AttendanceAudits { get; set; } = null!;
+    public DbSet<AttendanceQrSession> AttendanceQrSessions { get; set; } = null!;
+    public DbSet<AttendanceQrCheckin> AttendanceQrCheckins { get; set; } = null!;
     public DbSet<Enrollment> Enrollments { get; set; } = null!;
     public DbSet<AttendanceReport> AttendanceReports { get; set; } = null!;
 
@@ -315,6 +317,75 @@ public class AppDbContext : IdentityDbContext<User, IdentityRole<int>, int>
                 .WithMany()
                 .HasForeignKey(r => r.GeneratedBy)
                 .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        // QR attendance session configuration
+        modelBuilder.Entity<AttendanceQrSession>(entity =>
+        {
+            entity.Property(session => session.SessionId)
+                .IsRequired()
+                .HasMaxLength(64);
+
+            entity.Property(session => session.TokenNonce)
+                .IsRequired()
+                .HasMaxLength(64);
+
+            entity.HasIndex(session => session.SessionId)
+                .IsUnique();
+
+            entity.HasIndex(session => new { session.OwnerTeacherId, session.IsActive, session.ExpiresAtUtc });
+
+            entity.HasOne(session => session.Section)
+                .WithMany()
+                .HasForeignKey(session => session.SectionId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(session => session.Schedule)
+                .WithMany()
+                .HasForeignKey(session => session.ScheduleId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(session => session.Subject)
+                .WithMany()
+                .HasForeignKey(session => session.SubjectId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(session => session.Creator)
+                .WithMany()
+                .HasForeignKey(session => session.CreatedByUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasMany(session => session.Checkins)
+                .WithOne(checkin => checkin.Session)
+                .HasForeignKey(checkin => checkin.AttendanceQrSessionId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // QR attendance check-in configuration
+        modelBuilder.Entity<AttendanceQrCheckin>(entity =>
+        {
+            entity.Property(checkin => checkin.Status)
+                .IsRequired()
+                .HasMaxLength(16);
+
+            entity.HasIndex(checkin => new { checkin.AttendanceQrSessionId, checkin.StudentId })
+                .IsUnique();
+
+            entity.HasIndex(checkin => new { checkin.AttendanceQrSessionId, checkin.CheckedInAtUtc });
+
+            entity.ToTable(table => table.HasCheckConstraint(
+                "CK_AttendanceQrCheckin_Status",
+                "\"Status\" IN ('present', 'late')"));
+
+            entity.HasOne(checkin => checkin.Student)
+                .WithMany()
+                .HasForeignKey(checkin => checkin.StudentId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(checkin => checkin.Attendance)
+                .WithMany()
+                .HasForeignKey(checkin => checkin.AttendanceId)
+                .OnDelete(DeleteBehavior.SetNull);
         });
     }
 }

@@ -374,53 +374,8 @@
 		});
 	}
 
-	var qrSessionStorageKey = "ams.qr.active-session";
-	var qrCheckinPrefix = "ams.qr.checkins.";
-	var qrSessionTtlSeconds = 90;
 	var studentSubmitCooldownMs = 2000;
 	var studentLastSubmitAt = 0;
-
-	function makeGuidLikeId(prefix) {
-		if (window.crypto && typeof window.crypto.randomUUID === "function") {
-			return prefix + window.crypto.randomUUID();
-		}
-
-		return prefix + String(Date.now()) + "-" + String(Math.random()).slice(2, 11);
-	}
-
-	function encodeBase64Url(value) {
-		var input = typeof value === "string" ? value : String(value || "");
-		var utf8 = new TextEncoder().encode(input);
-		var binary = "";
-		for (var i = 0; i < utf8.length; i += 1) {
-			binary += String.fromCharCode(utf8[i]);
-		}
-
-		return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
-	}
-
-	function decodeBase64Url(encoded) {
-		var normalized = String(encoded || "").replace(/-/g, "+").replace(/_/g, "/");
-		while (normalized.length % 4 !== 0) {
-			normalized += "=";
-		}
-
-		var binary = atob(normalized);
-		var bytes = new Uint8Array(binary.length);
-		for (var i = 0; i < binary.length; i += 1) {
-			bytes[i] = binary.charCodeAt(i);
-		}
-
-		return new TextDecoder().decode(bytes);
-	}
-
-	function stringifyJsonSafe(data) {
-		try {
-			return JSON.stringify(data);
-		} catch (error) {
-			return "";
-		}
-	}
 
 	function parseJsonSafe(data) {
 		if (!data) {
@@ -434,135 +389,157 @@
 		}
 	}
 
-	function buildSessionToken(payload) {
-		return encodeBase64Url(stringifyJsonSafe(payload));
+	function debounce(callback, waitMs) {
+		var timeoutId = 0;
+		return function () {
+			var args = arguments;
+			window.clearTimeout(timeoutId);
+			timeoutId = window.setTimeout(function () {
+				callback.apply(null, args);
+			}, waitMs);
+		};
 	}
 
-	function parseSessionToken(token) {
-		if (!token) {
-			return null;
+	function makeApiUrl(baseUrl, queryParams) {
+		var url = new URL(baseUrl, window.location.origin);
+		if (!queryParams) {
+			return url.toString();
 		}
 
-		try {
-			var decoded = decodeBase64Url(token.trim());
-			var parsed = parseJsonSafe(decoded);
-			return parsed && typeof parsed === "object" ? parsed : null;
-		} catch (error) {
-			return null;
-		}
-	}
-
-	function saveActiveQrSession(session) {
-		try {
-			localStorage.setItem(qrSessionStorageKey, stringifyJsonSafe(session));
-		} catch (error) {
-			// Ignore storage write failures in private browsing contexts.
-		}
-	}
-
-	function getActiveQrSession() {
-		var raw;
-		try {
-			raw = localStorage.getItem(qrSessionStorageKey);
-		} catch (error) {
-			return null;
-		}
-
-		var parsed = parseJsonSafe(raw);
-		if (!parsed || typeof parsed !== "object") {
-			return null;
-		}
-
-		if (typeof parsed.expiresAt !== "number" || Date.now() > parsed.expiresAt) {
-			return null;
-		}
-
-		return parsed;
-	}
-
-	function clearQrState() {
-		var active = getActiveQrSession();
-		try {
-			localStorage.removeItem(qrSessionStorageKey);
-			if (active && active.sessionId) {
-				localStorage.removeItem(qrCheckinPrefix + active.sessionId);
+		Object.keys(queryParams).forEach(function (key) {
+			var rawValue = queryParams[key];
+			if (rawValue === null || rawValue === undefined) {
+				return;
 			}
-		} catch (error) {
-			// Ignore storage cleanup failures.
-		}
+
+			var textValue = String(rawValue).trim();
+			if (!textValue.length) {
+				return;
+			}
+
+			url.searchParams.set(key, textValue);
+		});
+
+		return url.toString();
 	}
 
-	function getCheckinsForSession(sessionId) {
-		if (!sessionId) {
-			return [];
+	function requestApi(method, url, body) {
+		var options = {
+			method: method,
+			headers: {
+				Accept: "application/json"
+			}
+		};
+
+		if (body !== undefined) {
+			options.headers["Content-Type"] = "application/json";
+			options.body = JSON.stringify(body);
 		}
 
-		var raw;
-		try {
-			raw = localStorage.getItem(qrCheckinPrefix + sessionId);
-		} catch (error) {
-			return [];
-		}
+		return window.fetch(url, options)
+			.then(function (response) {
+				return response.text().then(function (rawText) {
+					var payload = parseJsonSafe(rawText);
+					if (response.ok && payload && payload.success === true) {
+						return {
+							ok: true,
+							data: payload.data,
+							status: response.status,
+							payload: payload
+						};
+					}
 
-		var parsed = parseJsonSafe(raw);
-		if (!Array.isArray(parsed)) {
-			return [];
-		}
+					var errorCode = payload && payload.error && payload.error.code ? payload.error.code : "BAD_REQUEST";
+					var message = payload && payload.error && payload.error.message
+						? payload.error.message
+						: "Request failed.";
 
-		return parsed
-			.filter(function (item) {
-				return item && typeof item.studentId === "string" && typeof item.studentName === "string" && typeof item.scannedAt === "number";
+					return {
+						ok: false,
+						errorCode: errorCode,
+						message: message,
+						status: response.status,
+						payload: payload
+					};
+				});
 			})
-			.sort(function (a, b) {
-				return b.scannedAt - a.scannedAt;
+			.catch(function () {
+				return {
+					ok: false,
+					errorCode: "NETWORK_ERROR",
+					message: "Unable to connect to the server right now.",
+					status: 0,
+					payload: null
+				};
 			});
 	}
 
-	function saveCheckinsForSession(sessionId, checkins) {
-		if (!sessionId) {
+	function getApi(url) {
+		return requestApi("GET", url);
+	}
+
+	function postApi(url, body) {
+		return requestApi("POST", url, body);
+	}
+
+	function closeSuggestionBox(container) {
+		if (!container) {
 			return;
 		}
 
-		try {
-			localStorage.setItem(qrCheckinPrefix + sessionId, stringifyJsonSafe(checkins || []));
-		} catch (error) {
-			// Ignore storage write failures in restricted environments.
+		container.classList.remove("is-open");
+		container.innerHTML = "";
+	}
+
+	function renderSuggestionBox(container, items, labelResolver, selectHandler, emptyMessage) {
+		if (!container) {
+			return;
 		}
+
+		container.innerHTML = "";
+
+		if (!Array.isArray(items) || !items.length) {
+			var emptyText = document.createElement("p");
+			emptyText.className = "qr-suggestion-empty";
+			emptyText.textContent = emptyMessage;
+			container.appendChild(emptyText);
+			container.classList.add("is-open");
+			return;
+		}
+
+		items.forEach(function (item) {
+			var button = document.createElement("button");
+			button.type = "button";
+			button.className = "qr-suggestion";
+			button.textContent = labelResolver(item);
+			button.addEventListener("click", function () {
+				selectHandler(item);
+			});
+			container.appendChild(button);
+		});
+
+		container.classList.add("is-open");
 	}
 
-	function createQrSession(sectionCode, subjectCode, periodLabel) {
-		var normalizedSection = String(sectionCode || "").trim();
-		var normalizedSubject = String(subjectCode || "").trim();
-		var normalizedPeriod = String(periodLabel || "").trim();
+	function buildSessionUrl(template, sessionId) {
+		if (!template) {
+			return "";
+		}
 
-		var expiresAt = Date.now() + qrSessionTtlSeconds * 1000;
-		var payload = {
-			version: 1,
-			sessionId: makeGuidLikeId("sess_"),
-			sectionCode: normalizedSection,
-			subjectCode: normalizedSubject,
-			periodLabel: normalizedPeriod,
-			issuedAt: Date.now(),
-			expiresAt: expiresAt,
-			nonce: makeGuidLikeId("n_")
-		};
-
-		payload.token = buildSessionToken(payload);
-		saveActiveQrSession(payload);
-		saveCheckinsForSession(payload.sessionId, []);
-		return payload;
+		return template.replace("__SESSION__", encodeURIComponent(sessionId));
 	}
 
-	function renderCheckinsTable(tbody, checkins) {
+	function renderTeacherCheckinsTable(tbody, checkins) {
 		if (!tbody) {
 			return;
 		}
 
-		if (!checkins.length) {
-			tbody.innerHTML = "";
+		tbody.innerHTML = "";
+
+		if (!Array.isArray(checkins) || !checkins.length) {
 			var emptyRow = document.createElement("tr");
 			var emptyCell = document.createElement("td");
-			emptyCell.colSpan = 3;
+			emptyCell.colSpan = 4;
 			emptyCell.className = "muted";
 			emptyCell.textContent = "No check-ins yet.";
 			emptyRow.appendChild(emptyCell);
@@ -570,22 +547,32 @@
 			return;
 		}
 
-		tbody.innerHTML = "";
 		checkins.forEach(function (entry) {
 			var row = document.createElement("tr");
 
-			var idCell = document.createElement("td");
-			idCell.textContent = entry.studentId;
+			var studentIdCell = document.createElement("td");
+			studentIdCell.textContent = entry.studentNumber || String(entry.studentId || "-");
 
 			var nameCell = document.createElement("td");
-			nameCell.textContent = entry.studentName;
+			nameCell.textContent = entry.studentName || "Unknown student";
 
-			var scannedCell = document.createElement("td");
-			scannedCell.textContent = new Date(entry.scannedAt).toLocaleTimeString();
+			var checkedAtCell = document.createElement("td");
+			var checkedAt = entry.checkedInAtUtc ? new Date(entry.checkedInAtUtc) : null;
+			checkedAtCell.textContent = checkedAt && !Number.isNaN(checkedAt.getTime())
+				? checkedAt.toLocaleTimeString()
+				: "-";
 
-			row.appendChild(idCell);
+			var statusCell = document.createElement("td");
+			var statusPill = document.createElement("span");
+			var normalizedStatus = String(entry.status || "present").toLowerCase();
+			statusPill.className = "qr-status-pill " + (normalizedStatus === "late" ? "late" : "present");
+			statusPill.textContent = normalizedStatus === "late" ? "Late" : "Present";
+			statusCell.appendChild(statusPill);
+
+			row.appendChild(studentIdCell);
 			row.appendChild(nameCell);
-			row.appendChild(scannedCell);
+			row.appendChild(checkedAtCell);
+			row.appendChild(statusCell);
 			tbody.appendChild(row);
 		});
 	}
@@ -596,102 +583,510 @@
 			return;
 		}
 
-		var sectionInput = document.getElementById("qr-section-code");
-		var subjectInput = document.getElementById("qr-subject-code");
-		var periodInput = document.getElementById("qr-period-label");
+		var sectionsUrl = page.getAttribute("data-sections-url") || "";
+		var subjectsUrl = page.getAttribute("data-subjects-url") || "";
+		var periodsUrl = page.getAttribute("data-periods-url") || "";
+		var createSessionUrl = page.getAttribute("data-create-session-url") || "";
+		var refreshSessionUrlTemplate = page.getAttribute("data-refresh-session-url-template") || "";
+		var closeSessionUrlTemplate = page.getAttribute("data-close-session-url-template") || "";
+		var feedUrlTemplate = page.getAttribute("data-feed-url-template") || "";
+
+		var configuredFeedPollSeconds = parseInt(page.getAttribute("data-feed-poll-seconds") || "3", 10);
+		if (Number.isNaN(configuredFeedPollSeconds) || configuredFeedPollSeconds < 1) {
+			configuredFeedPollSeconds = 3;
+		}
+
+		var configuredRefreshThresholdSeconds = parseInt(page.getAttribute("data-refresh-threshold-seconds") || "10", 10);
+		if (Number.isNaN(configuredRefreshThresholdSeconds) || configuredRefreshThresholdSeconds < 2) {
+			configuredRefreshThresholdSeconds = 10;
+		}
+
+		var sectionInput = document.getElementById("qr-section-search");
+		var sectionIdInput = document.getElementById("qr-section-id");
+		var sectionSuggestions = document.getElementById("qr-section-suggestions");
+		var subjectInput = document.getElementById("qr-subject-search");
+		var subjectIdInput = document.getElementById("qr-subject-id");
+		var subjectSuggestions = document.getElementById("qr-subject-suggestions");
+		var periodInput = document.getElementById("qr-period-search");
+		var scheduleIdInput = document.getElementById("qr-schedule-id");
+		var periodSuggestions = document.getElementById("qr-period-suggestions");
+		var timeRangeText = document.getElementById("qr-time-range");
 		var generateBtn = document.getElementById("qr-generate-btn");
 		var resetBtn = document.getElementById("qr-reset-btn");
 		var statusText = document.getElementById("qr-status");
 		var sessionText = document.getElementById("qr-session-id");
 		var countdownText = document.getElementById("qr-countdown");
 		var qrTarget = document.getElementById("qr-render-target");
+		var tokenValue = document.getElementById("qr-token-value");
 		var checkinsBody = document.getElementById("qr-checkins-body");
 
-		if (!sectionInput || !subjectInput || !periodInput || !generateBtn || !resetBtn || !statusText || !sessionText || !countdownText || !qrTarget || !checkinsBody) {
+		if (!sectionInput || !sectionIdInput || !sectionSuggestions
+			|| !subjectInput || !subjectIdInput || !subjectSuggestions
+			|| !periodInput || !scheduleIdInput || !periodSuggestions
+			|| !timeRangeText || !generateBtn || !resetBtn
+			|| !statusText || !sessionText || !countdownText || !qrTarget || !tokenValue || !checkinsBody) {
 			return;
 		}
 
+		var selectedSection = null;
+		var selectedSubject = null;
+		var selectedPeriod = null;
 		var activeSession = null;
+		var refreshInFlight = false;
+		var countdownTimerId = 0;
+		var feedTimerId = 0;
 
-		function updateTeacherUi(session) {
-			activeSession = session;
+		function setStatus(message) {
+			statusText.textContent = message;
+		}
 
-			if (!session) {
-				statusText.textContent = "Generate a session to display QR.";
-				sessionText.textContent = "-";
-				countdownText.textContent = "-";
-				qrTarget.innerHTML = "";
-				renderCheckinsTable(checkinsBody, []);
-				return;
+		function setGenerateState() {
+			generateBtn.disabled = !(selectedSection && selectedSubject && selectedPeriod);
+		}
+
+		function stopSessionTimers() {
+			if (countdownTimerId) {
+				window.clearInterval(countdownTimerId);
+				countdownTimerId = 0;
 			}
 
-			statusText.textContent = "Session active for " + session.sectionCode + " / " + session.subjectCode + " (" + session.periodLabel + ").";
-			sessionText.textContent = session.sessionId;
+			if (feedTimerId) {
+				window.clearInterval(feedTimerId);
+				feedTimerId = 0;
+			}
+		}
 
+		function renderQrToken(token) {
 			qrTarget.innerHTML = "";
-			if (window.QRCode) {
-				new window.QRCode(qrTarget, {
-					text: session.token,
-					width: 230,
-					height: 230,
-					correctLevel: window.QRCode.CorrectLevel.M
-				});
-			} else {
+
+			if (!token) {
+				return;
+			}
+
+			if (!window.QRCode) {
 				qrTarget.textContent = "QR library failed to load.";
-			}
-
-			renderCheckinsTable(checkinsBody, getCheckinsForSession(session.sessionId));
-		}
-
-		function regenerateIfExpired() {
-			if (!activeSession) {
 				return;
 			}
 
-			var remainingSeconds = Math.max(0, Math.floor((activeSession.expiresAt - Date.now()) / 1000));
-			countdownText.textContent = remainingSeconds + "s";
+			new window.QRCode(qrTarget, {
+				text: token,
+				width: 230,
+				height: 230,
+				correctLevel: window.QRCode.CorrectLevel.M
+			});
+		}
 
-			renderCheckinsTable(checkinsBody, getCheckinsForSession(activeSession.sessionId));
+		function renderQrTokenValue(token) {
+			tokenValue.value = token || "";
+		}
 
-			if (remainingSeconds > 0) {
+		function clearActiveSession(statusMessage) {
+			activeSession = null;
+			refreshInFlight = false;
+			stopSessionTimers();
+			sessionText.textContent = "-";
+			countdownText.textContent = "-";
+			renderQrToken("");
+			renderQrTokenValue("");
+			renderTeacherCheckinsTable(checkinsBody, []);
+			if (statusMessage) {
+				setStatus(statusMessage);
+			}
+		}
+
+		function setSection(selection) {
+			selectedSection = selection;
+			sectionIdInput.value = selection ? String(selection.sectionId) : "";
+
+			if (selection) {
+				sectionInput.value = selection.sectionName;
+			}
+
+			closeSuggestionBox(sectionSuggestions);
+
+			selectedSubject = null;
+			subjectIdInput.value = "";
+			subjectInput.value = "";
+			subjectInput.disabled = !selection;
+			closeSuggestionBox(subjectSuggestions);
+
+			selectedPeriod = null;
+			scheduleIdInput.value = "";
+			periodInput.value = "";
+			periodInput.disabled = true;
+			timeRangeText.textContent = "Select a period to lock class time.";
+			closeSuggestionBox(periodSuggestions);
+
+			setGenerateState();
+		}
+
+		function setSubject(selection) {
+			selectedSubject = selection;
+			subjectIdInput.value = selection ? String(selection.subjectId) : "";
+
+			if (selection) {
+				subjectInput.value = selection.label || selection.subjectName;
+			}
+
+			closeSuggestionBox(subjectSuggestions);
+
+			selectedPeriod = null;
+			scheduleIdInput.value = "";
+			periodInput.value = "";
+			periodInput.disabled = !selection;
+			timeRangeText.textContent = "Select a period to lock class time.";
+			closeSuggestionBox(periodSuggestions);
+
+			setGenerateState();
+		}
+
+		function setPeriod(selection) {
+			selectedPeriod = selection;
+			scheduleIdInput.value = selection ? String(selection.scheduleId) : "";
+
+			if (selection) {
+				periodInput.value = selection.label;
+				timeRangeText.textContent = selection.dayName + " | " + selection.timeRangeLabel;
+			} else {
+				timeRangeText.textContent = "Select a period to lock class time.";
+			}
+
+			closeSuggestionBox(periodSuggestions);
+			setGenerateState();
+		}
+
+		function disableQrInputs(message) {
+			sectionInput.disabled = true;
+			subjectInput.disabled = true;
+			periodInput.disabled = true;
+			generateBtn.disabled = true;
+			setStatus(message || "QR controls are unavailable for this account.");
+		}
+
+		function loadSectionSuggestions(queryText) {
+			if (!sectionsUrl) {
+				disableQrInputs("Section suggestion endpoint is unavailable.");
 				return;
 			}
 
-			var rotated = createQrSession(activeSession.sectionCode, activeSession.subjectCode, activeSession.periodLabel);
-			updateTeacherUi(rotated);
+			var url = makeApiUrl(sectionsUrl, {
+				q: queryText,
+				take: 8
+			});
+
+			getApi(url).then(function (result) {
+				if (!result.ok) {
+					if (result.errorCode === "FORBIDDEN") {
+						disableQrInputs(result.message);
+					}
+					closeSuggestionBox(sectionSuggestions);
+					return;
+				}
+
+				renderSuggestionBox(
+					sectionSuggestions,
+					Array.isArray(result.data) ? result.data : [],
+					function (item) { return item.sectionName; },
+					function (item) {
+						setSection(item);
+						subjectInput.focus();
+					},
+					"No matching sections found."
+				);
+			});
 		}
+
+		function loadSubjectSuggestions(queryText) {
+			if (!subjectsUrl || !selectedSection) {
+				closeSuggestionBox(subjectSuggestions);
+				return;
+			}
+
+			var url = makeApiUrl(subjectsUrl, {
+				sectionId: selectedSection.sectionId,
+				q: queryText,
+				take: 8
+			});
+
+			getApi(url).then(function (result) {
+				if (!result.ok) {
+					closeSuggestionBox(subjectSuggestions);
+					return;
+				}
+
+				var subjectResults = Array.isArray(result.data) ? result.data : [];
+				var normalizedQueryText = (queryText || "").trim();
+
+				if (!activeSession && subjectResults.length === 0 && !normalizedQueryText) {
+					setStatus("No owned subjects are scheduled today for " + selectedSection.sectionName + ". Choose another section or check your timetable.");
+				}
+
+				renderSuggestionBox(
+					subjectSuggestions,
+					subjectResults,
+					function (item) { return item.label || item.subjectName; },
+					function (item) {
+						setSubject(item);
+						periodInput.focus();
+					},
+					"No matching subjects found for today."
+				);
+			});
+		}
+
+		function loadPeriodSuggestions(queryText) {
+			if (!periodsUrl || !selectedSection || !selectedSubject) {
+				closeSuggestionBox(periodSuggestions);
+				return;
+			}
+
+			var url = makeApiUrl(periodsUrl, {
+				sectionId: selectedSection.sectionId,
+				subjectId: selectedSubject.subjectId,
+				q: queryText,
+				take: 8
+			});
+
+			getApi(url).then(function (result) {
+				if (!result.ok) {
+					closeSuggestionBox(periodSuggestions);
+					return;
+				}
+
+				var periodResults = Array.isArray(result.data) ? result.data : [];
+				var normalizedQueryText = (queryText || "").trim();
+
+				if (!activeSession && periodResults.length === 0 && !normalizedQueryText) {
+					setStatus("No owned periods are available today for the selected section and subject.");
+				}
+
+				renderSuggestionBox(
+					periodSuggestions,
+					periodResults,
+					function (item) { return item.label; },
+					function (item) {
+						setPeriod(item);
+					},
+					"No matching periods found for today."
+				);
+			});
+		}
+
+		function fetchLiveCheckins() {
+			if (!activeSession || !feedUrlTemplate) {
+				return;
+			}
+
+			var url = buildSessionUrl(feedUrlTemplate, activeSession.sessionId);
+			getApi(url).then(function (result) {
+				if (!result.ok || !result.data) {
+					return;
+				}
+
+				renderTeacherCheckinsTable(checkinsBody, result.data.checkins || []);
+			});
+		}
+
+		function startSessionTimers() {
+			stopSessionTimers();
+
+			countdownTimerId = window.setInterval(function () {
+				if (!activeSession) {
+					countdownText.textContent = "-";
+					return;
+				}
+
+				var remainingSeconds = Math.max(0, Math.floor((activeSession.expiresAtMs - Date.now()) / 1000));
+				countdownText.textContent = remainingSeconds + "s";
+
+				var refreshThreshold = activeSession.refreshAfterSeconds || configuredRefreshThresholdSeconds;
+				if (remainingSeconds <= 0) {
+					refreshSession(true);
+					return;
+				}
+
+				if (remainingSeconds <= refreshThreshold) {
+					refreshSession(false);
+				}
+			}, 1000);
+
+			feedTimerId = window.setInterval(function () {
+				fetchLiveCheckins();
+			}, configuredFeedPollSeconds * 1000);
+		}
+
+		function applySession(sessionDto) {
+			activeSession = {
+				sessionId: sessionDto.sessionId,
+				token: sessionDto.token,
+				expiresAtMs: new Date(sessionDto.expiresAtUtc).getTime(),
+				refreshAfterSeconds: sessionDto.refreshAfterSeconds || configuredRefreshThresholdSeconds,
+				sectionName: sessionDto.sectionName || "-",
+				subjectLabel: sessionDto.subjectLabel || "-",
+				periodLabel: sessionDto.periodLabel || "-",
+				timeRangeLabel: sessionDto.timeRangeLabel || "-"
+			};
+
+			sessionText.textContent = activeSession.sessionId;
+			renderQrToken(activeSession.token);
+			renderQrTokenValue(activeSession.token);
+			renderTeacherCheckinsTable(checkinsBody, []);
+			refreshInFlight = false;
+			startSessionTimers();
+			fetchLiveCheckins();
+		}
+
+		function refreshSession(forceWhenExpired) {
+			if (!activeSession || refreshInFlight || !refreshSessionUrlTemplate) {
+				return;
+			}
+
+			refreshInFlight = true;
+			var url = buildSessionUrl(refreshSessionUrlTemplate, activeSession.sessionId);
+
+			postApi(url, {})
+				.then(function (result) {
+					refreshInFlight = false;
+					if (!result.ok || !result.data) {
+						if (forceWhenExpired) {
+							clearActiveSession(result.message || "Session expired. Generate a new QR.");
+						}
+						return;
+					}
+
+					applySession(result.data);
+					setStatus("QR refreshed for " + activeSession.sectionName + " / " + activeSession.subjectLabel + ".");
+				});
+		}
+
+		var debouncedSectionSearch = debounce(function () {
+			loadSectionSuggestions(sectionInput.value.trim());
+		}, 220);
+
+		var debouncedSubjectSearch = debounce(function () {
+			loadSubjectSuggestions(subjectInput.value.trim());
+		}, 220);
+
+		var debouncedPeriodSearch = debounce(function () {
+			loadPeriodSuggestions(periodInput.value.trim());
+		}, 220);
+
+		sectionInput.addEventListener("input", function () {
+			if (!selectedSection || sectionInput.value.trim() !== selectedSection.sectionName) {
+				setSection(null);
+			}
+			debouncedSectionSearch();
+		});
+
+		sectionInput.addEventListener("focus", function () {
+			loadSectionSuggestions(sectionInput.value.trim());
+		});
+
+		subjectInput.addEventListener("input", function () {
+			if (!selectedSubject || subjectInput.value.trim() !== (selectedSubject.label || selectedSubject.subjectName)) {
+				setSubject(null);
+			}
+			debouncedSubjectSearch();
+		});
+
+		subjectInput.addEventListener("focus", function () {
+			loadSubjectSuggestions(subjectInput.value.trim());
+		});
+
+		periodInput.addEventListener("input", function () {
+			if (!selectedPeriod || periodInput.value.trim() !== selectedPeriod.label) {
+				setPeriod(null);
+			}
+			debouncedPeriodSearch();
+		});
+
+		periodInput.addEventListener("focus", function () {
+			loadPeriodSuggestions(periodInput.value.trim());
+		});
+
+		document.addEventListener("click", function (event) {
+			var target = event.target;
+			if (!(target instanceof Element)) {
+				return;
+			}
+
+			if (!sectionSuggestions.contains(target) && target !== sectionInput) {
+				closeSuggestionBox(sectionSuggestions);
+			}
+
+			if (!subjectSuggestions.contains(target) && target !== subjectInput) {
+				closeSuggestionBox(subjectSuggestions);
+			}
+
+			if (!periodSuggestions.contains(target) && target !== periodInput) {
+				closeSuggestionBox(periodSuggestions);
+			}
+		});
 
 		generateBtn.addEventListener("click", function () {
-			var sectionCode = sectionInput.value.trim();
-			var subjectCode = subjectInput.value.trim();
-			var periodLabel = periodInput.value.trim();
-			var sectionPattern = /^[A-Za-z0-9\- ]{2,64}$/;
-			var subjectPattern = /^[A-Za-z0-9\- ]{2,64}$/;
-			var periodPattern = /^[A-Za-z0-9:\- ]{3,64}$/;
-
-			if (!sectionCode || !subjectCode || !periodLabel) {
-				statusText.textContent = "Section, subject, and period are required.";
+			if (!selectedSection || !selectedSubject || !selectedPeriod) {
+				setStatus("Select section, subject, and period before generating QR.");
 				return;
 			}
 
-			if (!sectionPattern.test(sectionCode) || !subjectPattern.test(subjectCode) || !periodPattern.test(periodLabel)) {
-				statusText.textContent = "Use letters, numbers, spaces, and dashes only for section/subject/period.";
+			if (!createSessionUrl) {
+				setStatus("Session endpoint is unavailable.");
 				return;
 			}
 
-			var session = createQrSession(sectionCode, subjectCode, periodLabel);
-			updateTeacherUi(session);
-			countdownText.textContent = qrSessionTtlSeconds + "s";
+			setStatus("Creating QR session...");
+			postApi(createSessionUrl, {
+				sectionId: selectedSection.sectionId,
+				subjectId: selectedSubject.subjectId,
+				scheduleId: selectedPeriod.scheduleId
+			}).then(function (result) {
+				if (!result.ok || !result.data) {
+					setStatus(result.message || "Unable to create QR session.");
+					return;
+				}
+
+				applySession(result.data);
+				setStatus(
+					"Session active for "
+						+ activeSession.sectionName
+						+ " / "
+						+ activeSession.subjectLabel
+						+ " ("
+						+ activeSession.periodLabel
+						+ ")."
+				);
+			});
 		});
 
 		resetBtn.addEventListener("click", function () {
-			clearQrState();
-			updateTeacherUi(null);
+			if (!activeSession) {
+				clearActiveSession("Session reset. Select section, subject, and period to generate a new QR.");
+				return;
+			}
+
+			if (!closeSessionUrlTemplate) {
+				clearActiveSession("Session reset locally. Select section, subject, and period to generate a new QR.");
+				return;
+			}
+
+			var sessionId = activeSession.sessionId;
+			var closeUrl = buildSessionUrl(closeSessionUrlTemplate, sessionId);
+			setStatus("Closing session...");
+
+			postApi(closeUrl, {})
+				.then(function (result) {
+					if (result.ok) {
+						clearActiveSession("Session closed. Select section, subject, and period to generate a new QR.");
+						return;
+					}
+
+					clearActiveSession(result.message || "Session reset. Close confirmation pending from server.");
+				});
 		});
 
-		var existing = getActiveQrSession();
-		updateTeacherUi(existing);
-		window.setInterval(regenerateIfExpired, 1000);
+		setSection(null);
+		setStatus("Search section, subject, and period to generate a session.");
+		loadSectionSuggestions("");
 	}
 
 	function initializeStudentScanPage() {
@@ -700,17 +1095,16 @@
 			return;
 		}
 
+		var checkinUrl = page.getAttribute("data-checkin-url") || "";
 		var scannerContainerId = "attendance-scanner";
 		var startBtn = document.getElementById("scan-start-btn");
 		var stopBtn = document.getElementById("scan-stop-btn");
 		var statusText = document.getElementById("scan-status");
-		var studentIdInput = document.getElementById("scan-student-id");
-		var studentNameInput = document.getElementById("scan-student-name");
 		var tokenInput = document.getElementById("scan-token");
 		var submitBtn = document.getElementById("scan-submit-btn");
 		var submitResult = document.getElementById("scan-submit-result");
 
-		if (!startBtn || !stopBtn || !statusText || !studentIdInput || !studentNameInput || !tokenInput || !submitBtn || !submitResult) {
+		if (!startBtn || !stopBtn || !statusText || !tokenInput || !submitBtn || !submitResult) {
 			return;
 		}
 
@@ -793,7 +1187,7 @@
 					{ fps: 8, qrbox: { width: 230, height: 230 } },
 					function (decodedText) {
 						tokenInput.value = decodedText;
-						setStatus("QR detected. Review details and submit.");
+						setStatus("QR detected. Submit attendance when ready.");
 						stopScanner();
 					},
 					function () {
@@ -827,24 +1221,9 @@
 
 			studentLastSubmitAt = Date.now();
 
-			var studentId = studentIdInput.value.trim();
-			var studentName = studentNameInput.value.trim();
 			var token = tokenInput.value.trim();
-			var idPattern = /^[A-Za-z0-9\-]{2,32}$/;
-			var namePattern = /^[A-Za-z][A-Za-z .'-]{1,118}$/;
-
-			if (!studentId || !studentName || !token) {
-				setSubmitResult("Student ID, student name, and token are required.", "result-error");
-				return;
-			}
-
-			if (!idPattern.test(studentId)) {
-				setSubmitResult("Student ID should be 2-32 characters using letters, numbers, and dashes.", "result-error");
-				return;
-			}
-
-			if (!namePattern.test(studentName)) {
-				setSubmitResult("Student name contains unsupported characters.", "result-error");
+			if (!token) {
+				setSubmitResult("QR token is required.", "result-error");
 				return;
 			}
 
@@ -853,41 +1232,30 @@
 				return;
 			}
 
-			var tokenPayload = parseSessionToken(token);
-			if (!tokenPayload || typeof tokenPayload.sessionId !== "string") {
-				setSubmitResult("Invalid QR token format.", "result-error");
+			if (!checkinUrl) {
+				setSubmitResult("Check-in endpoint is unavailable.", "result-error");
 				return;
 			}
 
-			if (typeof tokenPayload.expiresAt !== "number" || Date.now() > tokenPayload.expiresAt) {
-				setSubmitResult("QR token already expired. Ask your teacher for a fresh QR.", "result-error");
-				return;
-			}
+			setSubmitResult("Submitting attendance...", null);
+			postApi(checkinUrl, {
+				token: token
+			}).then(function (result) {
+				if (!result.ok || !result.data) {
+					var errorType = result.errorCode === "ALREADY_CHECKED_IN"
+						? "result-warning"
+						: "result-error";
+					setSubmitResult(result.message || "Unable to submit attendance.", errorType);
+					return;
+				}
 
-			var activeSession = getActiveQrSession();
-			if (!activeSession || activeSession.sessionId !== tokenPayload.sessionId) {
-				setSubmitResult("This QR is not active for the current class session.", "result-error");
-				return;
-			}
+				var normalizedStatus = String(result.data.status || "present").toLowerCase();
+				var successType = normalizedStatus === "late"
+					? "result-warning"
+					: "result-success";
 
-			var checkins = getCheckinsForSession(activeSession.sessionId);
-			var alreadyPresent = checkins.some(function (entry) {
-				return entry.studentId.toLowerCase() === studentId.toLowerCase();
+				setSubmitResult(result.data.message || "Attendance submitted successfully.", successType);
 			});
-
-			if (alreadyPresent) {
-				setSubmitResult("Already marked present for this session.", "result-warning");
-				return;
-			}
-
-			checkins.push({
-				studentId: studentId,
-				studentName: studentName,
-				scannedAt: Date.now()
-			});
-
-			saveCheckinsForSession(activeSession.sessionId, checkins);
-			setSubmitResult("Attendance submitted for " + activeSession.subjectCode + " (" + activeSession.periodLabel + ").", "result-success");
 		});
 
 		window.addEventListener("beforeunload", function () {

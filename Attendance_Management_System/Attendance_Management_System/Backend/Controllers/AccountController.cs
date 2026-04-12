@@ -2,11 +2,10 @@ using Attendance_Management_System.Backend.DTOs.Requests;
 using Attendance_Management_System.Backend.Entities;
 using Attendance_Management_System.Backend.Interfaces.Services;
 using Attendance_Management_System.Backend.ViewModels.Auth;
-using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
-using System.Security.Claims;
+using Npgsql;
 
 namespace Attendance_Management_System.Backend.Controllers;
 
@@ -17,35 +16,28 @@ public class AccountController : Controller
     private readonly IAuthService _authService;
     private readonly ICoursesService _coursesService;
     private readonly IAcademicYearsService _academicYearsService;
-    private readonly IWebHostEnvironment _environment;
+    private readonly ILogger<AccountController> _logger;
 
     public AccountController(
         SignInManager<User> signInManager,
         IAuthService authService,
         ICoursesService coursesService,
         IAcademicYearsService academicYearsService,
-        IWebHostEnvironment environment)
+        ILogger<AccountController> logger)
     {
         _signInManager = signInManager;
         _authService = authService;
         _coursesService = coursesService;
         _academicYearsService = academicYearsService;
-        _environment = environment;
+        _logger = logger;
     }
 
     [HttpGet("login")]
     [AllowAnonymous]
-    public async Task<IActionResult> Login(string? returnUrl = null)
+    public IActionResult Login(string? returnUrl = null)
     {
         if (User.Identity?.IsAuthenticated == true)
         {
-            if (IsDevBypassEnabled())
-            {
-                await HttpContext.SignOutAsync(IdentityConstants.ApplicationScheme);
-                await _signInManager.SignOutAsync();
-                return View(new LoginViewModel { ReturnUrl = returnUrl });
-            }
-
             return RedirectToAction("Index", "Dashboard");
         }
 
@@ -90,42 +82,27 @@ public class AccountController : Controller
             return View(model);
         }
 
-        if (IsDevBypassEnabled() && TryGetDevBypassUser(model.Email, model.Password, out var devUser))
+        Microsoft.AspNetCore.Identity.SignInResult result;
+        try
         {
-            var claims = new List<Claim>
-            {
-                new(ClaimTypes.NameIdentifier, devUser.Email),
-                new(ClaimTypes.Name, devUser.Email),
-                new(ClaimTypes.Email, devUser.Email),
-                new(ClaimTypes.Role, devUser.Role)
-            };
-
-            var identity = new ClaimsIdentity(claims, IdentityConstants.ApplicationScheme);
-            var principal = new ClaimsPrincipal(identity);
-
-            await HttpContext.SignInAsync(
-                IdentityConstants.ApplicationScheme,
-                principal,
-                new AuthenticationProperties { IsPersistent = model.RememberMe });
-
-            if (!string.IsNullOrWhiteSpace(model.ReturnUrl) && Url.IsLocalUrl(model.ReturnUrl))
-            {
-                return Redirect(model.ReturnUrl);
-            }
-
-            if (string.Equals(devUser.Role, "Student", StringComparison.OrdinalIgnoreCase))
-            {
-                return RedirectToAction("Scan", "AttendanceManagement");
-            }
-
-            return RedirectToAction("Qr", "AttendanceManagement");
+            result = await _signInManager.PasswordSignInAsync(
+                model.Email,
+                model.Password,
+                model.RememberMe,
+                lockoutOnFailure: false);
         }
-
-        var result = await _signInManager.PasswordSignInAsync(
-            model.Email,
-            model.Password,
-            model.RememberMe,
-            lockoutOnFailure: false);
+        catch (PostgresException ex) when (ex.SqlState == PostgresErrorCodes.InvalidPassword)
+        {
+            _logger.LogError(ex, "PostgreSQL authentication failed while processing login for {Email}.", model.Email);
+            ModelState.AddModelError(string.Empty, "Login is temporarily unavailable due to a database configuration issue.");
+            return View(model);
+        }
+        catch (NpgsqlException ex)
+        {
+            _logger.LogError(ex, "PostgreSQL connection failure while processing login for {Email}.", model.Email);
+            ModelState.AddModelError(string.Empty, "Login is temporarily unavailable. Please try again later.");
+            return View(model);
+        }
 
         if (!result.Succeeded)
         {
@@ -240,36 +217,5 @@ public class AccountController : Controller
     {
         var trimmed = value?.Trim();
         return string.IsNullOrWhiteSpace(trimmed) ? null : trimmed;
-    }
-
-    private bool IsDevBypassEnabled()
-    {
-        return _environment.IsDevelopment();
-    }
-
-    private static bool TryGetDevBypassUser(string email, string password, out (string Email, string Role) user)
-    {
-        user = default;
-        var normalizedEmail = email.Trim().ToLowerInvariant();
-
-        if (normalizedEmail == "it.faculty@dbtc-cebu.edu.ph" && password == "Teacher123!")
-        {
-            user = ("it.faculty@dbtc-cebu.edu.ph", "Teacher");
-            return true;
-        }
-
-        if (normalizedEmail == "student01@dbtc-cebu.edu.ph" && password == "Student123!")
-        {
-            user = ("student01@dbtc-cebu.edu.ph", "Student");
-            return true;
-        }
-
-        if (normalizedEmail == "admin@dbtc-cebu.edu.ph" && password == "Admin123!")
-        {
-            user = ("admin@dbtc-cebu.edu.ph", "Admin");
-            return true;
-        }
-
-        return false;
     }
 }
