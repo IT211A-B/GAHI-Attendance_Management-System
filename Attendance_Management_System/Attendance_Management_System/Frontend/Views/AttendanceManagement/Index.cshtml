@@ -1,0 +1,136 @@
+@model Attendance_Management_System.Backend.ViewModels.Attendance.AttendanceIndexViewModel
+@{
+    ViewData["Title"] = "Attendance";
+}
+
+<section class="panel">
+    <h3>Attendance</h3>
+    <p class="muted">Filter by section, schedule, and date to view or mark attendance.</p>
+
+    @if (TempData["AttendanceSuccess"] is string successMessage)
+    {
+        <p class="status-pill active">@successMessage</p>
+    }
+
+    @if (TempData["AttendanceError"] is string errorMessage)
+    {
+        <p class="form-validation">@errorMessage</p>
+    }
+
+    <form method="get" class="filters-grid three">
+        <div>
+            <label for="sectionId">Section</label>
+            <select id="sectionId" name="sectionId" class="input-select">
+                <option value="">Choose section</option>
+                @foreach (var sectionItem in Model.Sections)
+                {
+                    <option value="@sectionItem.Id" selected="@(Model.SelectedSectionId == sectionItem.Id)">@sectionItem.Name</option>
+                }
+            </select>
+        </div>
+        <div>
+            <label for="scheduleId">Schedule</label>
+            <select id="scheduleId" name="scheduleId" class="input-select">
+                <option value="">Choose schedule</option>
+                @foreach (var schedule in Model.Schedules.Where(s => Model.SelectedSectionId is null || s.SectionId == Model.SelectedSectionId))
+                {
+                    <option value="@schedule.Id" selected="@(Model.SelectedScheduleId == schedule.Id)">@schedule.Label</option>
+                }
+            </select>
+        </div>
+        <div>
+            <label for="date">Date</label>
+            <input id="date" name="date" type="date" class="input-select" value="@Model.SelectedDate.ToString("yyyy-MM-dd")" />
+        </div>
+        <button type="submit" class="btn-primary btn-inline">Load Attendance</button>
+    </form>
+
+    @if (!string.IsNullOrWhiteSpace(Model.ErrorMessage))
+    {
+        <p class="form-validation">@Model.ErrorMessage</p>
+    }
+    else if (Model.SelectedSectionId is null || Model.SelectedScheduleId is null)
+    {
+        <p class="footer-note">Select section and schedule to load attendance data.</p>
+    }
+    else
+    {
+        <article class="panel">
+            <h3>Mark Attendance</h3>
+            <form asp-controller="AttendanceManagement" asp-action="Mark" method="post" class="filters-grid three">
+                @Html.AntiForgeryToken()
+                <input type="hidden" asp-for="MarkForm.SectionId" value="@Model.SelectedSectionId" />
+                <input type="hidden" asp-for="MarkForm.ScheduleId" value="@Model.SelectedScheduleId" />
+                <input type="hidden" asp-for="MarkForm.Date" value="@Model.SelectedDate.ToString("yyyy-MM-dd")" />
+
+                <div>
+                    <label asp-for="MarkForm.StudentId"></label>
+                    <input asp-for="MarkForm.StudentId" class="input-select" type="number" min="1" />
+                    <span asp-validation-for="MarkForm.StudentId" class="field-validation"></span>
+                </div>
+                <div>
+                    <label asp-for="MarkForm.TimeIn"></label>
+                    <input asp-for="MarkForm.TimeIn" class="input-select" type="time" />
+                    <span asp-validation-for="MarkForm.TimeIn" class="field-validation"></span>
+                </div>
+                <div>
+                    <label asp-for="MarkForm.Remarks"></label>
+                    <input asp-for="MarkForm.Remarks" class="input-select" />
+                    <span asp-validation-for="MarkForm.Remarks" class="field-validation"></span>
+                </div>
+
+                <button type="submit" class="btn-primary btn-inline">Mark</button>
+            </form>
+        </article>
+
+        <section class="grid-4 compact-gap">
+            <article class="stat-card"><p class="stat-title">Total</p><p class="stat-value">@Model.TotalStudents</p></article>
+            <article class="stat-card"><p class="stat-title">Present</p><p class="stat-value success">@Model.PresentCount</p></article>
+            <article class="stat-card"><p class="stat-title">Late</p><p class="stat-value warning">@Model.LateCount</p></article>
+            <article class="stat-card"><p class="stat-title">Absent</p><p class="stat-value danger">@Model.AbsentCount</p></article>
+        </section>
+
+        <div class="table-wrap">
+            <table class="app-table">
+                <thead>
+                    <tr>
+                        <th>Student ID</th>
+                        <th>Student</th>
+                        <th>Subject</th>
+                        <th>Time In</th>
+                        <th>Time Out</th>
+                        <th>Remarks</th>
+                        <th>Marked By</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (!Model.Records.Any())
+                    {
+                        <tr>
+                            <td colspan="7" class="muted">No attendance records for this filter.</td>
+                        </tr>
+                    }
+                    else
+                    {
+                        @foreach (var record in Model.Records)
+                        {
+                            <tr>
+                                <td>@record.StudentId</td>
+                                <td>@record.StudentName</td>
+                                <td>@record.SubjectName</td>
+                                <td>@record.TimeIn</td>
+                                <td>@record.TimeOut</td>
+                                <td>@record.Remarks</td>
+                                <td>@record.MarkerName</td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</section>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

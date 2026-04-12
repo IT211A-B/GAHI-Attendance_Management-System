@@ -1,0 +1,283 @@
+@model Attendance_Management_System.Backend.ViewModels.Dashboard.DashboardIndexViewModel
+@{
+    ViewData["Title"] = "Dashboard";
+    var periodLabel = string.IsNullOrWhiteSpace(Model.AcademicPeriodLabel)
+        ? "Current academic period"
+        : Model.AcademicPeriodLabel;
+    var windowLabel = string.IsNullOrWhiteSpace(Model.Filters.EffectiveLabel)
+        ? periodLabel
+        : Model.Filters.EffectiveLabel;
+    var customFromValue = Model.Filters.CustomFrom?.ToString("yyyy-MM-dd") ?? string.Empty;
+    var customToValue = Model.Filters.CustomTo?.ToString("yyyy-MM-dd") ?? string.Empty;
+}
+
+@if (!string.IsNullOrWhiteSpace(Model.ErrorMessage))
+{
+    <p class="form-validation">@Model.ErrorMessage</p>
+}
+
+@if (Model.IsStudent || Model.IsTeacher)
+{
+    <article class="panel dashboard-filter-panel">
+        <h3>Quick Filters</h3>
+        <form method="get" class="filters-grid three dashboard-filter-grid">
+            <div>
+                <label for="window">Date Window</label>
+                <select id="window" name="window" class="input-select">
+                    <option value="academic" selected="@(Model.Filters.SelectedWindow == "academic")">Current academic
+                        period</option>
+                        <option value="last7" selected="@(Model.Filters.SelectedWindow == "last7")">Last 7 days</option>
+                        <option value="last30" selected="@(Model.Filters.SelectedWindow == "last30")">Last 30 days</option>
+                        <option value="thismonth" selected="@(Model.Filters.SelectedWindow == "thismonth")">This month</option>
+                        <option value="custom" selected="@(Model.Filters.SelectedWindow == "custom")">Custom range</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="from">From (Custom)</label>
+                    <input id="from" name="from" type="date" class="input-select" value="@customFromValue" />
+                </div>
+                <div>
+                    <label for="to">To (Custom)</label>
+                    <input id="to" name="to" type="date" class="input-select" value="@customToValue" />
+                </div>
+                <button type="submit" class="btn-primary btn-inline">Apply Filter</button>
+            </form>
+
+            <p class="footer-note">Showing <strong>@windowLabel</strong> (@Model.Filters.EffectiveFrom.ToString("yyyy-MM-dd") to
+                @Model.Filters.EffectiveTo.ToString("yyyy-MM-dd")).</p>
+
+                @if (!string.IsNullOrWhiteSpace(Model.Filters.Message))
+                {
+                    <p class="form-validation">@Model.Filters.Message</p>
+                }
+            </article>
+        }
+
+        @if (Model.IsStudent && Model.Student is not null)
+        {
+            <section class="hero role-hero student-hero">
+                <p class="dashboard-eyebrow">Student Scope</p>
+                <h2>@Model.Student.StudentName</h2>
+                <p>Attendance metrics in your personal scope for @windowLabel.</p>
+            </section>
+
+            <section class="grid-4">
+                <article class="stat-card">
+                    <p class="stat-title">Present</p>
+                    <p class="stat-value success">@Model.Student.PresentCount</p>
+                </article>
+                <article class="stat-card">
+                    <p class="stat-title">Late</p>
+                    <p class="stat-value warning">@Model.Student.LateCount</p>
+                </article>
+                <article class="stat-card">
+                    <p class="stat-title">Absent</p>
+                    <p class="stat-value danger">@Model.Student.AbsentCount</p>
+                </article>
+                <article class="stat-card">
+                    <p class="stat-title">Attendance Rate</p>
+                    <p class="stat-value">@Model.Student.AttendanceRate%</p>
+                </article>
+            </section>
+
+            <section class="info-grid">
+                <article class="info-card">
+                    <span class="muted">Student Number</span>
+                    <strong>@Model.Student.StudentNumber</strong>
+                </article>
+                <article class="info-card">
+                    <span class="muted">Course</span>
+                    <strong>@Model.Student.CourseText</strong>
+                </article>
+                <article class="info-card">
+                    <span class="muted">Section</span>
+                    <strong>@Model.Student.SectionName</strong>
+                </article>
+                <article class="info-card">
+                    <span class="muted">Date Window</span>
+                    <strong>@windowLabel</strong>
+                </article>
+            </section>
+
+            <article class="panel">
+                <h3>Recent Attendance (Last 10)</h3>
+                @if (!Model.Student.RecentRecords.Any())
+                {
+                    <p class="footer-note">No attendance records yet for this period.</p>
+                }
+                else
+                {
+                    <div class="table-wrap">
+                        <table class="app-table">
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Subject</th>
+                                    <th>Section</th>
+                                    <th>Time In</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var record in Model.Student.RecentRecords)
+                                {
+                                    <tr>
+                                        <td>@record.Date.ToString("yyyy-MM-dd")</td>
+                                        <td>@record.SubjectName</td>
+                                        <td>@record.SectionName</td>
+                                        <td>@record.TimeInText</td>
+                                        <td><span class="status-pill @record.StatusClass">@record.StatusLabel</span></td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </article>
+        }
+
+        @if (Model.IsTeacher && Model.Teacher is not null)
+        {
+            <section class="hero role-hero teacher-hero">
+                <p class="dashboard-eyebrow">Teacher Scope</p>
+                <h2>@Model.Teacher.TeacherName</h2>
+                <p>Operational view based on your assigned schedules and sections.</p>
+            </section>
+
+            <section class="grid-4">
+                <article class="stat-card">
+                    <p class="stat-title">Assigned Sections</p>
+                    <p class="stat-value">@Model.Teacher.AssignedSectionsCount</p>
+                </article>
+                <article class="stat-card">
+                    <p class="stat-title">Assigned Schedules</p>
+                    <p class="stat-value">@Model.Teacher.AssignedSchedulesCount</p>
+                </article>
+                <article class="stat-card">
+                    <p class="stat-title">Today Present</p>
+                    <p class="stat-value success">@Model.Teacher.TodayPresentCount</p>
+                </article>
+                <article class="stat-card">
+                    <p class="stat-title">Today Late</p>
+                    <p class="stat-value warning">@Model.Teacher.TodayLateCount</p>
+                </article>
+            </section>
+
+            <section class="grid-2">
+                <article class="panel">
+                    <h3>Window Attendance Totals</h3>
+                    <div class="mini-kpi-strip">
+                        <span class="role-pill">Present: @Model.Teacher.TodayPresentCount</span>
+                        <span class="role-pill">Late: @Model.Teacher.TodayLateCount</span>
+                        <span class="status-pill danger">Absent: @Model.Teacher.TodayAbsentCount</span>
+                    </div>
+                    <p class="footer-note">Counts are aggregated across your schedule ownership for @windowLabel.</p>
+                </article>
+
+                <article class="panel">
+                    <h3>Upcoming Classes (Next 7 Days)</h3>
+                    @if (!Model.Teacher.UpcomingClasses.Any())
+                    {
+                        <p class="footer-note">No classes scheduled in the next 7 days.</p>
+                    }
+                    else
+                    {
+                        <ul class="list">
+                            @foreach (var item in Model.Teacher.UpcomingClasses)
+                            {
+                                <li>
+                                    <strong>@item.Date.ToString("ddd, MMM dd")</strong> - @item.StartTime-@item.EndTime<br />
+                                    <span class="muted">@item.SectionName | @item.SubjectName | @item.ClassroomName</span>
+                                </li>
+                            }
+                        </ul>
+                    }
+                </article>
+            </section>
+
+            <article class="panel">
+                <h3>Students At Risk (Absent Rate >= 20%)</h3>
+                <p class="footer-note">Window: @windowLabel.</p>
+                @if (!Model.Teacher.AtRiskStudents.Any())
+                {
+                    <p class="footer-note">No students currently meeting the risk threshold for this period.</p>
+                }
+                else
+                {
+                    <div class="table-wrap">
+                        <table class="app-table">
+                            <thead>
+                                <tr>
+                                    <th>Student ID</th>
+                                    <th>Student</th>
+                                    <th>Section</th>
+                                    <th>Absent</th>
+                                    <th>Total Records</th>
+                                    <th>Absent Rate</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var student in Model.Teacher.AtRiskStudents)
+                                {
+                                    <tr>
+                                        <td>@student.StudentId</td>
+                                        <td>@student.StudentName</td>
+                                        <td>@student.SectionName</td>
+                                        <td>@student.AbsentCount</td>
+                                        <td>@student.TotalRecords</td>
+                                        <td><span class="status-pill danger">@student.AbsentRate%</span></td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </article>
+        }
+
+        @if (Model.IsAdmin && Model.Admin is not null)
+        {
+            <section class="hero role-hero admin-hero">
+                <p class="dashboard-eyebrow">Admin Scope</p>
+                <h2>System Operations Snapshot</h2>
+                <p>Enrollment and organizational metrics for @periodLabel.</p>
+            </section>
+
+            <section class="grid-4">
+                <article class="stat-card">
+                    <p class="stat-title">Pending Enrollments</p>
+                    <p class="stat-value warning">@Model.Admin.PendingEnrollmentsCount</p>
+                </article>
+                <article class="stat-card">
+                    <p class="stat-title">Approved Enrollments</p>
+                    <p class="stat-value success">@Model.Admin.ApprovedEnrollmentsCount</p>
+                </article>
+                <article class="stat-card">
+                    <p class="stat-title">Rejected Enrollments</p>
+                    <p class="stat-value danger">@Model.Admin.RejectedEnrollmentsCount</p>
+                </article>
+                <article class="stat-card">
+                    <p class="stat-title">Active Students</p>
+                    <p class="stat-value">@Model.Admin.ActiveStudentsCount</p>
+                </article>
+            </section>
+
+            <section class="grid-2">
+                <article class="stat-card">
+                    <p class="stat-title">Active Teachers</p>
+                    <p class="stat-value">@Model.Admin.ActiveTeachersCount</p>
+                </article>
+                <article class="stat-card">
+                    <p class="stat-title">Total Sections</p>
+                    <p class="stat-value">@Model.Admin.TotalSectionsCount</p>
+                </article>
+            </section>
+        }
+
+        @if (!Model.IsAdmin && !Model.IsTeacher && !Model.IsStudent)
+        {
+            <article class="panel">
+                <h3>Dashboard Unavailable</h3>
+                <p class="footer-note">No dashboard layout is configured for your current role.</p>
+            </article>
+        }

@@ -1,0 +1,151 @@
+@model Attendance_Management_System.Backend.ViewModels.Subjects.SubjectsIndexViewModel
+@{
+    ViewData["Title"] = "Subjects";
+    var hasCourseOptions = Model.Courses.Any();
+    var replacementSubjects = Model.Subjects
+        .OrderBy(subject => subject.Name)
+        .ThenBy(subject => subject.Code)
+        .ToList();
+}
+
+<section class="panel">
+    <h3>Subjects</h3>
+    <p class="muted">Manage the subject catalog using readable course names instead of internal IDs.</p>
+
+    @if (TempData["SubjectsSuccess"] is string successMessage)
+    {
+        <p class="status-pill active">@successMessage</p>
+    }
+
+    @if (TempData["SubjectsError"] is string errorMessage)
+    {
+        <p class="form-validation">@errorMessage</p>
+    }
+
+    <article class="panel">
+        <h3>Create Subject</h3>
+        <p class="field-helper">Pick the course by name. You do not need to know or enter any course ID.</p>
+
+        @if (!hasCourseOptions)
+        {
+            <p class="form-validation">Course options are currently unavailable. Reload the page and try again.</p>
+        }
+
+        <form asp-controller="SubjectsManagement" asp-action="Create" method="post" class="filters-grid three">
+            @Html.AntiForgeryToken()
+            <div asp-validation-summary="ModelOnly" class="form-validation"></div>
+
+            <div>
+                <label asp-for="CreateForm.Name"></label>
+                <input asp-for="CreateForm.Name" class="input-select" />
+                <span asp-validation-for="CreateForm.Name" class="field-validation"></span>
+            </div>
+            <div>
+                <label asp-for="CreateForm.Code"></label>
+                <input asp-for="CreateForm.Code" class="input-select" />
+                <span asp-validation-for="CreateForm.Code" class="field-validation"></span>
+            </div>
+            <div>
+                <label asp-for="CreateForm.CourseId"></label>
+                <select asp-for="CreateForm.CourseId" class="input-select" disabled="@(!hasCourseOptions)">
+                    <option value="">Choose course</option>
+                    @foreach (var course in Model.Courses)
+                    {
+                        <option value="@course.Id">@course.Label</option>
+                    }
+                </select>
+                <p class="field-helper compact">The selected course will be linked automatically.</p>
+                <span asp-validation-for="CreateForm.CourseId" class="field-validation"></span>
+            </div>
+            <div>
+                <label asp-for="CreateForm.Units"></label>
+                <input asp-for="CreateForm.Units" class="input-select" type="number" min="1" />
+                <span asp-validation-for="CreateForm.Units" class="field-validation"></span>
+            </div>
+
+            <button type="submit" class="btn-primary btn-inline" disabled="@(!hasCourseOptions)">Create Subject</button>
+        </form>
+    </article>
+
+    @if (!string.IsNullOrWhiteSpace(Model.ErrorMessage))
+    {
+        <p class="form-validation">@Model.ErrorMessage</p>
+    }
+    else if (!Model.Subjects.Any())
+    {
+        <p class="footer-note">No subjects found.</p>
+    }
+    else
+    {
+        <div class="table-wrap">
+            <table class="app-table">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Code</th>
+                        <th>Course</th>
+                        <th>Units</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var item in Model.Subjects)
+                    {
+                        <tr>
+                            <td>@item.Name</td>
+                            <td><span class="role-pill">@item.Code</span></td>
+                            <td>
+                                <span class="entity-pill">@item.CourseLabel</span>
+                            </td>
+                            <td>@item.Units</td>
+                            <td>
+                                <div class="action-stack">
+                                    <form asp-controller="SubjectsManagement" asp-action="Update" asp-route-id="@item.Id"
+                                          method="post" class="stack-form">
+                                        @Html.AntiForgeryToken()
+                                        <input type="text" name="UpdateForm.Name" value="@item.Name"
+                                               class="input-select compact-input" placeholder="Subject name" />
+                                        <input type="text" name="UpdateForm.Code" value="@item.Code"
+                                               class="input-select compact-input" placeholder="Subject code" />
+                                        <select name="UpdateForm.CourseId" class="input-select compact-input"
+                                                disabled="@(!hasCourseOptions)">
+                                            @foreach (var course in Model.Courses)
+                                            {
+                                                <option value="@course.Id" selected="@(course.Id == item.CourseId)">@course.Label
+                                                </option>
+                                            }
+                                        </select>
+                                        <input type="number" name="UpdateForm.Units" value="@item.Units" min="1"
+                                               class="input-select compact-input" placeholder="Units" />
+                                        <p class="field-helper compact">Review the course and subject details, then save.</p>
+                                        <button type="submit" class="btn-secondary"
+                                                disabled="@(!hasCourseOptions)">Save</button>
+                                    </form>
+                                    <form asp-controller="SubjectsManagement" asp-action="Delete" asp-route-id="@item.Id"
+                                          method="post" class="inline-form">
+                                        @Html.AntiForgeryToken()
+                                        <select name="replacementSubjectId" class="input-select compact-input">
+                                            <option value="">Delete directly</option>
+                                            @foreach (var replacement in replacementSubjects.Where(subject => subject.Id !=
+                                                                                                                            item.Id))
+                                            {
+                                                <option value="@replacement.Id">@replacement.Code - @replacement.Name</option>
+                                            }
+                                        </select>
+                                        <p class="field-helper compact">Optional: choose a replacement. If left as Delete
+                                            directly, the system auto-reassigns active references.</p>
+                                            <button type="submit" class="btn-danger">Delete</button>
+                                        </form>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </section>
+
+    @section Scripts {
+        <partial name="_ValidationScriptsPartial" />
+    }

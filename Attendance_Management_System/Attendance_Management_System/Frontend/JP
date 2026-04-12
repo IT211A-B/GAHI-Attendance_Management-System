@@ -1,0 +1,29 @@
+3
+
+Automatic Zoom
+
+Frontend Progress Report
+
+What didn't go well?
+- The role-based chat widget required extra handling for viewport overlap and click interception on some pages.
+- Manual QR flow testing depended on a working local database and valid seeded credentials, which slowed down verification.
+- Some browser interactions in manual QA were flaky due to overlay layering and focus behavior.
+- Frontend error handling for protected QR API endpoints initially received redirect HTML instead of clean status codes.
+- The QR submit cooldown logic initially triggered even for client-side validation failures, creating user friction.
+
+What should I start doing?
+- I should add a dedicated frontend QA checklist for role-based UI behavior (student, teacher, admin).
+- I should add frontend documentation for QR testing steps, including expected validation and error states.
+- I should add a small test harness page or dev utility for validating chat widget states and tab filtering quickly.
+- I should add integration tests for critical frontend flows (login redirects, QR scan submit states, settings forms).
+- I should add a stable z-index and interaction contract for global overlays/widgets to prevent click interception.
+- I should add a local environment setup note for DB credentials and seeded test users.
+
+What should I continue doing?
+- I will continue implementing role-aware UI and endpoint access behavior.
+- I will continue using clear validation feedback for form and action errors.
+- I will continue keeping frontend logic modular and easy to maintain in site.js.
+- I will continue aligning frontend behavior with backend API contracts and status codes.
+- I will continue running manual QA after each high-impact UI or auth-related change.
+- I will continue writing focused commits and documenting key implementation decisions.
+- I will continue improving UX details such as accessibility states, responsive behavior, and error messaging.

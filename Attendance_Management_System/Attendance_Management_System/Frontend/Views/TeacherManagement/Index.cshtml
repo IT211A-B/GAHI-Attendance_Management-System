@@ -1,0 +1,137 @@
+@model Attendance_Management_System.Backend.ViewModels.Teachers.TeachersIndexViewModel
+@{
+    ViewData["Title"] = "Teachers";
+}
+
+<section class="panel">
+    <h3>Teacher Management</h3>
+    <p class="muted">Server-rendered C# MVC teacher accounts and status controls.</p>
+
+    @if (TempData["TeachersSuccess"] is string successMessage)
+    {
+        <p class="status-pill active">@successMessage</p>
+    }
+
+    @if (TempData["TeachersError"] is string errorMessage)
+    {
+        <p class="form-validation">@errorMessage</p>
+    }
+
+    <article class="panel">
+        <h3>Create Teacher Account</h3>
+        <form asp-controller="TeacherManagement" asp-action="CreateAccount" method="post" class="filters-grid three">
+            @Html.AntiForgeryToken()
+            <div asp-validation-summary="ModelOnly" class="form-validation"></div>
+
+            <div>
+                <label asp-for="CreateForm.Email"></label>
+                <input asp-for="CreateForm.Email" class="input-select" autocomplete="email" />
+                <span asp-validation-for="CreateForm.Email" class="field-validation"></span>
+            </div>
+            <div>
+                <label asp-for="CreateForm.Password"></label>
+                <input asp-for="CreateForm.Password" class="input-select" autocomplete="new-password" />
+                <span asp-validation-for="CreateForm.Password" class="field-validation"></span>
+            </div>
+            <div>
+                <label asp-for="CreateForm.ConfirmPassword"></label>
+                <input asp-for="CreateForm.ConfirmPassword" class="input-select" autocomplete="new-password" />
+                <span asp-validation-for="CreateForm.ConfirmPassword" class="field-validation"></span>
+            </div>
+            <div>
+                <label asp-for="CreateForm.FirstName"></label>
+                <input asp-for="CreateForm.FirstName" class="input-select" autocomplete="given-name" />
+                <span asp-validation-for="CreateForm.FirstName" class="field-validation"></span>
+            </div>
+            <div>
+                <label asp-for="CreateForm.MiddleName"></label>
+                <input asp-for="CreateForm.MiddleName" class="input-select" autocomplete="additional-name" />
+                <span asp-validation-for="CreateForm.MiddleName" class="field-validation"></span>
+            </div>
+            <div>
+                <label asp-for="CreateForm.LastName"></label>
+                <input asp-for="CreateForm.LastName" class="input-select" autocomplete="family-name" />
+                <span asp-validation-for="CreateForm.LastName" class="field-validation"></span>
+            </div>
+            <div>
+                <label asp-for="CreateForm.Department"></label>
+                <input asp-for="CreateForm.Department" class="input-select" />
+                <span asp-validation-for="CreateForm.Department" class="field-validation"></span>
+            </div>
+            <div>
+                <label asp-for="CreateForm.Specialization"></label>
+                <input asp-for="CreateForm.Specialization" class="input-select" />
+                <span asp-validation-for="CreateForm.Specialization" class="field-validation"></span>
+            </div>
+
+            <button type="submit" class="btn-primary btn-inline">Create Teacher</button>
+        </form>
+    </article>
+
+    @if (!string.IsNullOrWhiteSpace(Model.ErrorMessage))
+    {
+        <p class="form-validation">@Model.ErrorMessage</p>
+    }
+    else if (!Model.Teachers.Any())
+    {
+        <p class="footer-note">No teachers found.</p>
+    }
+    else
+    {
+        <div class="table-wrap">
+            <table class="app-table">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Email</th>
+                        <th>Department</th>
+                        <th>Employee No.</th>
+                        <th>Sections</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                @foreach (var item in Model.Teachers)
+                {
+                    <tr>
+                        <td>@item.Name</td>
+                        <td>@item.Email</td>
+                        <td>@item.Department</td>
+                        <td>@item.EmployeeNumber</td>
+                        <td>@item.SectionsText</td>
+                        <td>
+                            @if (item.IsActive)
+                            {
+                                <span class="status-pill active">Active</span>
+                            }
+                            else
+                            {
+                                <span class="status-pill inactive">Inactive</span>
+                            }
+                        </td>
+                        <td>
+                            <form asp-controller="TeacherManagement" asp-action="SetStatus" asp-route-id="@item.Id" method="post" class="inline-form">
+                                @Html.AntiForgeryToken()
+                                <input type="hidden" name="isActive" value="@(!item.IsActive)" />
+                                @if (item.IsActive)
+                                {
+                                    <button type="submit" class="btn-secondary">Deactivate</button>
+                                }
+                                else
+                                {
+                                    <button type="submit" class="btn-primary">Activate</button>
+                                }
+                            </form>
+                        </td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        </div>
+    }
+</section>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

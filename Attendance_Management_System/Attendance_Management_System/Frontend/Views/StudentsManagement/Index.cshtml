@@ -1,0 +1,90 @@
+@model Attendance_Management_System.Backend.ViewModels.Students.StudentsIndexViewModel
+@{
+    ViewData["Title"] = "Students";
+}
+
+<section class="panel">
+    <h3>Students</h3>
+    <p class="muted">@(Model.IsTeacher
+                    ? "Select your assigned section to view enrolled students."
+                    : "Select a section to view enrolled students.")</p>
+
+        @if (TempData["StudentsSuccess"] is string successMessage)
+        {
+            <p class="status-pill active">@successMessage</p>
+        }
+
+        @if (TempData["StudentsError"] is string errorMessage)
+        {
+            <p class="form-validation">@errorMessage</p>
+        }
+
+        <form method="get" class="filters-grid">
+            <div>
+                <label for="sectionId">Section</label>
+                <select id="sectionId" name="sectionId" class="input-select">
+                    <option value="">@(Model.IsTeacher ? "Choose your section" : "Choose a section")</option>
+                    @foreach (var sectionItem in Model.Sections)
+                    {
+                        <option value="@sectionItem.Id" selected="@(Model.SelectedSectionId == sectionItem.Id)">
+                            @sectionItem.Name</option>
+                        }
+                    </select>
+                </div>
+                <button type="submit" class="btn-primary btn-inline">Load Students</button>
+            </form>
+
+            @if (Model.IsTeacher && Model.SelectedSectionId.HasValue && Model.IsCurrentTeacherAssignedToSelectedSection)
+            {
+                <form asp-controller="StudentsManagement" asp-action="SelfUnassign" asp-route-id="@Model.SelectedSectionId.Value"
+                      method="post" class="inline-form">
+                    @Html.AntiForgeryToken()
+                    <button type="submit" class="btn-secondary btn-xs">Unassign Myself From Section</button>
+                </form>
+            }
+
+            @if (!string.IsNullOrWhiteSpace(Model.ErrorMessage))
+            {
+                <p class="form-validation">@Model.ErrorMessage</p>
+            }
+            else if (Model.SelectedSectionId is null)
+            {
+                <p class="footer-note">@(Model.IsTeacher
+                                    ? "Pick one of your assigned sections to view students."
+                                    : "Pick a section to view students.")</p>
+                }
+    else if (!Model.Students.Any())
+                {
+                    <p class="footer-note">No students found in the selected section.</p>
+                }
+                else
+                {
+                    <div class="table-wrap">
+                        <table class="app-table">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Student Number</th>
+                                    <th>Full Name</th>
+                                    <th>Year</th>
+                                    <th>Course</th>
+                                    <th>Section</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var student in Model.Students)
+                                {
+                                    <tr>
+                                        <td>@student.Id</td>
+                                        <td>@student.StudentNumber</td>
+                                        <td>@student.FullName</td>
+                                        <td>@student.YearLevel</td>
+                                        <td>@student.CourseText</td>
+                                        <td>@student.SectionName</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </section>
