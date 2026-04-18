@@ -44,12 +44,6 @@ public class AccountController : Controller
         return View(new LoginViewModel { ReturnUrl = returnUrl });
     }
 
-    [HttpGet("Account/Login")]
-    [AllowAnonymous]
-    public IActionResult LegacyLogin(string? returnUrl = null)
-    {
-        return RedirectToAction(nameof(Login), new { returnUrl });
-    }
 
     [HttpGet("signup")]
     [AllowAnonymous]
@@ -63,13 +57,6 @@ public class AccountController : Controller
         var viewModel = new StudentSignupViewModel();
         await PopulateSignupOptionsAsync(viewModel);
         return View(viewModel);
-    }
-
-    [HttpGet("Account/Register")]
-    [AllowAnonymous]
-    public IActionResult LegacyRegister()
-    {
-        return RedirectToAction(nameof(Signup));
     }
 
     [HttpPost("login")]
