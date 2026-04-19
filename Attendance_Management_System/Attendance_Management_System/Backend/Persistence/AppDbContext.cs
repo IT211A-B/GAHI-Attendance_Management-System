@@ -27,6 +27,7 @@ public class AppDbContext : IdentityDbContext<User, IdentityRole<int>, int>
     public DbSet<AttendanceAudit> AttendanceAudits { get; set; } = null!;
     public DbSet<AttendanceQrSession> AttendanceQrSessions { get; set; } = null!;
     public DbSet<AttendanceQrCheckin> AttendanceQrCheckins { get; set; } = null!;
+    public DbSet<Notification> Notifications { get; set; } = null!;
     public DbSet<Enrollment> Enrollments { get; set; } = null!;
     public DbSet<AttendanceReport> AttendanceReports { get; set; } = null!;
 
@@ -291,6 +292,34 @@ public class AppDbContext : IdentityDbContext<User, IdentityRole<int>, int>
                 .WithMany()
                 .HasForeignKey(e => e.ProcessedBy)
                 .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        // Notification configuration
+        modelBuilder.Entity<Notification>(entity =>
+        {
+            entity.Property(notification => notification.Type)
+                .IsRequired();
+
+            entity.Property(notification => notification.Title)
+                .IsRequired();
+
+            entity.Property(notification => notification.Message)
+                .IsRequired();
+
+            entity.HasOne(notification => notification.RecipientUser)
+                .WithMany()
+                .HasForeignKey(notification => notification.RecipientUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasIndex(notification => new { notification.RecipientUserId, notification.IsRead, notification.CreatedAt })
+                .IsDescending(false, false, true);
+
+            entity.HasIndex(notification => new { notification.RecipientUserId, notification.CreatedAt })
+                .IsDescending(false, true);
+
+            entity.ToTable(table => table.HasCheckConstraint(
+                "CK_Notification_Type",
+                "\"Type\" IN ('signup', 'enrollment', 'checkin')"));
         });
 
         // AttendanceReport configuration

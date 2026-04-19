@@ -1,10 +1,15 @@
+using System.Text;
+using System.Text.Json;
+using Attendance_Management_System.Backend.Configuration;
 using Attendance_Management_System.Backend.DTOs.Requests;
 using Attendance_Management_System.Backend.DTOs.Responses;
 using Attendance_Management_System.Backend.Entities;
 using Attendance_Management_System.Backend.Interfaces.Services;
 using Attendance_Management_System.Backend.Persistence;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 
 namespace Attendance_Management_System.Backend.Services;
 
@@ -14,15 +19,27 @@ public class AuthService : IAuthService
     private readonly UserManager<User> _userManager;
     private readonly AppDbContext _context;
     private readonly ISectionAllocationService _sectionAllocationService;
+    private readonly IAccountEmailService _accountEmailService;
+    private readonly INotificationService _notificationService;
+    private readonly EmailSettings _emailSettings;
+    private readonly ILogger<AuthService> _logger;
 
     public AuthService(
         UserManager<User> userManager,
         AppDbContext context,
-        ISectionAllocationService sectionAllocationService)
+        ISectionAllocationService sectionAllocationService,
+        IAccountEmailService accountEmailService,
+        INotificationService notificationService,
+        IOptions<EmailSettings> emailSettings,
+        ILogger<AuthService> logger)
     {
         _userManager = userManager;
         _context = context;
         _sectionAllocationService = sectionAllocationService;
+        _accountEmailService = accountEmailService;
+        _notificationService = notificationService;
+        _emailSettings = emailSettings.Value;
+        _logger = logger;
     }
 
     // Authenticates user by verifying email and password
@@ -189,7 +206,7 @@ public class AuthService : IAuthService
                 Email = request.Email,
                 Role = "student",
                 IsActive = true,
-                EmailConfirmed = true // Auto-confirm for MVP
+                EmailConfirmed = false
             };
 
             var result = await _userManager.CreateAsync(user, request.Password);
@@ -241,6 +258,11 @@ public class AuthService : IAuthService
 
             await transaction.CommitAsync();
 
+            var studentDisplayName = BuildDisplayName(request.FirstName, request.MiddleName, request.LastName);
+
+            await TrySendSignupAndVerificationEmailsAsync(user, studentDisplayName);
+            await TryNotifyAdminsOfSignupAsync(user, studentDisplayName, request.StudentNumber);
+
             var userDto = await BuildUserDtoAsync(user);
 
             return new AuthResponse
@@ -259,6 +281,107 @@ public class AuthService : IAuthService
                 Message = "Unable to complete registration right now. Please try again."
             };
         }
+    }
+
+    public async Task<AuthResponse> ConfirmEmailAsync(int userId, string token)
+    {
+        if (userId <= 0 || string.IsNullOrWhiteSpace(token))
+        {
+            return new AuthResponse
+            {
+                Success = false,
+                Message = "Invalid or expired email confirmation link."
+            };
+        }
+
+        var user = await _userManager.FindByIdAsync(userId.ToString());
+        if (user == null)
+        {
+            return new AuthResponse
+            {
+                Success = false,
+                Message = "Invalid or expired email confirmation link."
+            };
+        }
+
+        if (user.EmailConfirmed)
+        {
+            return new AuthResponse
+            {
+                Success = true,
+                Message = "Email is already confirmed. You can sign in."
+            };
+        }
+
+        var decodedToken = DecodeEmailToken(token);
+        if (string.IsNullOrWhiteSpace(decodedToken))
+        {
+            return new AuthResponse
+            {
+                Success = false,
+                Message = "Invalid or expired email confirmation link."
+            };
+        }
+
+        var result = await _userManager.ConfirmEmailAsync(user, decodedToken);
+        if (!result.Succeeded)
+        {
+            return new AuthResponse
+            {
+                Success = false,
+                Message = "Invalid or expired email confirmation link."
+            };
+        }
+
+        return new AuthResponse
+        {
+            Success = true,
+            Message = "Email confirmed successfully. You can now sign in."
+        };
+    }
+
+    public async Task<AuthResponse> ResendVerificationAsync(string email)
+    {
+        const string GenericResponseMessage = "If an account exists for that email, a verification link has been sent. Please check your inbox.";
+
+        if (string.IsNullOrWhiteSpace(email))
+        {
+            return new AuthResponse
+            {
+                Success = true,
+                Message = GenericResponseMessage
+            };
+        }
+
+        var normalizedEmail = email.Trim();
+        var user = await _userManager.FindByEmailAsync(normalizedEmail);
+        if (user == null || user.EmailConfirmed || !user.IsActive || string.IsNullOrWhiteSpace(user.Email))
+        {
+            return new AuthResponse
+            {
+                Success = true,
+                Message = GenericResponseMessage
+            };
+        }
+
+        try
+        {
+            var token = await _userManager.GenerateEmailConfirmationTokenAsync(user);
+            var confirmationLink = BuildEmailConfirmationLink(user.Id, token);
+            var displayName = await ResolveDisplayNameAsync(user);
+
+            await _accountEmailService.SendVerificationEmailAsync(user.Email, displayName, confirmationLink);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to resend verification email for user {UserId}.", user.Id);
+        }
+
+        return new AuthResponse
+        {
+            Success = true,
+            Message = GenericResponseMessage
+        };
     }
 
     // Registers a new teacher with auto-generated employee number
@@ -382,6 +505,128 @@ public class AuthService : IAuthService
         }
 
         return userDto;
+    }
+
+    private async Task TrySendSignupAndVerificationEmailsAsync(User user, string studentDisplayName)
+    {
+        if (string.IsNullOrWhiteSpace(user.Email))
+        {
+            return;
+        }
+
+        try
+        {
+            var token = await _userManager.GenerateEmailConfirmationTokenAsync(user);
+            var confirmationLink = BuildEmailConfirmationLink(user.Id, token);
+
+            await _accountEmailService.SendSignupAcknowledgmentAsync(user.Email, studentDisplayName);
+            await _accountEmailService.SendVerificationEmailAsync(user.Email, studentDisplayName, confirmationLink);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to send signup/verification emails for user {UserId}.", user.Id);
+        }
+    }
+
+    private async Task TryNotifyAdminsOfSignupAsync(User user, string studentDisplayName, string studentNumber)
+    {
+        try
+        {
+            var adminUserIds = await _context.Users
+                .AsNoTracking()
+                .Where(account => account.Role == "admin" && account.IsActive)
+                .Select(account => account.Id)
+                .ToListAsync();
+
+            if (adminUserIds.Count == 0)
+            {
+                return;
+            }
+
+            var payloadJson = JsonSerializer.Serialize(new
+            {
+                StudentUserId = user.Id,
+                StudentNumber = studentNumber,
+                StudentName = studentDisplayName
+            });
+
+            foreach (var adminUserId in adminUserIds)
+            {
+                await _notificationService.CreateAsync(
+                    adminUserId,
+                    "signup",
+                    "New Student Signup",
+                    $"{studentDisplayName} submitted a new signup request.",
+                    "/enrollments",
+                    payloadJson);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to notify admin users about student signup for user {UserId}.", user.Id);
+        }
+    }
+
+    private async Task<string> ResolveDisplayNameAsync(User user)
+    {
+        var studentName = await _context.Students
+            .AsNoTracking()
+            .Where(student => student.UserId == user.Id)
+            .Select(student => new { student.FirstName, student.MiddleName, student.LastName })
+            .FirstOrDefaultAsync();
+
+        if (studentName != null)
+        {
+            return BuildDisplayName(studentName.FirstName, studentName.MiddleName, studentName.LastName);
+        }
+
+        var teacherName = await _context.Teachers
+            .AsNoTracking()
+            .Where(teacher => teacher.UserId == user.Id)
+            .Select(teacher => new { teacher.FirstName, teacher.MiddleName, teacher.LastName })
+            .FirstOrDefaultAsync();
+
+        if (teacherName != null)
+        {
+            return BuildDisplayName(teacherName.FirstName, teacherName.MiddleName, teacherName.LastName);
+        }
+
+        return user.Email ?? "Student";
+    }
+
+    private string BuildEmailConfirmationLink(int userId, string token)
+    {
+        var encodedToken = WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(token));
+
+        var baseUrl = string.IsNullOrWhiteSpace(_emailSettings.PublicBaseUrl)
+            ? "https://localhost:5001"
+            : _emailSettings.PublicBaseUrl.Trim();
+
+        baseUrl = baseUrl.TrimEnd('/');
+        return $"{baseUrl}/confirm-email?userId={userId}&token={encodedToken}";
+    }
+
+    private static string? DecodeEmailToken(string token)
+    {
+        try
+        {
+            var decodedBytes = WebEncoders.Base64UrlDecode(token.Trim());
+            return Encoding.UTF8.GetString(decodedBytes);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static string BuildDisplayName(string? firstName, string? middleName, string? lastName)
+    {
+        var parts = new[] { firstName, middleName, lastName }
+            .Where(part => !string.IsNullOrWhiteSpace(part))
+            .Select(part => part!.Trim());
+
+        var fullName = string.Join(" ", parts);
+        return string.IsNullOrWhiteSpace(fullName) ? "Student" : fullName;
     }
 
     private async Task<string> GenerateEmployeeNumberAsync()

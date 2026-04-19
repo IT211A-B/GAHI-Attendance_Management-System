@@ -33,12 +33,16 @@ public class AttendanceQrService : IAttendanceQrService
     private readonly IAttendanceService _attendanceService;
     private readonly AttendanceSettings _attendanceSettings;
     private readonly AttendanceQrSettings _qrSettings;
+    private readonly INotificationService _notificationService;
+    private readonly ILogger<AttendanceQrService> _logger;
 
     public AttendanceQrService(
         AppDbContext context,
         IAttendanceService attendanceService,
         IOptions<AttendanceSettings> attendanceSettings,
-        IOptions<AttendanceQrSettings> qrSettings)
+        IOptions<AttendanceQrSettings> qrSettings,
+        INotificationService notificationService,
+        ILogger<AttendanceQrService> logger)
     {
         _context = context;
         _attendanceService = attendanceService;
@@ -48,6 +52,8 @@ public class AttendanceQrService : IAttendanceQrService
         _qrSettings = qrSettings.Value?.IsValid() == true
             ? qrSettings.Value
             : AttendanceQrSettings.Default;
+        _notificationService = notificationService;
+        _logger = logger;
     }
 
     public async Task<ApiResponse<List<AttendanceQrSectionSuggestionDto>>> SearchSectionsAsync(int userId, string role, string? query, int take)
@@ -639,6 +645,7 @@ public class AttendanceQrService : IAttendanceQrService
         }
 
         var normalizedStatus = NormalizeStatus(attendanceResult.Data.StatusLabel);
+        var studentName = BuildStudentName(student.FirstName, student.MiddleName, student.LastName);
 
         var checkin = new AttendanceQrCheckin
         {
@@ -660,6 +667,29 @@ public class AttendanceQrService : IAttendanceQrService
             return ApiResponse<AttendanceQrCheckinResultDto>.ErrorResponse(
                 "ALREADY_CHECKED_IN",
                 "You are already marked present for this session.");
+        }
+
+        try
+        {
+            var payloadJson = JsonSerializer.Serialize(new
+            {
+                SessionId = session.SessionId,
+                StudentId = student.Id,
+                StudentName = studentName,
+                Status = normalizedStatus
+            });
+
+            await _notificationService.CreateAsync(
+                session.CreatedByUserId,
+                "checkin",
+                "QR Check-in",
+                $"{studentName} checked in via QR.",
+                "/attendance/qr",
+                payloadJson);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to create QR check-in notification for session {SessionId}.", session.SessionId);
         }
 
         var result = new AttendanceQrCheckinResultDto

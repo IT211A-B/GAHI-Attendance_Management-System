@@ -1,5 +1,6 @@
 using Attendance_Management_System.Backend;
 using Attendance_Management_System.Backend.Data;
+using Attendance_Management_System.Backend.Hubs;
 using Attendance_Management_System.Backend.Persistence;
 using Microsoft.AspNetCore.Mvc.Razor;
 using Microsoft.EntityFrameworkCore;
@@ -52,6 +53,8 @@ app.UseAuthorization();
 app.MapControllerRoute(
     name: "default",
     pattern: "{controller=Home}/{action=Index}/{id?}");
+
+app.MapHub<NotificationHub>("/hubs/notifications");
 
 // Expose health check endpoint for monitoring
 app.MapHealthChecks("/health");
