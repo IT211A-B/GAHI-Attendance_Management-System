@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations.Schema;
+using Attendance_Management_System.Backend.Constants;
 
 namespace Attendance_Management_System.Backend.Entities;
 
@@ -7,7 +8,7 @@ public class Notification : EntityBase
     public int RecipientUserId { get; set; }
 
     // Allowed values: signup, enrollment, checkin.
-    public string Type { get; set; } = "signup";
+    public string Type { get; set; } = NotificationTypes.Signup;
 
     public string Title { get; set; } = string.Empty;
 

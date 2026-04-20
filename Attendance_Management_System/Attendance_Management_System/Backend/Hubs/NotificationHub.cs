@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using Attendance_Management_System.Backend.Constants;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
 
@@ -12,12 +13,12 @@ public class NotificationHub : Hub
         var context = ResolveConnectionContext();
         if (context.UserId.HasValue)
         {
-            await Groups.AddToGroupAsync(Context.ConnectionId, $"user:{context.UserId.Value}");
+            await Groups.AddToGroupAsync(Context.ConnectionId, NotificationHubChannels.BuildUserGroupName(context.UserId.Value));
         }
 
         if (!string.IsNullOrWhiteSpace(context.Role))
         {
-            await Groups.AddToGroupAsync(Context.ConnectionId, $"role:{context.Role}");
+            await Groups.AddToGroupAsync(Context.ConnectionId, NotificationHubChannels.BuildRoleGroupName(context.Role));
         }
 
         await base.OnConnectedAsync();
@@ -28,12 +29,12 @@ public class NotificationHub : Hub
         var context = ResolveConnectionContext();
         if (context.UserId.HasValue)
         {
-            await Groups.RemoveFromGroupAsync(Context.ConnectionId, $"user:{context.UserId.Value}");
+            await Groups.RemoveFromGroupAsync(Context.ConnectionId, NotificationHubChannels.BuildUserGroupName(context.UserId.Value));
         }
 
         if (!string.IsNullOrWhiteSpace(context.Role))
         {
-            await Groups.RemoveFromGroupAsync(Context.ConnectionId, $"role:{context.Role}");
+            await Groups.RemoveFromGroupAsync(Context.ConnectionId, NotificationHubChannels.BuildRoleGroupName(context.Role));
         }
 
         await base.OnDisconnectedAsync(exception);
@@ -42,7 +43,7 @@ public class NotificationHub : Hub
     private (int? UserId, string Role) ResolveConnectionContext()
     {
         var userIdClaim = Context.User?.FindFirstValue(ClaimTypes.NameIdentifier);
-        var role = (Context.User?.FindFirstValue(ClaimTypes.Role) ?? string.Empty).Trim().ToLowerInvariant();
+        var role = NotificationHubChannels.NormalizeRole(Context.User?.FindFirstValue(ClaimTypes.Role));
 
         if (!int.TryParse(userIdClaim, out var userId))
         {

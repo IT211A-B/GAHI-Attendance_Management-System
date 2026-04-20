@@ -1,3 +1,4 @@
+using Attendance_Management_System.Backend.Constants;
 using Attendance_Management_System.Backend.DTOs.Responses;
 using Attendance_Management_System.Backend.Entities;
 using Attendance_Management_System.Backend.Interfaces.Services;
@@ -8,12 +9,8 @@ namespace Attendance_Management_System.Backend.Services;
 
 public class NotificationService : INotificationService
 {
-    private static readonly HashSet<string> AllowedTypes = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "signup",
-        "enrollment",
-        "checkin"
-    };
+    private const int DefaultTake = 20;
+    private const int MaxTake = 100;
 
     private readonly AppDbContext _context;
     private readonly INotificationPushService _pushService;
@@ -37,37 +34,20 @@ public class NotificationService : INotificationService
         string? linkUrl = null,
         string? payloadJson = null)
     {
-        var normalizedType = (type ?? string.Empty).Trim().ToLowerInvariant();
-        if (!AllowedTypes.Contains(normalizedType))
-        {
-            throw new ArgumentOutOfRangeException(nameof(type), "Unsupported notification type.");
-        }
-
-        var notification = new Notification
-        {
-            RecipientUserId = recipientUserId,
-            Type = normalizedType,
-            Title = title?.Trim() ?? string.Empty,
-            Message = message?.Trim() ?? string.Empty,
-            LinkUrl = string.IsNullOrWhiteSpace(linkUrl) ? null : linkUrl.Trim(),
-            PayloadJson = string.IsNullOrWhiteSpace(payloadJson) ? null : payloadJson,
-            IsRead = false
-        };
+        var notification = BuildNotification(
+            recipientUserId,
+            type,
+            title,
+            message,
+            linkUrl,
+            payloadJson);
 
         _context.Notifications.Add(notification);
         await _context.SaveChangesAsync();
 
         try
         {
-            await _pushService.PushToUserAsync(recipientUserId, new NotificationPushDto
-            {
-                Id = notification.Id,
-                Type = notification.Type,
-                Title = notification.Title,
-                Message = notification.Message,
-                LinkUrl = notification.LinkUrl,
-                CreatedAt = notification.CreatedAt
-            });
+            await _pushService.PushToUserAsync(recipientUserId, NotificationDtoMapper.ToPushDto(notification));
         }
         catch (Exception ex)
         {
@@ -79,7 +59,7 @@ public class NotificationService : INotificationService
 
     public Task<List<Notification>> GetRecentAsync(int userId, int take = 20)
     {
-        var safeTake = take <= 0 ? 20 : Math.Min(take, 100);
+        var safeTake = ClampTake(take);
 
         return _context.Notifications
             .AsNoTracking()
@@ -116,5 +96,48 @@ public class NotificationService : INotificationService
             .Where(notification => notification.RecipientUserId == userId && !notification.IsRead)
             .ExecuteUpdateAsync(update => update
                 .SetProperty(notification => notification.IsRead, _ => true));
+    }
+
+    private static Notification BuildNotification(
+        int recipientUserId,
+        string type,
+        string title,
+        string message,
+        string? linkUrl,
+        string? payloadJson)
+    {
+        var normalizedType = NormalizeAndValidateType(type);
+
+        return new Notification
+        {
+            RecipientUserId = recipientUserId,
+            Type = normalizedType,
+            Title = title?.Trim() ?? string.Empty,
+            Message = message?.Trim() ?? string.Empty,
+            LinkUrl = string.IsNullOrWhiteSpace(linkUrl) ? null : linkUrl.Trim(),
+            PayloadJson = string.IsNullOrWhiteSpace(payloadJson) ? null : payloadJson,
+            IsRead = false
+        };
+    }
+
+    private static string NormalizeAndValidateType(string type)
+    {
+        var normalizedType = NotificationTypes.Normalize(type);
+        if (NotificationTypes.IsSupported(normalizedType))
+        {
+            return normalizedType;
+        }
+
+        throw new ArgumentOutOfRangeException(nameof(type), "Unsupported notification type.");
+    }
+
+    private static int ClampTake(int take)
+    {
+        if (take <= 0)
+        {
+            return DefaultTake;
+        }
+
+        return Math.Min(take, MaxTake);
     }
 }

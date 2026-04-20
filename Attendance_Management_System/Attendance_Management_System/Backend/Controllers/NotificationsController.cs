@@ -1,6 +1,5 @@
 using System.Security.Claims;
 using Attendance_Management_System.Backend.DTOs.Responses;
-using Attendance_Management_System.Backend.Entities;
 using Attendance_Management_System.Backend.Interfaces.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -28,7 +27,7 @@ public class NotificationsController : Controller
         }
 
         var notifications = await _notificationService.GetRecentAsync(userId.Value, take);
-        var response = notifications.Select(MapToListItem).ToList();
+        var response = notifications.Select(NotificationDtoMapper.ToListItemDto).ToList();
 
         return Json(response);
     }
@@ -63,21 +62,5 @@ public class NotificationsController : Controller
     {
         var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
         return int.TryParse(userIdClaim, out var userId) ? userId : null;
-    }
-
-    private static NotificationListItemDto MapToListItem(Notification notification)
-    {
-        return new NotificationListItemDto
-        {
-            Id = notification.Id,
-            RecipientUserId = notification.RecipientUserId,
-            Type = notification.Type,
-            Title = notification.Title,
-            Message = notification.Message,
-            LinkUrl = notification.LinkUrl,
-            IsRead = notification.IsRead,
-            PayloadJson = notification.PayloadJson,
-            CreatedAt = notification.CreatedAt
-        };
     }
 }

@@ -260,40 +260,7 @@ public class EnrollmentService : IEnrollmentService
 
         await _context.SaveChangesAsync();
 
-        if (enrollment.Student?.UserId is int recipientUserId && recipientUserId > 0)
-        {
-            var studentName = BuildStudentDisplayName(enrollment.Student.FirstName, enrollment.Student.MiddleName, enrollment.Student.LastName);
-            var title = status == "approved" ? "Enrollment Approved" : "Enrollment Rejected";
-
-            var message = status == "approved"
-                ? $"Your enrollment has been approved, {studentName}."
-                : string.IsNullOrWhiteSpace(request.RejectionReason)
-                    ? $"Your enrollment has been rejected, {studentName}."
-                    : $"Your enrollment has been rejected: {request.RejectionReason.Trim()}";
-
-            var payloadJson = JsonSerializer.Serialize(new
-            {
-                EnrollmentId = enrollment.Id,
-                Status = status,
-                SectionId = enrollment.SectionId,
-                AcademicYearId = enrollment.AcademicYearId
-            });
-
-            try
-            {
-                await _notificationService.CreateAsync(
-                    recipientUserId,
-                    "enrollment",
-                    title,
-                    message,
-                    "/enrollments",
-                    payloadJson);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Failed to create enrollment notification for enrollment {EnrollmentId}.", enrollment.Id);
-            }
-        }
+        await TryCreateEnrollmentStatusNotificationAsync(enrollment, status, request.RejectionReason);
 
         // Get processor name for the response
         var teacher = await _context.Teachers
@@ -658,5 +625,45 @@ public class EnrollmentService : IEnrollmentService
             .Select(part => part!.Trim()));
 
         return string.IsNullOrWhiteSpace(fullName) ? "Student" : fullName;
+    }
+
+    private async Task TryCreateEnrollmentStatusNotificationAsync(Enrollment enrollment, string status, string? rejectionReason)
+    {
+        if (enrollment.Student?.UserId is not int recipientUserId || recipientUserId <= 0)
+        {
+            return;
+        }
+
+        var studentName = BuildStudentDisplayName(enrollment.Student.FirstName, enrollment.Student.MiddleName, enrollment.Student.LastName);
+        var title = status == "approved" ? "Enrollment Approved" : "Enrollment Rejected";
+
+        var message = status == "approved"
+            ? $"Your enrollment has been approved, {studentName}."
+            : string.IsNullOrWhiteSpace(rejectionReason)
+                ? $"Your enrollment has been rejected, {studentName}."
+                : $"Your enrollment has been rejected: {rejectionReason.Trim()}";
+
+        var payloadJson = JsonSerializer.Serialize(new
+        {
+            EnrollmentId = enrollment.Id,
+            Status = status,
+            SectionId = enrollment.SectionId,
+            AcademicYearId = enrollment.AcademicYearId
+        });
+
+        try
+        {
+            await _notificationService.CreateAsync(
+                recipientUserId,
+                NotificationTypes.Enrollment,
+                title,
+                message,
+                NotificationLinks.Enrollments,
+                payloadJson);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to create enrollment notification for enrollment {EnrollmentId}.", enrollment.Id);
+        }
     }
 }

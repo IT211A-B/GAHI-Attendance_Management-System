@@ -1,6 +1,7 @@
 using System.Text;
 using System.Text.Json;
 using Attendance_Management_System.Backend.Configuration;
+using Attendance_Management_System.Backend.Constants;
 using Attendance_Management_System.Backend.DTOs.Requests;
 using Attendance_Management_System.Backend.DTOs.Responses;
 using Attendance_Management_System.Backend.Entities;
@@ -16,6 +17,10 @@ namespace Attendance_Management_System.Backend.Services;
 // Handles authentication operations: login, registration, and user profile retrieval
 public class AuthService : IAuthService
 {
+    private const string GenericInvalidCredentialsMessage = "Invalid email or password.";
+    private const string GenericResendVerificationMessage = "If an account exists for that email, a verification link has been sent. Please check your inbox.";
+    private const string InvalidEmailConfirmationMessage = "Invalid or expired email confirmation link.";
+
     private readonly UserManager<User> _userManager;
     private readonly AppDbContext _context;
     private readonly ISectionAllocationService _sectionAllocationService;
@@ -51,21 +56,13 @@ public class AuthService : IAuthService
         // Return generic error to prevent email enumeration attacks
         if (user == null)
         {
-            return new AuthResponse
-            {
-                Success = false,
-                Message = "Invalid email or password."
-            };
+            return CreateFailureResponse(GenericInvalidCredentialsMessage);
         }
 
         // Check if account is active
         if (!user.IsActive)
         {
-            return new AuthResponse
-            {
-                Success = false,
-                Message = "Your account has been deactivated. Please contact administrator."
-            };
+            return CreateFailureResponse("Your account has been deactivated. Please contact administrator.");
         }
 
         // Verify password against stored hash
@@ -73,301 +70,97 @@ public class AuthService : IAuthService
 
         if (!isPasswordValid)
         {
-            return new AuthResponse
-            {
-                Success = false,
-                Message = "Invalid email or password."
-            };
+            return CreateFailureResponse(GenericInvalidCredentialsMessage);
         }
 
         // Build user DTO with role-specific details
         var userDto = await BuildUserDtoAsync(user);
 
-        return new AuthResponse
-        {
-            Success = true,
-            Message = "Login successful.",
-            User = userDto
-        };
+        return CreateSuccessResponse("Login successful.", userDto);
     }
 
     // Registers a new student and creates pending enrollment request
     public async Task<AuthResponse> RegisterStudentAsync(RegisterRequest request)
     {
-        // Check if email already exists
-        var existingUser = await _userManager.FindByEmailAsync(request.Email);
-        if (existingUser != null)
+        var validationError = await ValidateStudentRegistrationRequestAsync(request);
+        if (validationError != null)
         {
-            return new AuthResponse
-            {
-                Success = false,
-                Message = "An account with this email already exists."
-            };
+            return validationError;
         }
 
-        // Check if student number already exists
-        var existingStudentNumber = await _context.Students
-            .AnyAsync(s => s.StudentNumber == request.StudentNumber);
-        if (existingStudentNumber)
+        var sectionResolution = await ResolveStudentRegistrationSectionAsync(request);
+        if (sectionResolution.Error != null || sectionResolution.AssignedSection == null)
         {
-            return new AuthResponse
-            {
-                Success = false,
-                Message = "This student number is already registered."
-            };
+            return sectionResolution.Error ?? CreateFailureResponse("Unable to complete registration right now. Please try again.");
         }
 
-        // Validate CourseId exists
-        var courseExists = await _context.Courses.AnyAsync(c => c.Id == request.CourseId);
-        if (!courseExists)
+        var registrationResult = await CreateStudentRegistrationAsync(
+            request,
+            sectionResolution.AssignedSection,
+            sectionResolution.ResolvedYearLevel);
+
+        if (registrationResult.Error != null || registrationResult.User == null)
         {
-            return new AuthResponse
-            {
-                Success = false,
-                Message = "Invalid course selected."
-            };
+            return registrationResult.Error ?? CreateFailureResponse("Unable to complete registration right now. Please try again.");
         }
 
-        // Validate AcademicYearId exists
-        var academicYearExists = await _context.AcademicYears.AnyAsync(ay => ay.Id == request.AcademicYearId);
-        if (!academicYearExists)
-        {
-            return new AuthResponse
-            {
-                Success = false,
-                Message = "Invalid academic year selected."
-            };
-        }
+        var studentDisplayName = BuildDisplayName(request.FirstName, request.MiddleName, request.LastName);
+        await RunPostStudentRegistrationSideEffectsAsync(registrationResult.User, studentDisplayName, request.StudentNumber);
 
-        Section? assignedSection;
-        var resolvedYearLevel = 1;
-
-        // Optional explicit section still supported for backward compatibility.
-        if (request.SectionId.HasValue && request.SectionId.Value > 0)
-        {
-            assignedSection = await _context.Sections
-                .AsNoTracking()
-                .FirstOrDefaultAsync(s => s.Id == request.SectionId.Value);
-
-            if (assignedSection == null)
-            {
-                return new AuthResponse
-                {
-                    Success = false,
-                    Message = "Invalid section selected."
-                };
-            }
-
-            if (assignedSection.CourseId != request.CourseId)
-            {
-                return new AuthResponse
-                {
-                    Success = false,
-                    Message = "Selected section does not belong to the selected course."
-                };
-            }
-
-            if (assignedSection.AcademicYearId != request.AcademicYearId)
-            {
-                return new AuthResponse
-                {
-                    Success = false,
-                    Message = "Selected section does not belong to the selected academic period."
-                };
-            }
-
-            resolvedYearLevel = assignedSection.YearLevel > 0 ? assignedSection.YearLevel : 1;
-        }
-        else
-        {
-            assignedSection = await _sectionAllocationService
-                .AllocateSectionAsync(request.CourseId, request.AcademicYearId, resolvedYearLevel);
-
-            if (assignedSection == null)
-            {
-                return new AuthResponse
-                {
-                    Success = false,
-                    Message = "No available sections for the selected course and academic period. Please contact an administrator."
-                };
-            }
-
-            resolvedYearLevel = assignedSection.YearLevel > 0 ? assignedSection.YearLevel : resolvedYearLevel;
-        }
-
-        await using var transaction = await _context.Database.BeginTransactionAsync();
-
-        try
-        {
-            // Create user
-            var user = new User
-            {
-                UserName = request.Email,
-                Email = request.Email,
-                Role = "student",
-                IsActive = true,
-                EmailConfirmed = false
-            };
-
-            var result = await _userManager.CreateAsync(user, request.Password);
-
-            if (!result.Succeeded)
-            {
-                await transaction.RollbackAsync();
-                var errors = string.Join(", ", result.Errors.Select(e => e.Description));
-                return new AuthResponse
-                {
-                    Success = false,
-                    Message = $"Registration failed: {errors}"
-                };
-            }
-
-            // Create student record
-            var student = new Student
-            {
-                UserId = user.Id,
-                CourseId = request.CourseId,
-                SectionId = null, // Will be set when enrollment is approved
-                StudentNumber = request.StudentNumber,
-                FirstName = request.FirstName,
-                LastName = request.LastName,
-                MiddleName = request.MiddleName,
-                Birthdate = request.Birthdate,
-                Gender = request.Gender,
-                Address = request.Address,
-                GuardianName = request.GuardianName,
-                GuardianContact = request.GuardianContact,
-                YearLevel = resolvedYearLevel,
-                IsActive = true
-            };
-
-            _context.Students.Add(student);
-            await _context.SaveChangesAsync();
-
-            // Create pending enrollment
-            var enrollment = new Enrollment
-            {
-                StudentId = student.Id,
-                SectionId = assignedSection.Id,
-                AcademicYearId = request.AcademicYearId,
-                Status = "pending"
-            };
-
-            _context.Enrollments.Add(enrollment);
-            await _context.SaveChangesAsync();
-
-            await transaction.CommitAsync();
-
-            var studentDisplayName = BuildDisplayName(request.FirstName, request.MiddleName, request.LastName);
-
-            await TrySendSignupAndVerificationEmailsAsync(user, studentDisplayName);
-            await TryNotifyAdminsOfSignupAsync(user, studentDisplayName, request.StudentNumber);
-
-            var userDto = await BuildUserDtoAsync(user);
-
-            return new AuthResponse
-            {
-                Success = true,
-                Message = "Registration successful. Your enrollment is pending approval.",
-                User = userDto
-            };
-        }
-        catch
-        {
-            await transaction.RollbackAsync();
-            return new AuthResponse
-            {
-                Success = false,
-                Message = "Unable to complete registration right now. Please try again."
-            };
-        }
+        var userDto = await BuildUserDtoAsync(registrationResult.User);
+        return CreateSuccessResponse("Registration successful. Your enrollment is pending approval.", userDto);
     }
 
     public async Task<AuthResponse> ConfirmEmailAsync(int userId, string token)
     {
         if (userId <= 0 || string.IsNullOrWhiteSpace(token))
         {
-            return new AuthResponse
-            {
-                Success = false,
-                Message = "Invalid or expired email confirmation link."
-            };
+            return CreateInvalidEmailConfirmationResponse();
         }
 
         var user = await _userManager.FindByIdAsync(userId.ToString());
         if (user == null)
         {
-            return new AuthResponse
-            {
-                Success = false,
-                Message = "Invalid or expired email confirmation link."
-            };
+            return CreateInvalidEmailConfirmationResponse();
         }
 
         if (user.EmailConfirmed)
         {
-            return new AuthResponse
-            {
-                Success = true,
-                Message = "Email is already confirmed. You can sign in."
-            };
+            return CreateSuccessResponse("Email is already confirmed. You can sign in.");
         }
 
         var decodedToken = DecodeEmailToken(token);
         if (string.IsNullOrWhiteSpace(decodedToken))
         {
-            return new AuthResponse
-            {
-                Success = false,
-                Message = "Invalid or expired email confirmation link."
-            };
+            return CreateInvalidEmailConfirmationResponse();
         }
 
         var result = await _userManager.ConfirmEmailAsync(user, decodedToken);
         if (!result.Succeeded)
         {
-            return new AuthResponse
-            {
-                Success = false,
-                Message = "Invalid or expired email confirmation link."
-            };
+            return CreateInvalidEmailConfirmationResponse();
         }
 
-        return new AuthResponse
-        {
-            Success = true,
-            Message = "Email confirmed successfully. You can now sign in."
-        };
+        return CreateSuccessResponse("Email confirmed successfully. You can now sign in.");
     }
 
     public async Task<AuthResponse> ResendVerificationAsync(string email)
     {
-        const string GenericResponseMessage = "If an account exists for that email, a verification link has been sent. Please check your inbox.";
-
         if (string.IsNullOrWhiteSpace(email))
         {
-            return new AuthResponse
-            {
-                Success = true,
-                Message = GenericResponseMessage
-            };
+            return CreateSuccessResponse(GenericResendVerificationMessage);
         }
 
         var normalizedEmail = email.Trim();
         var user = await _userManager.FindByEmailAsync(normalizedEmail);
         if (user == null || user.EmailConfirmed || !user.IsActive || string.IsNullOrWhiteSpace(user.Email))
         {
-            return new AuthResponse
-            {
-                Success = true,
-                Message = GenericResponseMessage
-            };
+            return CreateSuccessResponse(GenericResendVerificationMessage);
         }
 
         try
         {
-            var token = await _userManager.GenerateEmailConfirmationTokenAsync(user);
-            var confirmationLink = BuildEmailConfirmationLink(user.Id, token);
+            var confirmationLink = await BuildEmailConfirmationLinkAsync(user);
             var displayName = await ResolveDisplayNameAsync(user);
 
             await _accountEmailService.SendVerificationEmailAsync(user.Email, displayName, confirmationLink);
@@ -377,11 +170,7 @@ public class AuthService : IAuthService
             _logger.LogWarning(ex, "Failed to resend verification email for user {UserId}.", user.Id);
         }
 
-        return new AuthResponse
-        {
-            Success = true,
-            Message = GenericResponseMessage
-        };
+        return CreateSuccessResponse(GenericResendVerificationMessage);
     }
 
     // Registers a new teacher with auto-generated employee number
@@ -391,11 +180,7 @@ public class AuthService : IAuthService
         var existingUser = await _userManager.FindByEmailAsync(request.Email);
         if (existingUser != null)
         {
-            return new AuthResponse
-            {
-                Success = false,
-                Message = "An account with this email already exists."
-            };
+            return CreateFailureResponse("An account with this email already exists.");
         }
 
         // Create user
@@ -413,11 +198,7 @@ public class AuthService : IAuthService
         if (!result.Succeeded)
         {
             var errors = string.Join(", ", result.Errors.Select(e => e.Description));
-            return new AuthResponse
-            {
-                Success = false,
-                Message = $"Registration failed: {errors}"
-            };
+            return CreateFailureResponse($"Registration failed: {errors}");
         }
 
         // Generate employee number (auto-generated)
@@ -440,12 +221,7 @@ public class AuthService : IAuthService
 
         var userDto = await BuildUserDtoAsync(user);
 
-        return new AuthResponse
-        {
-            Success = true,
-            Message = "Teacher registration successful.",
-            User = userDto
-        };
+        return CreateSuccessResponse("Teacher registration successful.", userDto);
     }
 
     // Retrieves user profile with role-specific information
@@ -458,6 +234,124 @@ public class AuthService : IAuthService
         }
 
         return await BuildUserDtoAsync(user);
+    }
+
+    private async Task<AuthResponse?> ValidateStudentRegistrationRequestAsync(RegisterRequest request)
+    {
+        // Check if email already exists
+        var existingUser = await _userManager.FindByEmailAsync(request.Email);
+        if (existingUser != null)
+        {
+            return CreateFailureResponse("An account with this email already exists.");
+        }
+
+        // Check if student number already exists
+        var existingStudentNumber = await _context.Students
+            .AnyAsync(student => student.StudentNumber == request.StudentNumber);
+        if (existingStudentNumber)
+        {
+            return CreateFailureResponse("This student number is already registered.");
+        }
+
+        // Validate CourseId exists
+        var courseExists = await _context.Courses.AnyAsync(course => course.Id == request.CourseId);
+        if (!courseExists)
+        {
+            return CreateFailureResponse("Invalid course selected.");
+        }
+
+        // Validate AcademicYearId exists
+        var academicYearExists = await _context.AcademicYears.AnyAsync(academicYear => academicYear.Id == request.AcademicYearId);
+        if (!academicYearExists)
+        {
+            return CreateFailureResponse("Invalid academic year selected.");
+        }
+
+        return null;
+    }
+
+    private async Task<(Section? AssignedSection, int ResolvedYearLevel, AuthResponse? Error)> ResolveStudentRegistrationSectionAsync(RegisterRequest request)
+    {
+        var resolvedYearLevel = 1;
+
+        // Optional explicit section still supported for backward compatibility.
+        if (request.SectionId.HasValue && request.SectionId.Value > 0)
+        {
+            var assignedSection = await _context.Sections
+                .AsNoTracking()
+                .FirstOrDefaultAsync(section => section.Id == request.SectionId.Value);
+
+            if (assignedSection == null)
+            {
+                return (null, resolvedYearLevel, CreateFailureResponse("Invalid section selected."));
+            }
+
+            if (assignedSection.CourseId != request.CourseId)
+            {
+                return (null, resolvedYearLevel, CreateFailureResponse("Selected section does not belong to the selected course."));
+            }
+
+            if (assignedSection.AcademicYearId != request.AcademicYearId)
+            {
+                return (null, resolvedYearLevel, CreateFailureResponse("Selected section does not belong to the selected academic period."));
+            }
+
+            resolvedYearLevel = assignedSection.YearLevel > 0 ? assignedSection.YearLevel : 1;
+            return (assignedSection, resolvedYearLevel, null);
+        }
+
+        var autoAssignedSection = await _sectionAllocationService
+            .AllocateSectionAsync(request.CourseId, request.AcademicYearId, resolvedYearLevel);
+
+        if (autoAssignedSection == null)
+        {
+            return (null, resolvedYearLevel, CreateFailureResponse("No available sections for the selected course and academic period. Please contact an administrator."));
+        }
+
+        resolvedYearLevel = autoAssignedSection.YearLevel > 0 ? autoAssignedSection.YearLevel : resolvedYearLevel;
+        return (autoAssignedSection, resolvedYearLevel, null);
+    }
+
+    private async Task<(User? User, AuthResponse? Error)> CreateStudentRegistrationAsync(
+        RegisterRequest request,
+        Section assignedSection,
+        int resolvedYearLevel)
+    {
+        await using var transaction = await _context.Database.BeginTransactionAsync();
+
+        try
+        {
+            var user = BuildStudentUser(request.Email);
+            var userCreateResult = await _userManager.CreateAsync(user, request.Password);
+            if (!userCreateResult.Succeeded)
+            {
+                await transaction.RollbackAsync();
+                var errors = string.Join(", ", userCreateResult.Errors.Select(error => error.Description));
+                return (null, CreateFailureResponse($"Registration failed: {errors}"));
+            }
+
+            var student = BuildStudentEntity(request, user.Id, resolvedYearLevel);
+            _context.Students.Add(student);
+            await _context.SaveChangesAsync();
+
+            var enrollment = BuildPendingEnrollment(student.Id, assignedSection.Id, request.AcademicYearId);
+            _context.Enrollments.Add(enrollment);
+            await _context.SaveChangesAsync();
+
+            await transaction.CommitAsync();
+            return (user, null);
+        }
+        catch
+        {
+            await transaction.RollbackAsync();
+            return (null, CreateFailureResponse("Unable to complete registration right now. Please try again."));
+        }
+    }
+
+    private async Task RunPostStudentRegistrationSideEffectsAsync(User user, string studentDisplayName, string studentNumber)
+    {
+        await TrySendSignupAndVerificationEmailsAsync(user, studentDisplayName);
+        await TryNotifyAdminsOfSignupAsync(user, studentDisplayName, studentNumber);
     }
 
     // Constructs UserDto with student or teacher details based on role
@@ -516,8 +410,7 @@ public class AuthService : IAuthService
 
         try
         {
-            var token = await _userManager.GenerateEmailConfirmationTokenAsync(user);
-            var confirmationLink = BuildEmailConfirmationLink(user.Id, token);
+            var confirmationLink = await BuildEmailConfirmationLinkAsync(user);
 
             await _accountEmailService.SendSignupAcknowledgmentAsync(user.Email, studentDisplayName);
             await _accountEmailService.SendVerificationEmailAsync(user.Email, studentDisplayName, confirmationLink);
@@ -554,10 +447,10 @@ public class AuthService : IAuthService
             {
                 await _notificationService.CreateAsync(
                     adminUserId,
-                    "signup",
+                    NotificationTypes.Signup,
                     "New Student Signup",
                     $"{studentDisplayName} submitted a new signup request.",
-                    "/enrollments",
+                    NotificationLinks.Enrollments,
                     payloadJson);
             }
         }
@@ -594,16 +487,29 @@ public class AuthService : IAuthService
         return user.Email ?? "Student";
     }
 
+    private async Task<string> BuildEmailConfirmationLinkAsync(User user)
+    {
+        var token = await _userManager.GenerateEmailConfirmationTokenAsync(user);
+        return BuildEmailConfirmationLink(user.Id, token);
+    }
+
     private string BuildEmailConfirmationLink(int userId, string token)
     {
-        var encodedToken = WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(token));
+        var encodedToken = EncodeEmailConfirmationToken(token);
+        var baseUrl = ResolvePublicBaseUrl().TrimEnd('/');
+        return $"{baseUrl}/confirm-email?userId={userId}&token={encodedToken}";
+    }
 
-        var baseUrl = string.IsNullOrWhiteSpace(_emailSettings.PublicBaseUrl)
+    private static string EncodeEmailConfirmationToken(string token)
+    {
+        return WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(token));
+    }
+
+    private string ResolvePublicBaseUrl()
+    {
+        return string.IsNullOrWhiteSpace(_emailSettings.PublicBaseUrl)
             ? "https://localhost:5001"
             : _emailSettings.PublicBaseUrl.Trim();
-
-        baseUrl = baseUrl.TrimEnd('/');
-        return $"{baseUrl}/confirm-email?userId={userId}&token={encodedToken}";
     }
 
     private static string? DecodeEmailToken(string token)
@@ -627,6 +533,74 @@ public class AuthService : IAuthService
 
         var fullName = string.Join(" ", parts);
         return string.IsNullOrWhiteSpace(fullName) ? "Student" : fullName;
+    }
+
+    private static User BuildStudentUser(string email)
+    {
+        return new User
+        {
+            UserName = email,
+            Email = email,
+            Role = "student",
+            IsActive = true,
+            EmailConfirmed = false
+        };
+    }
+
+    private static Student BuildStudentEntity(RegisterRequest request, int userId, int resolvedYearLevel)
+    {
+        return new Student
+        {
+            UserId = userId,
+            CourseId = request.CourseId,
+            SectionId = null, // Will be set when enrollment is approved
+            StudentNumber = request.StudentNumber,
+            FirstName = request.FirstName,
+            LastName = request.LastName,
+            MiddleName = request.MiddleName,
+            Birthdate = request.Birthdate,
+            Gender = request.Gender,
+            Address = request.Address,
+            GuardianName = request.GuardianName,
+            GuardianContact = request.GuardianContact,
+            YearLevel = resolvedYearLevel,
+            IsActive = true
+        };
+    }
+
+    private static Enrollment BuildPendingEnrollment(int studentId, int sectionId, int academicYearId)
+    {
+        return new Enrollment
+        {
+            StudentId = studentId,
+            SectionId = sectionId,
+            AcademicYearId = academicYearId,
+            Status = "pending"
+        };
+    }
+
+    private static AuthResponse CreateInvalidEmailConfirmationResponse()
+    {
+        return CreateFailureResponse(InvalidEmailConfirmationMessage);
+    }
+
+    private static AuthResponse CreateFailureResponse(string message)
+    {
+        return new AuthResponse
+        {
+            Success = false,
+            Message = message
+        };
+    }
+
+    private static AuthResponse CreateSuccessResponse(string message, UserDto? user = null)
+    {
+        return new AuthResponse
+        {
+            Success = true,
+            Message = message,
+            User = user
+        };
     }
 
     private async Task<string> GenerateEmployeeNumberAsync()

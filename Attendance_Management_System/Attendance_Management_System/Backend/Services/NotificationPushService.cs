@@ -1,3 +1,4 @@
+using Attendance_Management_System.Backend.Constants;
 using Attendance_Management_System.Backend.DTOs.Responses;
 using Attendance_Management_System.Backend.Hubs;
 using Attendance_Management_System.Backend.Interfaces.Services;
@@ -16,12 +17,15 @@ public class NotificationPushService : INotificationPushService
 
     public Task PushToUserAsync(int userId, NotificationPushDto notification)
     {
-        return _hubContext.Clients.Group($"user:{userId}").SendAsync("notification:new", notification);
+        return _hubContext.Clients
+            .Group(NotificationHubChannels.BuildUserGroupName(userId))
+            .SendAsync(NotificationHubChannels.NewEventName, notification);
     }
 
     public Task PushToRoleAsync(string role, NotificationPushDto notification)
     {
-        var normalizedRole = role?.Trim().ToLowerInvariant() ?? string.Empty;
-        return _hubContext.Clients.Group($"role:{normalizedRole}").SendAsync("notification:new", notification);
+        return _hubContext.Clients
+            .Group(NotificationHubChannels.BuildRoleGroupName(role))
+            .SendAsync(NotificationHubChannels.NewEventName, notification);
     }
 }

@@ -669,28 +669,7 @@ public class AttendanceQrService : IAttendanceQrService
                 "You are already marked present for this session.");
         }
 
-        try
-        {
-            var payloadJson = JsonSerializer.Serialize(new
-            {
-                SessionId = session.SessionId,
-                StudentId = student.Id,
-                StudentName = studentName,
-                Status = normalizedStatus
-            });
-
-            await _notificationService.CreateAsync(
-                session.CreatedByUserId,
-                "checkin",
-                "QR Check-in",
-                $"{studentName} checked in via QR.",
-                "/attendance/qr",
-                payloadJson);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Failed to create QR check-in notification for session {SessionId}.", session.SessionId);
-        }
+        await TryCreateCheckinNotificationAsync(session, student.Id, studentName, normalizedStatus);
 
         var result = new AttendanceQrCheckinResultDto
         {
@@ -787,6 +766,36 @@ public class AttendanceQrService : IAttendanceQrService
     private static string BuildPeriodLabel(int dayOfWeek, TimeOnly startTime, TimeOnly endTime)
     {
         return $"{ResolveDayName(dayOfWeek)} | {startTime:HH\\:mm}-{endTime:HH\\:mm}";
+    }
+
+    private async Task TryCreateCheckinNotificationAsync(
+        AttendanceQrSession session,
+        int studentId,
+        string studentName,
+        string normalizedStatus)
+    {
+        try
+        {
+            var payloadJson = JsonSerializer.Serialize(new
+            {
+                SessionId = session.SessionId,
+                StudentId = studentId,
+                StudentName = studentName,
+                Status = normalizedStatus
+            });
+
+            await _notificationService.CreateAsync(
+                session.CreatedByUserId,
+                NotificationTypes.Checkin,
+                "QR Check-in",
+                $"{studentName} checked in via QR.",
+                NotificationLinks.AttendanceQr,
+                payloadJson);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to create QR check-in notification for session {SessionId}.", session.SessionId);
+        }
     }
 
     private AttendanceQrSessionDto BuildSessionDto(

@@ -25,10 +25,7 @@ public class SmtpEmailSender : IEmailSender
 
     public async Task SendAsync(string toAddress, string subject, string htmlBody)
     {
-        if (string.IsNullOrWhiteSpace(toAddress))
-        {
-            throw new ArgumentException("Recipient email address is required.", nameof(toAddress));
-        }
+        EnsureRecipientAddress(toAddress);
 
         if (!IsSmtpConfigured())
         {
@@ -41,6 +38,20 @@ public class SmtpEmailSender : IEmailSender
             throw new InvalidOperationException("EmailSettings are not fully configured for SMTP delivery.");
         }
 
+        var message = BuildMessage(toAddress, subject, htmlBody);
+        await SendViaSmtpAsync(message);
+    }
+
+    private static void EnsureRecipientAddress(string toAddress)
+    {
+        if (string.IsNullOrWhiteSpace(toAddress))
+        {
+            throw new ArgumentException("Recipient email address is required.", nameof(toAddress));
+        }
+    }
+
+    private MimeMessage BuildMessage(string toAddress, string subject, string htmlBody)
+    {
         var message = new MimeMessage();
         message.From.Add(new MailboxAddress(_emailSettings.FromName, _emailSettings.FromAddress));
         message.To.Add(MailboxAddress.Parse(toAddress));
@@ -50,16 +61,26 @@ public class SmtpEmailSender : IEmailSender
             Text = htmlBody
         };
 
+        return message;
+    }
+
+    private async Task SendViaSmtpAsync(MimeMessage message)
+    {
         using var client = new SmtpClient();
         await client.ConnectAsync(_emailSettings.Host, _emailSettings.Port, _emailSettings.UseSsl);
-
-        if (!string.IsNullOrWhiteSpace(_emailSettings.Username) && !string.IsNullOrWhiteSpace(_emailSettings.Password))
-        {
-            await client.AuthenticateAsync(_emailSettings.Username, _emailSettings.Password);
-        }
-
+        await TryAuthenticateAsync(client);
         await client.SendAsync(message);
         await client.DisconnectAsync(true);
+    }
+
+    private async Task TryAuthenticateAsync(SmtpClient client)
+    {
+        if (string.IsNullOrWhiteSpace(_emailSettings.Username) || string.IsNullOrWhiteSpace(_emailSettings.Password))
+        {
+            return;
+        }
+
+        await client.AuthenticateAsync(_emailSettings.Username, _emailSettings.Password);
     }
 
     private bool IsSmtpConfigured()

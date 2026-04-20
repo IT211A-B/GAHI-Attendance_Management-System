@@ -1,3 +1,4 @@
+using Attendance_Management_System.Backend.Constants;
 using Attendance_Management_System.Backend.Entities;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
@@ -319,7 +320,7 @@ public class AppDbContext : IdentityDbContext<User, IdentityRole<int>, int>
 
             entity.ToTable(table => table.HasCheckConstraint(
                 "CK_Notification_Type",
-                "\"Type\" IN ('signup', 'enrollment', 'checkin')"));
+                NotificationTypes.TypeCheckConstraintSql));
         });
 
         // AttendanceReport configuration
