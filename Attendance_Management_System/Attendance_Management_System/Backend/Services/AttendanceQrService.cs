@@ -17,6 +17,7 @@ namespace Attendance_Management_System.Backend.Services;
 
 public class AttendanceQrService : IAttendanceQrService
 {
+    // Limits protect autocomplete and live-feed endpoints from over-fetching.
     private const int DefaultSuggestionTake = 8;
     private const int MaxSuggestionTake = 20;
     private const int MaxLiveFeedItems = 200;
@@ -46,6 +47,7 @@ public class AttendanceQrService : IAttendanceQrService
     {
         _context = context;
         _attendanceService = attendanceService;
+        // Use validated config values and fall back to defaults when needed.
         _attendanceSettings = attendanceSettings.Value?.IsValid() == true
             ? attendanceSettings.Value
             : AttendanceSettings.Default;
@@ -67,6 +69,7 @@ public class AttendanceQrService : IAttendanceQrService
         var normalizedQuery = NormalizeQuery(query);
         var limit = ClampTake(take);
 
+        // Teacher ownership can come from explicit section assignment or owned schedule rows.
         var assignedSectionIdsQuery = _context.SectionTeachers
             .AsNoTracking()
             .Where(assignment => assignment.TeacherId == ownerContext.TeacherId)
@@ -117,6 +120,7 @@ public class AttendanceQrService : IAttendanceQrService
         var normalizedQuery = NormalizeQuery(query);
         var limit = ClampTake(take);
 
+        // Subject suggestions are restricted to today's active schedules.
         var schedulesQuery = BuildOwnedSchedulesForSchoolDateQuery(ownerContext.TeacherId, ownerContext.SchoolDate)
             .Where(schedule => schedule.SectionId == sectionId && schedule.Subject != null);
 
@@ -171,6 +175,7 @@ public class AttendanceQrService : IAttendanceQrService
         var normalizedQuery = NormalizeQuery(query);
         var limit = ClampTake(take);
 
+        // Fetch first, then build labels in memory so filtering uses the final display text.
         var periodRows = await BuildOwnedSchedulesForSchoolDateQuery(ownerContext.TeacherId, ownerContext.SchoolDate)
             .Where(schedule => schedule.SectionId == sectionId && schedule.SubjectId == subjectId)
             .OrderBy(schedule => schedule.StartTime)
@@ -230,6 +235,7 @@ public class AttendanceQrService : IAttendanceQrService
         var schoolDate = ownerContext.SchoolDate;
         var nowUtc = DateTimeOffset.UtcNow;
 
+        // Session can only be created for a schedule owned by the current teacher profile.
         var schedule = await _context.Schedules
             .Include(item => item.Section)
             .Include(item => item.Subject)
@@ -267,6 +273,7 @@ public class AttendanceQrService : IAttendanceQrService
             activeSession.ClosedAtUtc = nowUtc;
         }
 
+        // New nonce invalidates any previously issued token for this schedule session.
         var sessionId = $"qrs_{Guid.NewGuid():N}";
         var nonce = Guid.NewGuid().ToString("N");
         var issuedAtUtc = nowUtc;
@@ -336,6 +343,7 @@ public class AttendanceQrService : IAttendanceQrService
         var nowUtc = DateTimeOffset.UtcNow;
         if (!session.IsActive || nowUtc >= session.ExpiresAtUtc)
         {
+            // Auto-close stale sessions so persisted state matches runtime validity.
             session.IsActive = false;
             session.ClosedAtUtc ??= nowUtc;
             await _context.SaveChangesAsync();
@@ -375,6 +383,7 @@ public class AttendanceQrService : IAttendanceQrService
 
         session.IssuedAtUtc = nowUtc;
         session.ExpiresAtUtc = nowUtc.AddSeconds(_qrSettings.SessionTtlSeconds);
+        // Rotate nonce on every refresh to block replay of previously captured tokens.
         session.TokenNonce = Guid.NewGuid().ToString("N");
 
         await _context.SaveChangesAsync();
@@ -436,6 +445,7 @@ public class AttendanceQrService : IAttendanceQrService
 
         if (hasChanges)
         {
+            // Close operation is idempotent; persist only if anything was updated.
             await _context.SaveChangesAsync();
         }
 
@@ -478,6 +488,7 @@ public class AttendanceQrService : IAttendanceQrService
             .AsNoTracking()
             .Where(item => item.AttendanceQrSessionId == session.Id)
             .OrderByDescending(item => item.CheckedInAtUtc)
+            // Cap feed size to keep polling payloads predictable.
             .Take(MaxLiveFeedItems)
             .Select(item => new LiveFeedCheckinRow
             {
@@ -535,6 +546,7 @@ public class AttendanceQrService : IAttendanceQrService
             return ApiResponse<AttendanceQrCheckinResultDto>.ErrorResponse("TOKEN_INVALID", "QR token is required.");
         }
 
+        // Reject tampered or expired tokens before querying any session data.
         if (!TryParseAndValidateToken(request.Token.Trim(), out var payload, out var tokenErrorCode, out var tokenErrorMessage))
         {
             return ApiResponse<AttendanceQrCheckinResultDto>.ErrorResponse(tokenErrorCode, tokenErrorMessage);
@@ -600,6 +612,7 @@ public class AttendanceQrService : IAttendanceQrService
                 && enrollment.AcademicYearId == activeAcademicYearId.Value
                 && enrollment.Status == "approved");
 
+        // Require both approved enrollment and current section assignment.
         if (!hasApprovedEnrollment || student.SectionId != session.SectionId)
         {
             return ApiResponse<AttendanceQrCheckinResultDto>.ErrorResponse(
@@ -636,6 +649,7 @@ public class AttendanceQrService : IAttendanceQrService
             IsAdmin = false
         };
 
+        // Reuse the core attendance service so QR and manual marking stay in sync.
         var attendanceResult = await _attendanceService.MarkAttendanceAsync(attendanceRequest, teacherContext);
         if (!attendanceResult.Success || attendanceResult.Data is null)
         {
@@ -664,6 +678,7 @@ public class AttendanceQrService : IAttendanceQrService
         }
         catch (DbUpdateException)
         {
+            // Handles race conditions where duplicate scans land almost simultaneously.
             return ApiResponse<AttendanceQrCheckinResultDto>.ErrorResponse(
                 "ALREADY_CHECKED_IN",
                 "You are already marked present for this session.");
@@ -686,6 +701,7 @@ public class AttendanceQrService : IAttendanceQrService
 
     private async Task<(bool Success, int TeacherId, DateOnly SchoolDate, string ErrorCode, string ErrorMessage)> ResolveOwnerContextAsync(int userId, string role)
     {
+        // Admin is accepted here only when the account is linked to a teacher profile.
         var isTeacherRole = string.Equals(role, "teacher", StringComparison.OrdinalIgnoreCase)
             || string.Equals(role, "admin", StringComparison.OrdinalIgnoreCase);
 
@@ -711,6 +727,7 @@ public class AttendanceQrService : IAttendanceQrService
 
     private IQueryable<Schedule> BuildOwnedSchedulesForSchoolDateQuery(int teacherId, DateOnly schoolDate)
     {
+        // Centralized "active today" filter keeps all suggestion endpoints consistent.
         return _context.Schedules
             .AsNoTracking()
             .Where(schedule => schedule.TeacherId == teacherId
@@ -794,6 +811,7 @@ public class AttendanceQrService : IAttendanceQrService
         }
         catch (Exception ex)
         {
+            // Notification failures should not roll back an already successful attendance write.
             _logger.LogWarning(ex, "Failed to create QR check-in notification for session {SessionId}.", session.SessionId);
         }
     }
@@ -821,6 +839,7 @@ public class AttendanceQrService : IAttendanceQrService
 
     private string BuildSignedToken(AttendanceQrSession session)
     {
+        // Token carries session identity + expiry and is protected with HMAC signature.
         var payload = new AttendanceQrTokenPayload
         {
             Version = 1,
@@ -858,6 +877,7 @@ public class AttendanceQrService : IAttendanceQrService
 
         if (token.StartsWith("qrs_", StringComparison.OrdinalIgnoreCase))
         {
+            // Common UX mistake: session IDs are not usable as check-in tokens.
             errorCode = "TOKEN_INVALID";
             errorMessage = "That value is a session ID, not a QR token. Scan the QR image or copy the full token from the QR Token panel.";
             return false;
@@ -886,6 +906,7 @@ public class AttendanceQrService : IAttendanceQrService
             return false;
         }
 
+        // Validate signature before deserializing payload to reject tampered tokens early.
         var expectedSignature = ComputeSignature(payloadEncoded);
         if (!CryptographicOperations.FixedTimeEquals(expectedSignature, providedSignature))
         {
@@ -930,6 +951,7 @@ public class AttendanceQrService : IAttendanceQrService
 
     private bool TokenPayloadMatchesSession(AttendanceQrTokenPayload payload, AttendanceQrSession session)
     {
+        // Match all critical fields so refreshed tokens cannot be replayed.
         if (!string.Equals(payload.SessionId, session.SessionId, StringComparison.Ordinal))
         {
             return false;
@@ -953,6 +975,7 @@ public class AttendanceQrService : IAttendanceQrService
 
     private byte[] ComputeSignature(string payloadEncoded)
     {
+        // HMAC-SHA256 binds token integrity to the server-side signing key.
         var keyBytes = Encoding.UTF8.GetBytes(_qrSettings.SigningKey.Trim());
         var payloadBytes = Encoding.UTF8.GetBytes(payloadEncoded);
 
@@ -970,6 +993,7 @@ public class AttendanceQrService : IAttendanceQrService
 
     private static byte[] DecodeBase64Url(string value)
     {
+        // Convert URL-safe Base64 back to standard Base64 before decoding bytes.
         var normalized = value
             .Replace('-', '+')
             .Replace('_', '/');
@@ -985,6 +1009,7 @@ public class AttendanceQrService : IAttendanceQrService
 
     private static string NormalizeStatus(string? statusLabel)
     {
+        // Live feed currently supports compact "present" and "late" status values.
         return string.Equals(statusLabel, "Late", StringComparison.OrdinalIgnoreCase)
             ? "late"
             : "present";

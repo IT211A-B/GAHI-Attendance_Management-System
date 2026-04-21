@@ -21,6 +21,7 @@ public class AttendanceService : IAttendanceService
     public AttendanceService(AppDbContext context, IOptions<AttendanceSettings> attendanceSettings)
     {
         _context = context;
+        // Fall back to defaults when config is missing so attendance checks still work.
         _attendanceSettings = attendanceSettings.Value?.IsValid() == true
             ? attendanceSettings.Value
             : AttendanceSettings.Default;
@@ -28,6 +29,7 @@ public class AttendanceService : IAttendanceService
 
     public async Task<ApiResponse<AttendanceDto>> MarkAttendanceAsync(MarkAttendanceRequest request, TeacherContext teacherContext)
     {
+        // Validate ownership, weekday, and allowed marking window before any mutation.
         var scheduleValidation = await ValidateScheduleForMarkingAsync(
             request.SectionId,
             request.ScheduleId,
@@ -79,6 +81,7 @@ public class AttendanceService : IAttendanceService
 
         if (existingAttendance == null)
         {
+            // First mark for this student/date/schedule creates a brand-new attendance row.
             attendance = new Attendance
             {
                 ScheduleId = request.ScheduleId,
@@ -93,6 +96,7 @@ public class AttendanceService : IAttendanceService
             };
 
             _context.Attendances.Add(attendance);
+            // Save first so the generated AttendanceId can be referenced by the audit row.
             await _context.SaveChangesAsync();
 
             audit = BuildAttendanceAudit(
@@ -109,6 +113,7 @@ public class AttendanceService : IAttendanceService
         }
         else
         {
+            // Re-marking updates the existing row while preserving an audit trail of before/after values.
             var beforeTimeIn = existingAttendance.TimeIn;
             var beforeRemarks = existingAttendance.Remarks;
             var beforeStatus = AttendancePolicy.GetMarkedStatus(beforeTimeIn, schedule.StartTime, _attendanceSettings);
@@ -134,6 +139,7 @@ public class AttendanceService : IAttendanceService
                 actionAt: now);
         }
 
+        // Audit is persisted separately to keep the main attendance write path straightforward.
         _context.AttendanceAudits.Add(audit);
         await _context.SaveChangesAsync();
 
@@ -151,6 +157,7 @@ public class AttendanceService : IAttendanceService
 
     public async Task<ApiResponse<List<AttendanceDto>>> MarkBulkAttendanceAsync(BulkAttendanceRequest request, TeacherContext teacherContext)
     {
+        // Reuse single-mark validation so bulk and manual flows enforce identical rules.
         var scheduleValidation = await ValidateScheduleForMarkingAsync(
             request.SectionId,
             request.ScheduleId,
@@ -179,6 +186,7 @@ public class AttendanceService : IAttendanceService
 
         var normalizedEntries = request.Entries
             .GroupBy(entry => entry.StudentId)
+            // Last entry wins when a client sends duplicate student rows in one payload.
             .Select(group => group.Last())
             .ToList();
 
@@ -200,6 +208,7 @@ public class AttendanceService : IAttendanceService
 
         foreach (var entry in normalizedEntries)
         {
+            // Skip invalid rows but continue processing valid ones for partial-success behavior.
             if (!students.TryGetValue(entry.StudentId, out var student))
             {
                 errors.Add($"Student {entry.StudentId} is not an active member of this section.");
@@ -274,6 +283,7 @@ public class AttendanceService : IAttendanceService
 
         await _context.SaveChangesAsync();
 
+        // Build one audit row per processed mutation to preserve detailed history.
         var audits = processedRows
             .Select(row => BuildAttendanceAudit(
                 row.Attendance,
@@ -373,6 +383,7 @@ public class AttendanceService : IAttendanceService
         var records = markedRecords.Select(row => row.Record).ToList();
         foreach (var student in unmarkedStudents)
         {
+            // Include explicit "Unmarked" rows so the UI can show every student in the class list.
             records.Add(new AttendanceDto
             {
                 Id = 0,
@@ -491,6 +502,7 @@ public class AttendanceService : IAttendanceService
         DateOnly date,
         TeacherContext teacherContext)
     {
+        // Attendance must always target a real schedule tied to the requested section.
         var schedule = await _context.Schedules
             .Include(s => s.Subject)
             .FirstOrDefaultAsync(s => s.Id == scheduleId && s.SectionId == sectionId);
@@ -514,6 +526,7 @@ public class AttendanceService : IAttendanceService
 
         if (teacherContext.IsAdmin)
         {
+            // Admin bypasses teacher ownership and backfill limits by design.
             return ScheduleValidationResult.Pass(schedule);
         }
 
@@ -557,6 +570,7 @@ public class AttendanceService : IAttendanceService
     {
         var trimmed = remarks?.Trim();
 
+        // Missing time-in is treated as absent; auto-fill that remark when caller leaves it blank.
         if (!timeIn.HasValue)
         {
             return string.IsNullOrWhiteSpace(trimmed) ? "Absent" : trimmed;
@@ -577,6 +591,7 @@ public class AttendanceService : IAttendanceService
         int actorUserId,
         DateTimeOffset actionAt)
     {
+        // Persisting labels keeps audit snapshots human-readable even if status rules evolve later.
         return new AttendanceAudit
         {
             AttendanceId = attendance.Id,
@@ -626,6 +641,7 @@ public class AttendanceService : IAttendanceService
 
     private async Task<string?> GetMarkerNameAsync(int userId)
     {
+        // Marker names are optional display metadata and should not block attendance writes.
         var teacher = await _context.Teachers
             .AsNoTracking()
             .FirstOrDefaultAsync(t => t.UserId == userId);
@@ -650,6 +666,7 @@ public class AttendanceService : IAttendanceService
         string? ErrorCode,
         string? ErrorMessage)
     {
+        // Small helper factory methods keep call sites terse and consistent.
         public static ScheduleValidationResult Pass(Schedule schedule) => new(true, schedule, null, null);
 
         public static ScheduleValidationResult Fail(string errorCode, string errorMessage)

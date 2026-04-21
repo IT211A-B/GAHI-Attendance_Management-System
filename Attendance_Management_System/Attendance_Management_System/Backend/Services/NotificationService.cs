@@ -9,6 +9,7 @@ namespace Attendance_Management_System.Backend.Services;
 
 public class NotificationService : INotificationService
 {
+    // Keep list endpoints bounded to avoid accidental heavy reads.
     private const int DefaultTake = 20;
     private const int MaxTake = 100;
 
@@ -51,6 +52,7 @@ public class NotificationService : INotificationService
         }
         catch (Exception ex)
         {
+            // Persisted notifications remain valid even when real-time push fails.
             _logger.LogWarning(ex, "Unable to push notification {NotificationId} to user {RecipientUserId}.", notification.Id, recipientUserId);
         }
 
@@ -92,6 +94,7 @@ public class NotificationService : INotificationService
 
     public async Task MarkAllReadAsync(int userId)
     {
+        // Bulk update avoids loading each notification entity into memory.
         await _context.Notifications
             .Where(notification => notification.RecipientUserId == userId && !notification.IsRead)
             .ExecuteUpdateAsync(update => update
@@ -122,6 +125,7 @@ public class NotificationService : INotificationService
 
     private static string NormalizeAndValidateType(string type)
     {
+        // Normalize first so callers can use case-insensitive type values.
         var normalizedType = NotificationTypes.Normalize(type);
         if (NotificationTypes.IsSupported(normalizedType))
         {
