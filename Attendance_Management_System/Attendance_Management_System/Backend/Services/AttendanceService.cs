@@ -316,8 +316,27 @@ public class AttendanceService : IAttendanceService
         return ApiResponse<List<AttendanceDto>>.SuccessResponse(attendanceDtos);
     }
 
-    public async Task<ApiResponse<AttendanceSummaryDto>> GetSectionAttendanceAsync(int sectionId, DateOnly date, int scheduleId)
+    public async Task<ApiResponse<AttendanceSummaryDto>> GetSectionAttendanceAsync(
+        int sectionId,
+        DateOnly date,
+        int scheduleId,
+        int requesterUserId,
+        string requesterRole)
     {
+        var scheduleValidation = await ValidateScheduleForReadAsync(
+            sectionId,
+            scheduleId,
+            requesterUserId,
+            requesterRole);
+        if (!scheduleValidation.Success || scheduleValidation.Schedule is null)
+        {
+            return ApiResponse<AttendanceSummaryDto>.ErrorResponse(
+                scheduleValidation.ErrorCode!,
+                scheduleValidation.ErrorMessage!);
+        }
+
+        var schedule = scheduleValidation.Schedule;
+
         var section = await _context.Sections
             .Include(s => s.Subject)
             .FirstOrDefaultAsync(s => s.Id == sectionId);
@@ -327,17 +346,6 @@ public class AttendanceService : IAttendanceService
             return ApiResponse<AttendanceSummaryDto>.ErrorResponse(
                 "NOT_FOUND",
                 "Section not found.");
-        }
-
-        var schedule = await _context.Schedules
-            .Include(s => s.Subject)
-            .FirstOrDefaultAsync(s => s.Id == scheduleId && s.SectionId == sectionId);
-
-        if (schedule == null)
-        {
-            return ApiResponse<AttendanceSummaryDto>.ErrorResponse(
-                "NOT_FOUND",
-                "Schedule not found for this section.");
         }
 
         var students = await _context.Students
@@ -556,6 +564,54 @@ public class AttendanceService : IAttendanceService
             return ScheduleValidationResult.Fail(
                 "VALIDATION_ERROR",
                 $"Teachers can only mark attendance from today back to {_attendanceSettings.TeacherBackfillDays} days.");
+        }
+
+        return ScheduleValidationResult.Pass(schedule);
+    }
+
+    private async Task<ScheduleValidationResult> ValidateScheduleForReadAsync(
+        int sectionId,
+        int scheduleId,
+        int requesterUserId,
+        string requesterRole)
+    {
+        // Attendance reads still target a concrete schedule under a concrete section.
+        var schedule = await _context.Schedules
+            .Include(s => s.Subject)
+            .FirstOrDefaultAsync(s => s.Id == scheduleId && s.SectionId == sectionId);
+
+        if (schedule == null)
+        {
+            return ScheduleValidationResult.Fail("NOT_FOUND", "Schedule not found for this section.");
+        }
+
+        var normalizedRole = requesterRole.Trim().ToLowerInvariant();
+        if (normalizedRole == "admin")
+        {
+            return ScheduleValidationResult.Pass(schedule);
+        }
+
+        if (normalizedRole != "teacher")
+        {
+            return ScheduleValidationResult.Fail("FORBIDDEN", "Access denied.");
+        }
+
+        var teacherId = await _context.Teachers
+            .AsNoTracking()
+            .Where(t => t.UserId == requesterUserId)
+            .Select(t => (int?)t.Id)
+            .FirstOrDefaultAsync();
+
+        if (!teacherId.HasValue)
+        {
+            return ScheduleValidationResult.Fail("FORBIDDEN", "Teacher profile not found.");
+        }
+
+        if (!schedule.TeacherId.HasValue || schedule.TeacherId.Value != teacherId.Value)
+        {
+            return ScheduleValidationResult.Fail(
+                "FORBIDDEN",
+                "You can only view attendance for your own schedule slots.");
         }
 
         return ScheduleValidationResult.Pass(schedule);
