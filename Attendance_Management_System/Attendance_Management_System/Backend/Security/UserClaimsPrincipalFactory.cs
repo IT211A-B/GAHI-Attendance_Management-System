@@ -1,7 +1,7 @@
-using System.Security.Claims;
 using Attendance_Management_System.Backend.Entities;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Options;
+using System.Security.Claims;
 
 namespace Attendance_Management_System.Backend.Security;
 

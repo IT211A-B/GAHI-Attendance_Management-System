@@ -41,15 +41,14 @@ public class AccountController : Controller
             return RedirectToAction("Index", "Dashboard");
         }
 
+        if (TempData["AuthError"] is string authError)
+        {
+            ModelState.AddModelError(string.Empty, authError);
+        }
+
         return View(new LoginViewModel { ReturnUrl = returnUrl });
     }
 
-    [HttpGet("Account/Login")]
-    [AllowAnonymous]
-    public IActionResult LegacyLogin(string? returnUrl = null)
-    {
-        return RedirectToAction(nameof(Login), new { returnUrl });
-    }
 
     [HttpGet("signup")]
     [AllowAnonymous]
@@ -63,13 +62,6 @@ public class AccountController : Controller
         var viewModel = new StudentSignupViewModel();
         await PopulateSignupOptionsAsync(viewModel);
         return View(viewModel);
-    }
-
-    [HttpGet("Account/Register")]
-    [AllowAnonymous]
-    public IActionResult LegacyRegister()
-    {
-        return RedirectToAction(nameof(Signup));
     }
 
     [HttpPost("login")]
@@ -106,6 +98,14 @@ public class AccountController : Controller
 
         if (!result.Succeeded)
         {
+            if (result.IsNotAllowed)
+            {
+                ViewData["EmailVerificationRequired"] = true;
+                ViewData["EmailVerificationAddress"] = model.Email;
+                ModelState.AddModelError(string.Empty, "Please verify your email before signing in. You can request a new verification link below.");
+                return View(model);
+            }
+
             ModelState.AddModelError(string.Empty, "Invalid email or password.");
             return View(model);
         }
@@ -161,6 +161,35 @@ public class AccountController : Controller
         }
 
         TempData["AuthSuccess"] = result.Message ?? "Registration successful. You can now sign in.";
+        return RedirectToAction(nameof(Login));
+    }
+
+    [HttpGet("confirm-email")]
+    [AllowAnonymous]
+    public async Task<IActionResult> ConfirmEmail([FromQuery] int userId, [FromQuery] string token)
+    {
+        var result = await _authService.ConfirmEmailAsync(userId, token);
+        if (result.Success)
+        {
+            TempData["AuthSuccess"] = result.Message;
+        }
+        else
+        {
+            TempData["AuthError"] = result.Message;
+        }
+
+        return RedirectToAction(nameof(Login));
+    }
+
+    [HttpPost("resend-verification")]
+    [AllowAnonymous]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> ResendVerification([FromForm] string email)
+    {
+        var result = await _authService.ResendVerificationAsync(email);
+        TempData["ResendSuccess"] = result.Message;
+        TempData["AuthSuccess"] = result.Message;
+
         return RedirectToAction(nameof(Login));
     }
 

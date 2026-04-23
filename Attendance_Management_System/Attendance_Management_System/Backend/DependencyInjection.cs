@@ -39,6 +39,9 @@ public static class DependencyInjection
         // Bind QR attendance settings from configuration to strongly-typed class
         services.Configure<AttendanceQrSettings>(configuration.GetSection(AttendanceQrSettings.SectionName));
 
+        // Bind email settings from configuration to strongly-typed class
+        services.Configure<EmailSettings>(configuration.GetSection(EmailSettings.SectionName));
+
         // Configure ASP.NET Core Identity with password requirements
         services.AddIdentity<User, IdentityRole<int>>(options =>
         {
@@ -47,9 +50,12 @@ public static class DependencyInjection
             options.Password.RequireUppercase = true;
             options.Password.RequireNonAlphanumeric = false;
             options.Password.RequiredLength = 8;
+            options.SignIn.RequireConfirmedEmail = true;
         })
             .AddEntityFrameworkStores<AppDbContext>()
             .AddDefaultTokenProviders();
+
+        services.AddSignalR();
 
         // Configure Identity cookie authentication
         services.ConfigureApplicationCookie(options =>
@@ -113,6 +119,10 @@ public static class DependencyInjection
         services.AddScoped<IConflictService, ConflictService>();
         services.AddScoped<ITeacherHistoryService, TeacherHistoryService>();
         services.AddScoped<IStudentsService, StudentsService>();
+        services.AddScoped<INotificationService, NotificationService>();
+        services.AddScoped<INotificationPushService, NotificationPushService>();
+        services.AddScoped<IEmailSender, SmtpEmailSender>();
+        services.AddScoped<IAccountEmailService, AccountEmailService>();
 
         // Add custom claims factory to include User.Role as ClaimTypes.Role
         services.AddScoped<IUserClaimsPrincipalFactory<User>, UserClaimsPrincipalFactory>();

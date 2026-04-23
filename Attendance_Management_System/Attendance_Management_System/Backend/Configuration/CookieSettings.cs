@@ -8,7 +8,7 @@ public class CookieSettings
     public const string SectionName = "CookieSettings";
 
     // Number of hours before the cookie expires
-    public int ExpirationHours { get; set; } = 8;
+    public int ExpirationHours { get; set; } = 24;
 
     // Whether the cookie should be renewed on each request
     public bool SlidingExpiration { get; set; } = true;

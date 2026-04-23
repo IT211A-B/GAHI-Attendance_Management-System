@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Attendance_Management_System.Backend.Configuration;
 using Attendance_Management_System.Backend.Constants;
 using Attendance_Management_System.Backend.DTOs.Requests;
@@ -18,17 +19,23 @@ public class EnrollmentService : IEnrollmentService
     private readonly AppDbContext _context;
     private readonly EnrollmentSettings _enrollmentSettings;
     private readonly ISectionAllocationService _sectionAllocationService;
+    private readonly INotificationService _notificationService;
+    private readonly ILogger<EnrollmentService> _logger;
 
     public EnrollmentService(
         AppDbContext context,
         IOptions<EnrollmentSettings> enrollmentSettings,
-        ISectionAllocationService sectionAllocationService)
+        ISectionAllocationService sectionAllocationService,
+        INotificationService notificationService,
+        ILogger<EnrollmentService> logger)
     {
         _context = context;
         _enrollmentSettings = enrollmentSettings.Value?.IsValid() == true
             ? enrollmentSettings.Value
             : EnrollmentSettings.Default;
         _sectionAllocationService = sectionAllocationService;
+        _notificationService = notificationService;
+        _logger = logger;
     }
 
     // Gets a paginated list of enrollments with "pending" status
@@ -252,6 +259,8 @@ public class EnrollmentService : IEnrollmentService
         }
 
         await _context.SaveChangesAsync();
+
+        await TryCreateEnrollmentStatusNotificationAsync(enrollment, status, request.RejectionReason);
 
         // Get processor name for the response
         var teacher = await _context.Teachers
@@ -607,5 +616,54 @@ public class EnrollmentService : IEnrollmentService
             HasWarning = enrollment.HasWarning,
             WarningMessage = enrollment.WarningMessage
         };
+    }
+
+    private static string BuildStudentDisplayName(string? firstName, string? middleName, string? lastName)
+    {
+        var fullName = string.Join(" ", new[] { firstName, middleName, lastName }
+            .Where(part => !string.IsNullOrWhiteSpace(part))
+            .Select(part => part!.Trim()));
+
+        return string.IsNullOrWhiteSpace(fullName) ? "Student" : fullName;
+    }
+
+    private async Task TryCreateEnrollmentStatusNotificationAsync(Enrollment enrollment, string status, string? rejectionReason)
+    {
+        if (enrollment.Student?.UserId is not int recipientUserId || recipientUserId <= 0)
+        {
+            return;
+        }
+
+        var studentName = BuildStudentDisplayName(enrollment.Student.FirstName, enrollment.Student.MiddleName, enrollment.Student.LastName);
+        var title = status == "approved" ? "Enrollment Approved" : "Enrollment Rejected";
+
+        var message = status == "approved"
+            ? $"Your enrollment has been approved, {studentName}."
+            : string.IsNullOrWhiteSpace(rejectionReason)
+                ? $"Your enrollment has been rejected, {studentName}."
+                : $"Your enrollment has been rejected: {rejectionReason.Trim()}";
+
+        var payloadJson = JsonSerializer.Serialize(new
+        {
+            EnrollmentId = enrollment.Id,
+            Status = status,
+            SectionId = enrollment.SectionId,
+            AcademicYearId = enrollment.AcademicYearId
+        });
+
+        try
+        {
+            await _notificationService.CreateAsync(
+                recipientUserId,
+                NotificationTypes.Enrollment,
+                title,
+                message,
+                NotificationLinks.Enrollments,
+                payloadJson);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to create enrollment notification for enrollment {EnrollmentId}.", enrollment.Id);
+        }
     }
 }
