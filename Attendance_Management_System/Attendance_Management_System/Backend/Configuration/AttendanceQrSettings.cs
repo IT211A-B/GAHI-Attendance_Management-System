@@ -6,11 +6,11 @@ public class AttendanceQrSettings
     // Configuration section key used in appsettings.json.
     public const string SectionName = "AttendanceQrSettings";
 
-    // Time-to-live for each QR token/session in seconds.
-    public int SessionTtlSeconds { get; set; } = 90;
+    // Time-to-live for each QR token/session in seconds. 15mins
+    public int SessionTtlSeconds { get; set; } = 900;
 
     // When remaining time reaches this value, frontend should rotate token.
-    public int RefreshThresholdSeconds { get; set; } = 10;
+    public int RefreshThresholdSeconds { get; set; } = 60;
 
     // Polling interval for teacher live check-in feed.
     public int LiveFeedPollSeconds { get; set; } = 3;

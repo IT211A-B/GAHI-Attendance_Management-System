@@ -14,7 +14,13 @@ public interface IAttendanceService
     Task<ApiResponse<List<AttendanceDto>>> MarkBulkAttendanceAsync(BulkAttendanceRequest request, TeacherContext teacherContext);
 
     // Gets attendance summary for all students in a section on a given date
-    Task<ApiResponse<AttendanceSummaryDto>> GetSectionAttendanceAsync(int sectionId, DateOnly date, int scheduleId);
+    // Read access is role-aware so teacher callers only see attendance for schedules they own.
+    Task<ApiResponse<AttendanceSummaryDto>> GetSectionAttendanceAsync(
+        int sectionId,
+        DateOnly date,
+        int scheduleId,
+        int requesterUserId,
+        string requesterRole);
 
     // Gets attendance history for a specific student with optional filters
     Task<ApiResponse<List<AttendanceDto>>> GetStudentAttendanceAsync(int studentId, int? sectionId, DateOnly? from, DateOnly? to);

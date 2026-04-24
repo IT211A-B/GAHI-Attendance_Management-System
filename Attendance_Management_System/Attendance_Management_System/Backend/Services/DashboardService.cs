@@ -12,10 +12,12 @@ namespace Attendance_Management_System.Backend.Services;
 
 public class DashboardService : IDashboardService
 {
+    // Shared limits keep dashboard queries bounded for fast initial page loads.
     private const int RecentRecordsLimit = 10;
     private const int UpcomingDaysRange = 7;
     private const int RiskRowsLimit = 10;
     private const decimal AtRiskAbsentRateThreshold = 20m;
+    // Window keys are persisted to the UI filter state, so keep them stable.
     private const string WindowAcademic = "academic";
     private const string WindowLast7 = "last7";
     private const string WindowLast30 = "last30";
@@ -28,6 +30,7 @@ public class DashboardService : IDashboardService
     public DashboardService(AppDbContext context, IOptions<AttendanceSettings> attendanceSettings)
     {
         _context = context;
+        // Fall back to defaults when configuration is missing or invalid.
         _attendanceSettings = attendanceSettings.Value?.IsValid() == true
             ? attendanceSettings.Value
             : AttendanceSettings.Default;
@@ -37,6 +40,7 @@ public class DashboardService : IDashboardService
     {
         var normalizedRole = role.Trim().ToLowerInvariant();
         var currentAcademicYear = await GetCurrentAcademicYearAsync();
+        // Date filtering is centralized so all role dashboards use the same window rules.
         var filter = BuildDateFilter(currentAcademicYear, window, from, to);
 
         var viewModel = new DashboardIndexViewModel
@@ -48,6 +52,7 @@ public class DashboardService : IDashboardService
             Filters = filter
         };
 
+        // Populate only the section needed for the caller's role.
         switch (normalizedRole)
         {
             case "student":
@@ -102,6 +107,7 @@ public class DashboardService : IDashboardService
             })
             .ToListAsync();
 
+        // Status values always come from policy so late/present rules stay consistent app-wide.
         var summaryStatuses = summaryRows
             .Select(row => AttendancePolicy.GetMarkedStatus(row.TimeIn, row.StartTime, _attendanceSettings))
             .ToList();
@@ -171,6 +177,7 @@ public class DashboardService : IDashboardService
             .ToListAsync();
 
         var todayDate = DateOnly.FromDateTime(DateTime.Today);
+        // Teacher counters use the same selected date window as the rest of the dashboard.
         var (presentCount, lateCount, absentCount) = await BuildTeacherWindowTotalsAsync(teacher.Id, filter);
         var upcomingClasses = BuildUpcomingClasses(schedules, todayDate, UpcomingDaysRange);
         var atRiskStudents = await BuildTeacherAtRiskStudentsAsync(teacher.Id, filter);
@@ -257,6 +264,7 @@ public class DashboardService : IDashboardService
         int teacherId,
         DashboardDateFilterViewModel filter)
     {
+        // Group by student + section to compute risk metrics per class context.
         var groupedRows = await _context.Attendances
             .AsNoTracking()
             .Where(a => a.Schedule != null && a.Schedule.TeacherId == teacherId)
@@ -317,6 +325,7 @@ public class DashboardService : IDashboardService
                     AbsentRate = absentRate
                 };
             })
+            // "At risk" means sustained absence rate at or above the configured threshold.
             .Where(item => item.TotalRecords > 0 && item.AbsentRate >= AtRiskAbsentRateThreshold)
             .OrderByDescending(item => item.AbsentRate)
             .ThenByDescending(item => item.AbsentCount)
@@ -343,6 +352,7 @@ public class DashboardService : IDashboardService
             CustomTo = to
         };
 
+        // Resolve the effective date range once, then reuse it in all downstream queries.
         switch (selectedWindow)
         {
             case WindowLast7:
@@ -373,6 +383,7 @@ public class DashboardService : IDashboardService
                 else
                 {
                     filter.SelectedWindow = WindowAcademic;
+                    // Invalid custom ranges gracefully fall back instead of throwing.
                     ApplyAcademicFallback(filter, currentAcademicYear, today);
                     filter.Message = "Custom range is invalid. Falling back to current academic period.";
                 }
@@ -409,6 +420,7 @@ public class DashboardService : IDashboardService
     {
         if (currentAcademicYear is null)
         {
+            // Keep the dashboard usable even when academic years are not configured yet.
             filter.EffectiveFrom = today.AddDays(-29);
             filter.EffectiveTo = today;
             filter.EffectiveLabel = "Last 30 days";
@@ -419,6 +431,7 @@ public class DashboardService : IDashboardService
             ? currentAcademicYear.EndDate
             : today;
 
+        // Guard against malformed academic periods where end date can precede start date.
         if (effectiveTo < currentAcademicYear.StartDate)
         {
             effectiveTo = currentAcademicYear.StartDate;
@@ -436,6 +449,7 @@ public class DashboardService : IDashboardService
     {
         var upcoming = new List<TeacherUpcomingClassViewModel>();
 
+        // Expand the next N calendar days, then match schedules that are active on each day.
         for (var offset = 0; offset < daysRange; offset++)
         {
             var targetDate = startDate.AddDays(offset);
@@ -468,12 +482,14 @@ public class DashboardService : IDashboardService
         return upcoming
             .OrderBy(item => item.Date)
             .ThenBy(item => item.StartTime)
+            // Keep cards compact; full schedules are available elsewhere.
             .Take(12)
             .ToList();
     }
 
     private async Task<AcademicYear?> GetCurrentAcademicYearAsync()
     {
+        // Prefer the explicitly active year; otherwise use the most recent configured period.
         var activeAcademicYear = await _context.AcademicYears
             .AsNoTracking()
             .FirstOrDefaultAsync(academicYear => academicYear.IsActive);
@@ -492,6 +508,7 @@ public class DashboardService : IDashboardService
     private StudentAttendanceRecordViewModel MapStudentAttendanceRecord(Attendance attendance)
     {
         var scheduleStart = attendance.Schedule?.StartTime ?? new TimeOnly(0, 0);
+        // Status mapping uses shared policy to keep labels and CSS classes in sync everywhere.
         var status = AttendancePolicy.GetMarkedStatus(attendance.TimeIn, scheduleStart, _attendanceSettings);
 
         return new StudentAttendanceRecordViewModel
