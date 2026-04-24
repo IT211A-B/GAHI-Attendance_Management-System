@@ -1,0 +1,45 @@
+name: CI
+
+on:
+  push:
+    branches: [ "main", "JP", "Sucgang" ]
+  pull_request:
+    branches: [ "main", "JP" ]
+
+jobs:
+  build-test-publish:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "9.0.x"
+
+      - name: Restore
+        run: dotnet restore Attendance_Management_System/Attendance_Management_System.slnx
+
+      - name: Build (Release)
+        run: dotnet build Attendance_Management_System/Attendance_Management_System.slnx --configuration Release --no-restore
+
+      - name: Test
+        run: dotnet test Attendance_Management_System/tests/Attendance_Management_System.Tests/Attendance_Management_System.Tests.csproj --configuration Release --no-build --logger "trx;LogFileName=test-results.trx"
+
+      - name: Publish Web App
+        run: dotnet publish Attendance_Management_System/Attendance_Management_System/Attendance_Management_System.csproj --configuration Release --no-build --output ./publish
+
+      - name: Upload Published Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: webapp-publish
+          path: ./publish
+
+      - name: Upload Test Results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: '**/TestResults/*.trx'

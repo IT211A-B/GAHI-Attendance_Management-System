@@ -62,41 +62,17 @@
             </section>
 
             <section class="grid-4">
-                <article class="stat-card">
-                    <p class="stat-title">Present</p>
-                    <p class="stat-value success">@Model.Student.PresentCount</p>
-                </article>
-                <article class="stat-card">
-                    <p class="stat-title">Late</p>
-                    <p class="stat-value warning">@Model.Student.LateCount</p>
-                </article>
-                <article class="stat-card">
-                    <p class="stat-title">Absent</p>
-                    <p class="stat-value danger">@Model.Student.AbsentCount</p>
-                </article>
-                <article class="stat-card">
-                    <p class="stat-title">Attendance Rate</p>
-                    <p class="stat-value">@Model.Student.AttendanceRate%</p>
-                </article>
+                <app-stat-card title="Present" value="@Model.Student.PresentCount" tone="success"></app-stat-card>
+                <app-stat-card title="Late" value="@Model.Student.LateCount" tone="warning"></app-stat-card>
+                <app-stat-card title="Absent" value="@Model.Student.AbsentCount" tone="danger"></app-stat-card>
+                <app-stat-card title="Attendance Rate" value="@($"{Model.Student.AttendanceRate}%")"></app-stat-card>
             </section>
 
             <section class="info-grid">
-                <article class="info-card">
-                    <span class="muted">Student Number</span>
-                    <strong>@Model.Student.StudentNumber</strong>
-                </article>
-                <article class="info-card">
-                    <span class="muted">Course</span>
-                    <strong>@Model.Student.CourseText</strong>
-                </article>
-                <article class="info-card">
-                    <span class="muted">Section</span>
-                    <strong>@Model.Student.SectionName</strong>
-                </article>
-                <article class="info-card">
-                    <span class="muted">Date Window</span>
-                    <strong>@windowLabel</strong>
-                </article>
+                <app-info-card label="Student Number" value="@Model.Student.StudentNumber"></app-info-card>
+                <app-info-card label="Course" value="@Model.Student.CourseText"></app-info-card>
+                <app-info-card label="Section" value="@Model.Student.SectionName"></app-info-card>
+                <app-info-card label="Date Window" value="@windowLabel"></app-info-card>
             </section>
 
             <article class="panel">
@@ -145,22 +121,10 @@
             </section>
 
             <section class="grid-4">
-                <article class="stat-card">
-                    <p class="stat-title">Assigned Sections</p>
-                    <p class="stat-value">@Model.Teacher.AssignedSectionsCount</p>
-                </article>
-                <article class="stat-card">
-                    <p class="stat-title">Assigned Schedules</p>
-                    <p class="stat-value">@Model.Teacher.AssignedSchedulesCount</p>
-                </article>
-                <article class="stat-card">
-                    <p class="stat-title">Today Present</p>
-                    <p class="stat-value success">@Model.Teacher.TodayPresentCount</p>
-                </article>
-                <article class="stat-card">
-                    <p class="stat-title">Today Late</p>
-                    <p class="stat-value warning">@Model.Teacher.TodayLateCount</p>
-                </article>
+                <app-stat-card title="Assigned Sections" value="@Model.Teacher.AssignedSectionsCount"></app-stat-card>
+                <app-stat-card title="Assigned Schedules" value="@Model.Teacher.AssignedSchedulesCount"></app-stat-card>
+                <app-stat-card title="Today Present" value="@Model.Teacher.TodayPresentCount" tone="success"></app-stat-card>
+                <app-stat-card title="Today Late" value="@Model.Teacher.TodayLateCount" tone="warning"></app-stat-card>
             </section>
 
             <section class="grid-2">
@@ -244,33 +208,15 @@
             </section>
 
             <section class="grid-4">
-                <article class="stat-card">
-                    <p class="stat-title">Pending Enrollments</p>
-                    <p class="stat-value warning">@Model.Admin.PendingEnrollmentsCount</p>
-                </article>
-                <article class="stat-card">
-                    <p class="stat-title">Approved Enrollments</p>
-                    <p class="stat-value success">@Model.Admin.ApprovedEnrollmentsCount</p>
-                </article>
-                <article class="stat-card">
-                    <p class="stat-title">Rejected Enrollments</p>
-                    <p class="stat-value danger">@Model.Admin.RejectedEnrollmentsCount</p>
-                </article>
-                <article class="stat-card">
-                    <p class="stat-title">Active Students</p>
-                    <p class="stat-value">@Model.Admin.ActiveStudentsCount</p>
-                </article>
+                <app-stat-card title="Pending Enrollments" value="@Model.Admin.PendingEnrollmentsCount" tone="warning"></app-stat-card>
+                <app-stat-card title="Approved Enrollments" value="@Model.Admin.ApprovedEnrollmentsCount" tone="success"></app-stat-card>
+                <app-stat-card title="Rejected Enrollments" value="@Model.Admin.RejectedEnrollmentsCount" tone="danger"></app-stat-card>
+                <app-stat-card title="Active Students" value="@Model.Admin.ActiveStudentsCount"></app-stat-card>
             </section>
 
             <section class="grid-2">
-                <article class="stat-card">
-                    <p class="stat-title">Active Teachers</p>
-                    <p class="stat-value">@Model.Admin.ActiveTeachersCount</p>
-                </article>
-                <article class="stat-card">
-                    <p class="stat-title">Total Sections</p>
-                    <p class="stat-value">@Model.Admin.TotalSectionsCount</p>
-                </article>
+                <app-stat-card title="Active Teachers" value="@Model.Admin.ActiveTeachersCount"></app-stat-card>
+                <app-stat-card title="Total Sections" value="@Model.Admin.TotalSectionsCount"></app-stat-card>
             </section>
         }
 

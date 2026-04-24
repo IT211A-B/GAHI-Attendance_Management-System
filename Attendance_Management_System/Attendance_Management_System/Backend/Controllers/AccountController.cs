@@ -204,40 +204,66 @@ public class AccountController : Controller
 
     private async Task PopulateSignupOptionsAsync(StudentSignupViewModel model)
     {
-        var coursesResult = await _coursesService.GetAllCoursesAsync();
-        if (!coursesResult.Success || coursesResult.Data is null)
+        try
         {
-            model.ErrorMessage ??= coursesResult.Error?.Message ?? "Unable to load course options right now.";
+            var coursesResult = await _coursesService.GetAllCoursesAsync();
+            if (!coursesResult.Success || coursesResult.Data is null)
+            {
+                model.ErrorMessage ??= coursesResult.Error?.Message ?? "Unable to load course options right now.";
+            }
+            else
+            {
+                model.AvailableCourses = coursesResult.Data
+                    .OrderBy(course => course.Name)
+                    .Select(course => new SignupCourseOptionViewModel
+                    {
+                        Id = course.Id,
+                        Label = string.IsNullOrWhiteSpace(course.Code)
+                            ? course.Name
+                            : $"{course.Code} - {course.Name}"
+                    })
+                    .ToList();
+            }
         }
-        else
+        catch (PostgresException ex) when (ex.SqlState == PostgresErrorCodes.InvalidPassword)
         {
-            model.AvailableCourses = coursesResult.Data
-                .OrderBy(course => course.Name)
-                .Select(course => new SignupCourseOptionViewModel
-                {
-                    Id = course.Id,
-                    Label = string.IsNullOrWhiteSpace(course.Code)
-                        ? course.Name
-                        : $"{course.Code} - {course.Name}"
-                })
-                .ToList();
+            _logger.LogError(ex, "PostgreSQL authentication failed while loading signup course options.");
+            model.ErrorMessage ??= "Signup is temporarily unavailable due to a database configuration issue.";
+        }
+        catch (NpgsqlException ex)
+        {
+            _logger.LogError(ex, "PostgreSQL connection failure while loading signup course options.");
+            model.ErrorMessage ??= "Unable to load signup options right now. Please try again later.";
         }
 
-        var academicYearsResult = await _academicYearsService.GetAllAcademicYearsAsync();
-        if (!academicYearsResult.Success || academicYearsResult.Data is null)
+        try
         {
-            model.ErrorMessage ??= academicYearsResult.Error?.Message ?? "Unable to load academic period options right now.";
+            var academicYearsResult = await _academicYearsService.GetAllAcademicYearsAsync();
+            if (!academicYearsResult.Success || academicYearsResult.Data is null)
+            {
+                model.ErrorMessage ??= academicYearsResult.Error?.Message ?? "Unable to load academic period options right now.";
+            }
+            else
+            {
+                model.AvailableAcademicYears = academicYearsResult.Data
+                    .OrderByDescending(year => year.StartDate)
+                    .Select(year => new SignupAcademicYearOptionViewModel
+                    {
+                        Id = year.Id,
+                        Label = year.YearLabel
+                    })
+                    .ToList();
+            }
         }
-        else
+        catch (PostgresException ex) when (ex.SqlState == PostgresErrorCodes.InvalidPassword)
         {
-            model.AvailableAcademicYears = academicYearsResult.Data
-                .OrderByDescending(year => year.StartDate)
-                .Select(year => new SignupAcademicYearOptionViewModel
-                {
-                    Id = year.Id,
-                    Label = year.YearLabel
-                })
-                .ToList();
+            _logger.LogError(ex, "PostgreSQL authentication failed while loading signup academic period options.");
+            model.ErrorMessage ??= "Signup is temporarily unavailable due to a database configuration issue.";
+        }
+        catch (NpgsqlException ex)
+        {
+            _logger.LogError(ex, "PostgreSQL connection failure while loading signup academic period options.");
+            model.ErrorMessage ??= "Unable to load signup options right now. Please try again later.";
         }
 
     }

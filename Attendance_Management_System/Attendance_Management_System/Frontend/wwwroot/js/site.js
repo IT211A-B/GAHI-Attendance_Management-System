@@ -15,6 +15,54 @@
 		return typeof window.anime === "function";
 	}
 
+	function initializeLazyLoading() {
+		var lazyImages = Array.from(document.querySelectorAll("img[data-lazy-src]"));
+		if (!lazyImages.length) {
+			return;
+		}
+
+		function loadImage(image) {
+			if (!image || image.getAttribute("data-lazy-loaded") === "true") {
+				return;
+			}
+
+			var source = image.getAttribute("data-lazy-src");
+			if (!source) {
+				return;
+			}
+
+			image.addEventListener("load", function () {
+				image.classList.add("is-loaded");
+			}, { once: true });
+
+			image.src = source;
+			image.setAttribute("data-lazy-loaded", "true");
+			image.removeAttribute("data-lazy-src");
+		}
+
+		if (!("IntersectionObserver" in window)) {
+			lazyImages.forEach(loadImage);
+			return;
+		}
+
+		var observer = new IntersectionObserver(function (entries) {
+			entries.forEach(function (entry) {
+				if (!entry.isIntersecting) {
+					return;
+				}
+
+				loadImage(entry.target);
+				observer.unobserve(entry.target);
+			});
+		}, {
+			rootMargin: "160px 0px"
+		});
+
+		lazyImages.forEach(function (image) {
+			observer.observe(image);
+		});
+	}
+
 	// Animate multiple elements in a staggered reveal sequence.
 	function revealSequence(selector, options) {
 		var nodes = document.querySelectorAll(selector);
@@ -644,6 +692,412 @@
 		});
 	}
 
+	function initializeNotificationCenter() {
+		var center = document.querySelector("[data-notification-center='true']");
+		if (!center) {
+			return;
+		}
+
+		var toggleBtn = document.getElementById("notification-toggle");
+		var panel = document.getElementById("notification-panel");
+		var listContainer = document.getElementById("notification-list");
+		var unreadBadge = document.getElementById("notification-unread-badge");
+		var markAllBtn = document.getElementById("notification-mark-all-btn");
+
+		if (!toggleBtn || !panel || !listContainer || !unreadBadge || !markAllBtn) {
+			return;
+		}
+
+		var listUrl = (center.getAttribute("data-list-url") || "").trim();
+		var markReadUrlTemplate = (center.getAttribute("data-mark-read-url-template") || "").trim();
+		var markAllReadUrl = (center.getAttribute("data-mark-all-read-url") || "").trim();
+		var hubUrl = (center.getAttribute("data-hub-url") || "").trim();
+		var maxItems = parseInt(center.getAttribute("data-max-items") || "20", 10);
+		if (Number.isNaN(maxItems) || maxItems < 5) {
+			maxItems = 20;
+		}
+
+		var notifications = [];
+		var hasLoaded = false;
+		var signalrConnection = null;
+
+		function buildNotificationMarkReadUrl(notificationId) {
+			if (!markReadUrlTemplate) {
+				return "";
+			}
+
+			return markReadUrlTemplate.replace("__ID__", encodeURIComponent(notificationId));
+		}
+
+		function formatNotificationTime(isoTime) {
+			if (!isoTime) {
+				return "";
+			}
+
+			var dateValue = new Date(isoTime);
+			if (Number.isNaN(dateValue.getTime())) {
+				return "";
+			}
+
+			return dateValue.toLocaleString();
+		}
+
+		function computeUnreadCount() {
+			return notifications.reduce(function (count, item) {
+				return count + (item.isRead ? 0 : 1);
+			}, 0);
+		}
+
+		function refreshUnreadBadge() {
+			var unreadCount = computeUnreadCount();
+			if (unreadCount <= 0) {
+				unreadBadge.textContent = "0";
+				unreadBadge.hidden = true;
+				return;
+			}
+
+			unreadBadge.textContent = unreadCount > 99 ? "99+" : String(unreadCount);
+			unreadBadge.hidden = false;
+		}
+
+		function markNotificationRead(notificationId) {
+			var url = buildNotificationMarkReadUrl(notificationId);
+			if (!url) {
+				return Promise.resolve(false);
+			}
+
+			return postApi(url, {})
+				.then(function (result) {
+					if (!result.ok) {
+						return false;
+					}
+
+					notifications = notifications.map(function (item) {
+						if (item.id !== notificationId) {
+							return item;
+						}
+
+						item.isRead = true;
+						return item;
+					});
+
+					refreshUnreadBadge();
+					renderNotifications();
+					return true;
+				});
+		}
+
+		function renderEmptyState(message) {
+			listContainer.replaceChildren();
+			var emptyText = document.createElement("p");
+			emptyText.className = "notification-empty";
+			emptyText.textContent = message;
+			listContainer.appendChild(emptyText);
+		}
+
+		function renderNotifications() {
+			listContainer.replaceChildren();
+
+			if (!notifications.length) {
+				renderEmptyState("No notifications yet.");
+				markAllBtn.disabled = true;
+				refreshUnreadBadge();
+				return;
+			}
+
+			markAllBtn.disabled = computeUnreadCount() === 0;
+
+			notifications.forEach(function (item) {
+				var card = document.createElement("article");
+				card.className = "notification-item" + (item.isRead ? "" : " unread");
+
+				var header = document.createElement("div");
+				header.className = "notification-item-header";
+
+				var title = document.createElement("p");
+				title.className = "notification-item-title";
+				title.textContent = item.title || "Notification";
+
+				var time = document.createElement("p");
+				time.className = "notification-item-time";
+				time.textContent = formatNotificationTime(item.createdAt);
+
+				header.appendChild(title);
+				header.appendChild(time);
+
+				var message = document.createElement("p");
+				message.className = "notification-item-message";
+				message.textContent = item.message || "";
+
+				var actions = document.createElement("div");
+				actions.className = "notification-item-actions";
+
+				if (item.linkUrl) {
+					var link = document.createElement("a");
+					link.className = "notification-link";
+					link.href = item.linkUrl;
+					link.textContent = "Open";
+					actions.appendChild(link);
+				}
+
+				if (!item.isRead) {
+					var readBtn = document.createElement("button");
+					readBtn.type = "button";
+					readBtn.className = "btn-secondary notification-read-btn";
+					readBtn.textContent = "Mark read";
+					readBtn.addEventListener("click", function () {
+						markNotificationRead(item.id);
+					});
+					actions.appendChild(readBtn);
+				}
+
+				card.appendChild(header);
+				card.appendChild(message);
+				card.appendChild(actions);
+				listContainer.appendChild(card);
+			});
+
+			refreshUnreadBadge();
+		}
+
+		function upsertRealtimeNotification(pushDto) {
+			if (!pushDto || typeof pushDto !== "object") {
+				return;
+			}
+
+			var incomingId = Number(pushDto.id);
+			if (!incomingId) {
+				return;
+			}
+
+			var existingIndex = notifications.findIndex(function (item) {
+				return item.id === incomingId;
+			});
+
+			var normalized = {
+				id: incomingId,
+				type: String(pushDto.type || ""),
+				title: String(pushDto.title || "Notification"),
+				message: String(pushDto.message || ""),
+				linkUrl: pushDto.linkUrl ? String(pushDto.linkUrl) : null,
+				isRead: false,
+				createdAt: pushDto.createdAt || new Date().toISOString()
+			};
+
+			if (existingIndex >= 0) {
+				normalized.isRead = notifications[existingIndex].isRead;
+				notifications[existingIndex] = normalized;
+			} else {
+				notifications.unshift(normalized);
+			}
+
+			notifications = notifications
+				.sort(function (a, b) {
+					return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+				})
+				.slice(0, maxItems);
+
+			renderNotifications();
+		}
+
+		function loadNotifications() {
+			if (!listUrl) {
+				renderEmptyState("Notification endpoint is unavailable.");
+				return;
+			}
+
+			return window.fetch(listUrl, {
+				method: "GET",
+				headers: {
+					Accept: "application/json"
+				},
+				credentials: "same-origin"
+			})
+				.then(function (response) {
+					if (!response.ok) {
+						throw new Error("Failed to load notifications.");
+					}
+
+					return response.json();
+				})
+				.then(function (payload) {
+					notifications = (Array.isArray(payload) ? payload : [])
+						.map(function (item) {
+							return {
+								id: Number(item.id),
+								type: String(item.type || ""),
+								title: String(item.title || "Notification"),
+								message: String(item.message || ""),
+								linkUrl: item.linkUrl ? String(item.linkUrl) : null,
+								isRead: Boolean(item.isRead),
+								createdAt: item.createdAt || new Date().toISOString()
+							};
+						})
+						.filter(function (item) {
+							return !!item.id;
+						})
+						.sort(function (a, b) {
+							return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+						})
+						.slice(0, maxItems);
+
+					hasLoaded = true;
+					renderNotifications();
+				})
+				.catch(function () {
+					renderEmptyState("Unable to load notifications right now.");
+				});
+		}
+
+		function openPanel() {
+			panel.hidden = false;
+			toggleBtn.setAttribute("aria-expanded", "true");
+			if (!hasLoaded) {
+				loadNotifications();
+			}
+		}
+
+		function closePanel() {
+			panel.hidden = true;
+			toggleBtn.setAttribute("aria-expanded", "false");
+		}
+
+		toggleBtn.addEventListener("click", function () {
+			if (panel.hidden) {
+				openPanel();
+				return;
+			}
+
+			closePanel();
+		});
+
+		markAllBtn.addEventListener("click", function () {
+			if (!markAllReadUrl) {
+				return;
+			}
+
+			postApi(markAllReadUrl, {})
+				.then(function (result) {
+					if (!result.ok) {
+						return;
+					}
+
+					notifications = notifications.map(function (item) {
+						item.isRead = true;
+						return item;
+					});
+
+					renderNotifications();
+				});
+		});
+
+		document.addEventListener("click", function (event) {
+			if (panel.hidden) {
+				return;
+			}
+
+			var clickedInside = center.contains(event.target);
+			if (!clickedInside) {
+				closePanel();
+			}
+		});
+
+		document.addEventListener("keydown", function (event) {
+			if (event.key === "Escape" && !panel.hidden) {
+				closePanel();
+			}
+		});
+
+		if (window.signalR && hubUrl) {
+			signalrConnection = new window.signalR.HubConnectionBuilder()
+				.withUrl(hubUrl)
+				.withAutomaticReconnect()
+				.build();
+
+			signalrConnection.on("notification:new", function (payload) {
+				upsertRealtimeNotification(payload);
+			});
+
+			signalrConnection.start().catch(function () {
+				// Keep polling/list mode even if live channel is unavailable.
+			});
+		}
+
+		window.addEventListener("beforeunload", function () {
+			if (signalrConnection) {
+				signalrConnection.stop();
+			}
+		});
+
+		loadNotifications();
+	}
+
+	function initializeMobileSidebar() {
+		var toggleBtn = document.getElementById("mobile-nav-toggle");
+		var sidebar = document.getElementById("app-sidebar");
+		var backdrop = document.getElementById("mobile-sidebar-backdrop");
+
+		if (!toggleBtn || !sidebar || !backdrop) {
+			return;
+		}
+
+		function isMobileViewport() {
+			return window.matchMedia("(max-width: 860px)").matches;
+		}
+
+		function syncState(isOpen) {
+			document.body.classList.toggle("sidebar-open", isOpen);
+			backdrop.hidden = !isOpen;
+			toggleBtn.setAttribute("aria-expanded", isOpen ? "true" : "false");
+		}
+
+		function openSidebar() {
+			if (!isMobileViewport()) {
+				return;
+			}
+
+			syncState(true);
+		}
+
+		function closeSidebar() {
+			syncState(false);
+		}
+
+		toggleBtn.addEventListener("click", function () {
+			var isOpen = document.body.classList.contains("sidebar-open");
+			if (isOpen) {
+				closeSidebar();
+				return;
+			}
+
+			openSidebar();
+		});
+
+		backdrop.addEventListener("click", closeSidebar);
+
+		document.addEventListener("keydown", function (event) {
+			if (event.key === "Escape" && document.body.classList.contains("sidebar-open")) {
+				closeSidebar();
+			}
+		});
+
+		sidebar.querySelectorAll("a").forEach(function (link) {
+			link.addEventListener("click", function () {
+				if (isMobileViewport()) {
+					closeSidebar();
+				}
+			});
+		});
+
+		window.addEventListener("resize", function () {
+			if (!isMobileViewport()) {
+				closeSidebar();
+			}
+		});
+
+		closeSidebar();
+	}
+
 	// Determine whether the content area or window is the primary scroll container.
 	function getPrimaryScrollTarget() {
 		var content = document.querySelector(".content");
@@ -1016,9 +1470,9 @@
 			configuredFeedPollSeconds = 3;
 		}
 
-		var configuredRefreshThresholdSeconds = parseInt(page.getAttribute("data-refresh-threshold-seconds") || "10", 10);
+		var configuredRefreshThresholdSeconds = parseInt(page.getAttribute("data-refresh-threshold-seconds") || "60", 10);
 		if (Number.isNaN(configuredRefreshThresholdSeconds) || configuredRefreshThresholdSeconds < 2) {
-			configuredRefreshThresholdSeconds = 10;
+			configuredRefreshThresholdSeconds = 60;
 		}
 
 		var sectionInput = document.getElementById("qr-section-search");
@@ -1687,10 +2141,13 @@
 
 	// Initialize all features when the DOM is fully loaded.
 	document.addEventListener("DOMContentLoaded", function () {
+		initializeLazyLoading();
 		restoreScrollAfterPostback();
 		initializePostbackScrollRetention();
+		initializeMobileSidebar();
 		initializeTimetableQuickAdd();
 		initializePredefinedChatWidget();
+		initializeNotificationCenter();
 		initializeTeacherQrPage();
 		initializeStudentScanPage();
 
