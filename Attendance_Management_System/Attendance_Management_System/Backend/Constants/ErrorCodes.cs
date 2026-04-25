@@ -18,6 +18,9 @@ public static class ErrorCodes
     // Generic bad request error
     public const string BadRequest = "BAD_REQUEST";
 
+    // Request was rejected by rate limiting middleware
+    public const string TooManyRequests = "TOO_MANY_REQUESTS";
+
     // Resource conflict (e.g., duplicate entry)
     public const string Conflict = "CONFLICT";
 

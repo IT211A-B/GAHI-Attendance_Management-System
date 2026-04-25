@@ -2,7 +2,6 @@ using Attendance_Management_System.Backend.Entities;
 using Attendance_Management_System.Backend.Persistence;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
-using System.Linq;
 
 namespace Attendance_Management_System.Backend.Data;
 

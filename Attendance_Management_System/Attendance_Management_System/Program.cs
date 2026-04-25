@@ -47,6 +47,7 @@ app.UseRouting();
 
 // Enable authentication and authorization middleware
 app.UseAuthentication();
+app.UseRateLimiter();
 app.UseAuthorization();
 
 // Configure default MVC route pattern
@@ -54,14 +55,15 @@ app.MapControllerRoute(
     name: "default",
     pattern: "{controller=Home}/{action=Index}/{id?}");
 
-app.MapHub<NotificationHub>("/hubs/notifications");
+app.MapHub<NotificationHub>("/hubs/notifications").DisableRateLimiting();
 
 // Expose health check endpoint for monitoring
-app.MapHealthChecks("/health");
+app.MapHealthChecks("/health").DisableRateLimiting();
 
 // Run database migrations and seed initial data on startup
-using (var scope = app.Services.CreateScope())
+if (!app.Environment.IsEnvironment("Testing"))
 {
+    using var scope = app.Services.CreateScope();
     var services = scope.ServiceProvider;
     try
     {
@@ -80,3 +82,5 @@ using (var scope = app.Services.CreateScope())
 
 // Start the web application
 app.Run();
+
+public partial class Program;
