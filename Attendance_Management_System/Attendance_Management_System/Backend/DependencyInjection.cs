@@ -14,6 +14,7 @@ using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 
 namespace Attendance_Management_System.Backend;
 
@@ -42,8 +43,11 @@ public static class DependencyInjection
         // Bind QR attendance settings from configuration to strongly-typed class
         services.Configure<AttendanceQrSettings>(configuration.GetSection(AttendanceQrSettings.SectionName));
 
-        // Bind email settings from configuration to strongly-typed class
-        services.Configure<EmailSettings>(configuration.GetSection(EmailSettings.SectionName));
+        // Bind and validate email settings on startup so generated links always use a safe public origin.
+        services.AddSingleton<IValidateOptions<EmailSettings>, EmailSettingsValidator>();
+        services.AddOptions<EmailSettings>()
+            .Bind(configuration.GetSection(EmailSettings.SectionName))
+            .ValidateOnStart();
 
         // Bind rate limiting settings from configuration to strongly-typed class
         services.Configure<RateLimitingSettings>(configuration.GetSection(RateLimitingSettings.SectionName));
