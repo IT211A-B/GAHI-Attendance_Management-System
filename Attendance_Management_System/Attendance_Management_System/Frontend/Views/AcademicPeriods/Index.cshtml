@@ -1,0 +1,118 @@
+@model Attendance_Management_System.Backend.ViewModels.AcademicPeriods.AcademicPeriodsIndexViewModel
+@{
+    ViewData["Title"] = "Academic Periods";
+}
+
+<section class="panel">
+    <h3>Academic Periods</h3>
+    <p class="muted">C# MVC management of configured academic year periods.</p>
+
+    @if (TempData["AcademicPeriodsSuccess"] is string successMessage)
+    {
+        <p class="status-pill active">@successMessage</p>
+    }
+
+    @if (TempData["AcademicPeriodsError"] is string errorMessage)
+    {
+        <p class="form-validation">@errorMessage</p>
+    }
+
+    <article class="panel">
+        <h3>Create Academic Period</h3>
+        <form asp-controller="AcademicPeriods" asp-action="Create" method="post" class="filters-grid three">
+            @Html.AntiForgeryToken()
+            <div asp-validation-summary="ModelOnly" class="form-validation"></div>
+
+            <div>
+                <label asp-for="CreateForm.YearLabel"></label>
+                <input asp-for="CreateForm.YearLabel" class="input-select" />
+                <span asp-validation-for="CreateForm.YearLabel" class="field-validation"></span>
+            </div>
+            <div>
+                <label asp-for="CreateForm.StartDate"></label>
+                <input asp-for="CreateForm.StartDate" class="input-select" type="date" />
+                <span asp-validation-for="CreateForm.StartDate" class="field-validation"></span>
+            </div>
+            <div>
+                <label asp-for="CreateForm.EndDate"></label>
+                <input asp-for="CreateForm.EndDate" class="input-select" type="date" />
+                <span asp-validation-for="CreateForm.EndDate" class="field-validation"></span>
+            </div>
+
+            <button type="submit" class="btn-primary btn-inline">Create Period</button>
+        </form>
+    </article>
+
+    @if (!string.IsNullOrWhiteSpace(Model.ErrorMessage))
+    {
+        <p class="form-validation">@Model.ErrorMessage</p>
+    }
+    else if (!Model.Periods.Any())
+    {
+        <p class="footer-note">No academic periods found.</p>
+    }
+    else
+    {
+        <div class="table-wrap">
+            <table class="app-table">
+                <thead>
+                    <tr>
+                        <th>Label</th>
+                        <th>Start</th>
+                        <th>End</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var item in Model.Periods)
+                    {
+                        <tr>
+                            <td>@item.YearLabel</td>
+                            <td>@item.StartDate</td>
+                            <td>@item.EndDate</td>
+                            <td>
+                                @if (item.IsActive)
+                                {
+                                    <span class="status-pill active">Current</span>
+                                }
+                                else
+                                {
+                                    <span class="status-pill inactive">Inactive</span>
+                                }
+                            </td>
+                            <td>
+                                <div class="action-stack">
+                                    <form asp-controller="AcademicPeriods" asp-action="Update" asp-route-id="@item.Id" method="post" class="stack-form">
+                                        @Html.AntiForgeryToken()
+                                        <input type="text" name="UpdateForm.YearLabel" value="@item.YearLabel" class="input-select compact-input" placeholder="Year label" />
+                                        <input type="date" name="UpdateForm.StartDate" value="@item.StartDate" class="input-select compact-input" />
+                                        <input type="date" name="UpdateForm.EndDate" value="@item.EndDate" class="input-select compact-input" />
+                                        <button type="submit" class="btn-secondary">Save</button>
+                                    </form>
+
+                                    @if (!item.IsActive)
+                                    {
+                                        <form asp-controller="AcademicPeriods" asp-action="Activate" asp-route-id="@item.Id" method="post" class="inline-form">
+                                            @Html.AntiForgeryToken()
+                                            <button type="submit" class="btn-primary">Activate</button>
+                                        </form>
+                                    }
+
+                                    <form asp-controller="AcademicPeriods" asp-action="Delete" asp-route-id="@item.Id" method="post" class="inline-form">
+                                        @Html.AntiForgeryToken()
+                                        <button type="submit" class="btn-danger">Delete</button>
+                                    </form>
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</section>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

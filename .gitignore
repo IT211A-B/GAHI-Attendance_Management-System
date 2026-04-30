@@ -1,0 +1,130 @@
+# .gitignore for an ASP.NET Core / .NET 9 project
+# Generated with best practices for this repository
+
+# Visual Studio / Rider / IDE files
+.vs/
+.vscode/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# Build results
+[Bb]in/
+[Oo]bj/
+out/
+
+# NuGet packages
+*.nupkg
+*.snupkg
+project.lock.json
+project.fragment.lock.json
+artifacts/
+**/packages/*
+!**/packages/build/
+
+# ASP.NET Scaffolding
+ScaffoldingReadMe.txt
+
+# User-specific files
+*.rsuser
+*.ipr
+*.iws
+.idea/
+
+# IntelliJ and Rider
+*.iml
+*.iws
+.idea/
+
+# Log files
+*.log
+
+# OS files
+Thumbs.db
+Desktop.ini
+ehthumbs.db
+Icon?
+.DS_Store
+
+# npm / node
+node_modules/
+pnpm-lock.yaml
+yarn.lock
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# secret config / local settings
+appsettings.*.json
+secrets.json
+
+# runtime
+*.pid
+*.seed
+
+# Rider-specific things
+.idea/
+*.sln.iml
+
+# JetBrains Rider caches
+.idea/*
+*.sln.iml
+
+# User-specific ASP.NET files
+*.dotCover
+*.lcov
+
+# Azure publish settings
+PublishProfiles/
+
+# Visual Studio temporary files
+*.tmp
+~$*
+*.log
+*.vspscc
+*.vssscc
+
+# Coverage & test results
+TestResults/
+coverage*
+*.coverage
+*.coveragexml
+*.testresults
+
+# Package outputs
+*.dll
+*.exe
+*.appx
+*.msi
+*.zip
+
+# Built website
+wwwroot/lib/
+
+# Local debug and profiling files
+*.pdb
+*.cache
+
+# macOS
+*.DS_Store
+
+# Windows
+Thumbs.db
+
+# Always ignore generated project assets
+**/obj/**
+**/bin/**
+
+# Ensure facilities for local storage keys / secrets not committed
+**/appsettings.Development.json
+
+# Optional: keep lock file if you want deterministic NuGet restore
+# Uncomment if you commit package-lock style files for reproducible builds
+# packages.lock.json
+
+# Recommended:
+# - Track source files, csproj, .sln
+# - Ignore generated artifacts and local machine-specific configs
+# - Avoid committing secrets / local environment files
+

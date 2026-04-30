@@ -1,0 +1,60 @@
+@model Attendance_Management_System.Backend.ViewModels.Reports.ReportsIndexViewModel
+@{
+    ViewData["Title"] = "Reports";
+}
+
+<section class="panel">
+    <h3>Reports</h3>
+    <p class="muted">Daily attendance analytics from existing section attendance data.</p>
+
+    <form method="get" class="filters-grid three">
+        <div>
+            <label for="sectionId">Section</label>
+            <select id="sectionId" name="sectionId" class="input-select">
+                <option value="">Choose section</option>
+                @foreach (var sectionItem in Model.Sections)
+                {
+                    <option value="@sectionItem.Id" selected="@(Model.SelectedSectionId == sectionItem.Id)">
+                        @sectionItem.Name</option>
+                    }
+                </select>
+            </div>
+            <div>
+                <label for="scheduleId">Schedule</label>
+                <select id="scheduleId" name="scheduleId" class="input-select">
+                    <option value="">Choose schedule</option>
+                    @foreach (var schedule in Model.Schedules.Where(s => Model.SelectedSectionId is null || s.SectionId ==
+                                    Model.SelectedSectionId))
+                    {
+                        <option value="@schedule.Id" selected="@(Model.SelectedScheduleId == schedule.Id)">@schedule.Label
+                        </option>
+                    }
+                </select>
+            </div>
+            <div>
+                <label for="date">Date</label>
+                <input id="date" name="date" type="date" class="input-select"
+                       value="@Model.SelectedDate.ToString("yyyy-MM-dd")" />
+            </div>
+            <button type="submit" class="btn-primary btn-inline">Generate Report</button>
+        </form>
+
+        @if (!string.IsNullOrWhiteSpace(Model.ErrorMessage))
+        {
+            <p class="form-validation">@Model.ErrorMessage</p>
+        }
+        else if (Model.SelectedSectionId is null || Model.SelectedScheduleId is null)
+        {
+            <p class="footer-note">Select section and schedule to view report metrics.</p>
+        }
+        else
+        {
+            <section class="grid-4 compact-gap">
+                <app-stat-card title="Total Students" value="@Model.TotalStudents"></app-stat-card>
+                <app-stat-card title="Present" value="@Model.PresentCount" tone="success" subtitle="@($"{Model.PresentRate}%")"></app-stat-card>
+                <app-stat-card title="Late" value="@Model.LateCount" tone="warning" subtitle="@($"{Model.LateRate}%")"></app-stat-card>
+                <app-stat-card title="Absent" value="@Model.AbsentCount" tone="danger" subtitle="@($"{Model.AbsentRate}%")"></app-stat-card>
+                <app-stat-card title="Unmarked" value="@Model.UnmarkedCount" subtitle="@($"{Model.UnmarkedRate}%")"></app-stat-card>
+            </section>
+        }
+    </section>

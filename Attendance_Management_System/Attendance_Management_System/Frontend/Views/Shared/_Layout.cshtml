@@ -1,0 +1,254 @@
+﻿@using Microsoft.AspNetCore.Antiforgery
+@inject IAntiforgery AntiForgery
+
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@ViewData["Title"] - DonBosco AMS</title>
+    @* Use the active Bosconian hero logo as favicon across authenticated pages. *@
+    <link rel="icon" type="image/png" href="~/images/Gemini_Generated_Image_s4on5ys4on5ys4on-Photoroom.png"
+          asp-append-version="true" />
+    <link rel="apple-touch-icon" href="~/images/Gemini_Generated_Image_s4on5ys4on5ys4on-Photoroom.png"
+          asp-append-version="true" />
+    <script type="importmap"></script>
+    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/Attendance_Management_System.styles.css" asp-append-version="true" />
+</head>
+
+<body>
+    @{
+        var antiforgeryToken = AntiForgery.GetAndStoreTokens(Context).RequestToken;
+    }
+    <input type="hidden" id="anti-forgery-token" name="__RequestVerificationToken" value="@antiforgeryToken" />
+    @{
+        var currentController = ViewContext.RouteData.Values["controller"]?.ToString() ?? string.Empty;
+        var currentAction = ViewContext.RouteData.Values["action"]?.ToString() ?? string.Empty;
+        var notificationsListUrl = Url.Action("GetRecent", "Notifications") ?? "/notifications";
+        var notificationsMarkReadUrlTemplate = Url.Action("MarkRead", "Notifications", new { id = "__ID__" }) ?? "/notifications/__ID__/read";
+        var notificationsMarkAllReadUrl = Url.Action("MarkAllRead", "Notifications") ?? "/notifications/read-all";
+        var notificationsHubUrl = "/hubs/notifications";
+        var currentUserRole = User.IsInRole("admin")
+            ? "admin"
+            : User.IsInRole("teacher")
+                ? "teacher"
+                : User.IsInRole("student")
+                    ? "student"
+                    : "guest";
+    }
+    <div class="app-shell">
+        <aside class="app-sidebar" id="app-sidebar">
+            <div class="brand">
+                <div class="brand-badge">DB</div>
+                <div class="brand-text">
+                    <strong>DonBosco AMS</strong>
+                    <span>Pure C# MVC Frontend</span>
+                </div>
+            </div>
+            <nav class="sidebar-nav" aria-label="Primary navigation">
+                <a class="sidebar-link @(currentController == "Dashboard" ? "active" : "")" asp-controller="Dashboard"
+                   asp-action="Index">Dashboard</a>
+
+                @if (User.IsInRole("admin"))
+                {
+                    <a class="sidebar-link @(currentController == "UserManagement" ? "active" : "")"
+                       asp-controller="UserManagement" asp-action="Index">Users</a>
+                    <a class="sidebar-link @(currentController == "Enrollments" ? "active" : "")"
+                       asp-controller="Enrollments" asp-action="Index">Enrollments</a>
+                    <a class="sidebar-link @(currentController == "AcademicPeriods" ? "active" : "")"
+                       asp-controller="AcademicPeriods" asp-action="Index">Academic Periods</a>
+                    <a class="sidebar-link @(currentController == "Programs" ? "active" : "")" asp-controller="Programs"
+                       asp-action="Index">Programs</a>
+                }
+
+                @if (User.IsInRole("admin") || User.IsInRole("teacher"))
+                {
+                    <a class="sidebar-link @(currentController == "SectionManagement" ? "active" : "")"
+                       asp-controller="SectionManagement" asp-action="Index">Sections</a>
+                          <a class="sidebar-link @(currentController == "AttendanceManagement" && currentAction == "Qr" ? "active" : "")"
+                              asp-controller="AttendanceManagement" asp-action="Qr">Attendance QR</a>
+                    <a class="sidebar-link @(currentController == "SubjectsManagement" ? "active" : "")"
+                       asp-controller="SubjectsManagement" asp-action="Index">Subjects</a>
+                    <a class="sidebar-link @(currentController == "ScheduleManagement" ? "active" : "")"
+                       asp-controller="ScheduleManagement" asp-action="Index">Schedules</a>
+                    <a class="sidebar-link @(currentController == "StudentsManagement" ? "active" : "")"
+                       asp-controller="StudentsManagement" asp-action="Index">Students</a>
+                    <a class="sidebar-link @(currentController == "Reports" ? "active" : "")" asp-controller="Reports"
+                       asp-action="Index">Reports</a>
+
+                    @if (User.IsInRole("teacher"))
+                    {
+                        <a class="sidebar-link @(currentController == "TeacherHistoryManagement" ? "active" : "")"
+                           asp-controller="TeacherHistoryManagement" asp-action="Index">Teaching History</a>
+                    }
+                }
+
+                @if (User.IsInRole("admin"))
+                {
+                    <a class="sidebar-link @(currentController == "ClassroomManagement" ? "active" : "")"
+                       asp-controller="ClassroomManagement" asp-action="Index">Departments</a>
+                    <a class="sidebar-link @(currentController == "TeacherManagement" ? "active" : "")"
+                       asp-controller="TeacherManagement" asp-action="Index">Teachers</a>
+                }
+
+                @if (User.IsInRole("student"))
+                {
+                    <a class="sidebar-link @(currentController == "Enrollments" ? "active" : "")"
+                       asp-controller="Enrollments" asp-action="Index">Enrollments</a>
+                          <a class="sidebar-link @(currentController == "AttendanceManagement" && currentAction == "Scan" ? "active" : "")"
+                              asp-controller="AttendanceManagement" asp-action="Scan">Scan QR</a>
+                }
+
+                <a class="sidebar-link @(currentController == "Settings" ? "active" : "")" asp-controller="Settings"
+                   asp-action="Index">Settings</a>
+                <a class="sidebar-link @(currentController == "Home" && currentAction == "Privacy" ? "active" : "")"
+                   asp-controller="Home" asp-action="Privacy">About</a>
+            </nav>
+
+            @if (User.Identity?.IsAuthenticated == true)
+            {
+                <form asp-controller="Account" asp-action="Logout" method="post" class="sidebar-logout-form">
+                    @Html.AntiForgeryToken()
+                    <button type="submit" class="sidebar-logout-btn">Sign out</button>
+                </form>
+            }
+            else
+            {
+                <a class="sidebar-link" asp-controller="Account" asp-action="Login">Sign in</a>
+            }
+        </aside>
+
+        <button type="button"
+                class="mobile-sidebar-backdrop"
+                id="mobile-sidebar-backdrop"
+                aria-label="Close navigation drawer"
+                hidden></button>
+
+        <div class="app-main">
+            <header class="topbar">
+                <div class="topbar-left">
+                    <button type="button"
+                            class="mobile-nav-toggle"
+                            id="mobile-nav-toggle"
+                            aria-controls="app-sidebar"
+                            aria-expanded="false"
+                            aria-label="Open navigation">
+                        Menu
+                    </button>
+                    <h1>@(ViewData["Title"] ?? "Dashboard")</h1>
+                </div>
+                <div class="topbar-meta">
+                    @if (User.Identity?.IsAuthenticated == true)
+                    {
+                        <div class="notification-center"
+                             data-notification-center="true"
+                             data-list-url="@notificationsListUrl"
+                             data-mark-read-url-template="@notificationsMarkReadUrlTemplate"
+                             data-mark-all-read-url="@notificationsMarkAllReadUrl"
+                             data-hub-url="@notificationsHubUrl"
+                             data-max-items="20">
+                            <button type="button"
+                                    class="notification-toggle"
+                                    id="notification-toggle"
+                                    aria-controls="notification-panel"
+                                    aria-expanded="false">
+                                Notifications
+                                <span id="notification-unread-badge" class="notification-badge" hidden>0</span>
+                            </button>
+                            <section id="notification-panel"
+                                     class="notification-panel"
+                                     role="dialog"
+                                     aria-modal="false"
+                                     aria-labelledby="notification-title"
+                                     hidden>
+                                <header class="notification-header">
+                                    <h3 id="notification-title">Notifications</h3>
+                                    <button type="button" class="btn-secondary notification-mark-all" id="notification-mark-all-btn">Mark all read</button>
+                                </header>
+                                <div id="notification-list" class="notification-list" aria-live="polite">
+                                    <p class="notification-empty">Loading notifications...</p>
+                                </div>
+                            </section>
+                        </div>
+                        <span class="user-pill">@User.Identity.Name</span>
+                    }
+                    <span class="date-pill">@DateTime.Now.ToString("MMM dd, yyyy")</span>
+                </div>
+            </header>
+
+            <main class="content" role="main">
+                @RenderBody()
+            </main>
+        </div>
+    </div>
+
+    @if (User.Identity?.IsAuthenticated == true)
+    {
+        <div id="predefined-chat-widget"
+             class="chat-widget"
+             data-user-role="@currentUserRole"
+               data-chat-api-url=""
+             data-widget-state="closed">
+            <button type="button"
+                    class="chat-widget-launcher"
+                    id="chat-widget-launcher"
+                    aria-controls="chat-widget-panel"
+                    aria-expanded="false">
+                Help Chat
+            </button>
+
+            <section id="chat-widget-panel"
+                     class="chat-widget-panel"
+                     role="dialog"
+                     aria-modal="false"
+                     aria-labelledby="chat-widget-title"
+                     hidden>
+                <header class="chat-widget-header">
+                    <div>
+                        <h3 id="chat-widget-title">Quick Help</h3>
+                        <p class="chat-widget-subtitle">Tap a question and get an instant answer.</p>
+                    </div>
+                    <button type="button"
+                            class="btn-secondary chat-widget-close"
+                            data-chat-widget-close="true"
+                            aria-label="Close help chat">
+                        Close
+                    </button>
+                </header>
+
+                <label for="chat-widget-search" class="chat-widget-search-label">Find a question</label>
+                <input id="chat-widget-search"
+                       type="search"
+                       class="input-select chat-widget-search"
+                       placeholder="Attendance, schedule, account..."
+                       autocomplete="off" />
+
+                  <div id="chat-widget-categories"
+                    class="chat-widget-categories"
+                    role="tablist"
+                    aria-label="Question categories">
+                      <button type="button" class="chat-widget-tab active" role="tab" data-chat-category="all" aria-selected="true">All</button>
+                      <button type="button" class="chat-widget-tab" role="tab" data-chat-category="attendance" aria-selected="false">Attendance</button>
+                      <button type="button" class="chat-widget-tab" role="tab" data-chat-category="schedule" aria-selected="false">Schedule</button>
+                      <button type="button" class="chat-widget-tab" role="tab" data-chat-category="account" aria-selected="false">Account</button>
+                  </div>
+
+                <div id="chat-widget-question-list" class="chat-widget-question-list" role="listbox" aria-label="Predefined questions"></div>
+
+                <article id="chat-widget-answer" class="chat-widget-answer" aria-live="polite">
+                    <p>Select a question to view the predefined answer.</p>
+                </article>
+            </section>
+        </div>
+    }
+
+    <script src="~/lib/jquery/dist/jquery.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/animejs@3.2.2/lib/anime.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/8.0.7/signalr.min.js"></script>
+    <script src="~/js/site.js" asp-append-version="true"></script>
+    @await RenderSectionAsync("Scripts", required: false)
+</body>
+
+</html>
