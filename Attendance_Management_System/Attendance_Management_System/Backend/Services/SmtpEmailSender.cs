@@ -98,27 +98,8 @@ public class SmtpEmailSender : IEmailSender
     private void LogEmail(string toAddress, string subject, string htmlBody)
     {
         _logger.LogInformation(
-            "DEV EMAIL FALLBACK\nTo: {To}\nSubjectLength: {SubjectLength}\nBodyLength: {BodyLength}",
-            RedactEmail(toAddress),
+            "DEV EMAIL FALLBACK\nSubjectLength: {SubjectLength}\nBodyLength: {BodyLength}",
             subject?.Length ?? 0,
             htmlBody?.Length ?? 0);
-    }
-
-    private static string RedactEmail(string? email)
-    {
-        if (string.IsNullOrWhiteSpace(email))
-        {
-            return "<unknown>";
-        }
-
-        var trimmed = email.Trim();
-        var atIndex = trimmed.IndexOf('@');
-        if (atIndex <= 1)
-        {
-            return "***";
-        }
-
-        var domain = atIndex < trimmed.Length - 1 ? trimmed[(atIndex + 1)..] : "";
-        return $"{trimmed[0]}***@{domain}";
     }
 }
