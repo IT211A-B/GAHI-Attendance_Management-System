@@ -1,4 +1,7 @@
-﻿<!DOCTYPE html>
+﻿@using Microsoft.AspNetCore.Antiforgery
+@inject IAntiforgery AntiForgery
+
+<!DOCTYPE html>
 <html lang="en">
 
 <head>
@@ -16,6 +19,10 @@
 </head>
 
 <body>
+    @{
+        var antiforgeryToken = AntiForgery.GetAndStoreTokens(Context).RequestToken;
+    }
+    <input type="hidden" id="anti-forgery-token" name="__RequestVerificationToken" value="@antiforgeryToken" />
     @{
         var currentController = ViewContext.RouteData.Values["controller"]?.ToString() ?? string.Empty;
         var currentAction = ViewContext.RouteData.Values["action"]?.ToString() ?? string.Empty;

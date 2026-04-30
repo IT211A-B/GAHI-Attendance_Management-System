@@ -104,6 +104,7 @@ public class AttendanceManagementController : Controller
     [HttpPost("qr/sessions")]
     [EnableRateLimiting(RateLimitingPolicyNames.QrSessionMutation)]
     [Authorize(Policy = "AdminOrTeacher")]
+    [ValidateAntiForgeryToken]
     public async Task<IActionResult> CreateQrSession([FromBody] CreateAttendanceQrSessionRequest request)
     {
         var userContext = GetUserContext();
@@ -128,6 +129,7 @@ public class AttendanceManagementController : Controller
     [HttpPost("qr/sessions/{sessionId}/refresh")]
     [EnableRateLimiting(RateLimitingPolicyNames.QrSessionMutation)]
     [Authorize(Policy = "AdminOrTeacher")]
+    [ValidateAntiForgeryToken]
     public async Task<IActionResult> RefreshQrSession(string sessionId)
     {
         var userContext = GetUserContext();
@@ -145,6 +147,7 @@ public class AttendanceManagementController : Controller
     [HttpPost("qr/sessions/{sessionId}/close")]
     [EnableRateLimiting(RateLimitingPolicyNames.QrSessionMutation)]
     [Authorize(Policy = "AdminOrTeacher")]
+    [ValidateAntiForgeryToken]
     public async Task<IActionResult> CloseQrSession(string sessionId)
     {
         var userContext = GetUserContext();
@@ -179,6 +182,7 @@ public class AttendanceManagementController : Controller
     [HttpPost("qr/checkins")]
     [EnableRateLimiting(RateLimitingPolicyNames.QrCheckin)]
     [Authorize(Policy = "StudentOnly")]
+    [ValidateAntiForgeryToken]
     public async Task<IActionResult> SubmitQrCheckin([FromBody] SubmitAttendanceQrCheckinRequest request)
     {
         var userContext = GetUserContext();

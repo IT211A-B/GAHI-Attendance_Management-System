@@ -88,13 +88,13 @@ public class AccountController : Controller
         }
         catch (PostgresException ex) when (ex.SqlState == PostgresErrorCodes.InvalidPassword)
         {
-            _logger.LogError(ex, "PostgreSQL authentication failed while processing login for {Email}.", model.Email);
+            _logger.LogError(ex, "PostgreSQL authentication failed while processing login for {Email}.", RedactEmail(model.Email));
             ModelState.AddModelError(string.Empty, "Login is temporarily unavailable due to a database configuration issue.");
             return View(model);
         }
         catch (NpgsqlException ex)
         {
-            _logger.LogError(ex, "PostgreSQL connection failure while processing login for {Email}.", model.Email);
+            _logger.LogError(ex, "PostgreSQL connection failure while processing login for {Email}.", RedactEmail(model.Email));
             ModelState.AddModelError(string.Empty, "Login is temporarily unavailable. Please try again later.");
             return View(model);
         }
@@ -271,6 +271,24 @@ public class AccountController : Controller
             model.ErrorMessage ??= "Unable to load signup options right now. Please try again later.";
         }
 
+    }
+
+    private static string RedactEmail(string? email)
+    {
+        if (string.IsNullOrWhiteSpace(email))
+        {
+            return "<unknown>";
+        }
+
+        var trimmed = email.Trim();
+        var atIndex = trimmed.IndexOf('@');
+        if (atIndex <= 1)
+        {
+            return "***";
+        }
+
+        var domain = atIndex < trimmed.Length - 1 ? trimmed[(atIndex + 1)..] : "";
+        return $"{trimmed[0]}***@{domain}";
     }
 
     private static string? NormalizeOptional(string? value)

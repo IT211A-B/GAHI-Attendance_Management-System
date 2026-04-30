@@ -1297,17 +1297,34 @@
 		return url.toString();
 	}
 
+	function getAntiForgeryToken() {
+		var tokenInput = document.getElementById("anti-forgery-token");
+		if (!tokenInput) {
+			return "";
+		}
+
+		return String(tokenInput.value || "");
+	}
+
 	function requestApi(method, url, body) {
 		var options = {
 			method: method,
 			headers: {
 				Accept: "application/json"
-			}
+			},
+			credentials: "same-origin"
 		};
 
 		if (body !== undefined) {
 			options.headers["Content-Type"] = "application/json";
 			options.body = JSON.stringify(body);
+		}
+
+		if (method !== "GET" && method !== "HEAD") {
+			var token = getAntiForgeryToken();
+			if (token) {
+				options.headers["RequestVerificationToken"] = token;
+			}
 		}
 
 		return window.fetch(url, options)
