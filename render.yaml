@@ -1,0 +1,31 @@
+services:
+  - type: web
+    name: attendance-management-system
+    runtime: dotnet
+    rootDir: Attendance_Management_System/Attendance_Management_System
+    buildCommand: dotnet restore Attendance_Management_System.csproj; dotnet publish Attendance_Management_System.csproj -c Release -o out
+    startCommand: dotnet out/Attendance_Management_System.dll
+    healthCheckPath: /health
+    envVars:
+      - key: ASPNETCORE_ENVIRONMENT
+        value: Production
+      - key: ConnectionStrings__Default
+        sync: false
+      - key: EmailSettings__PublicBaseUrl
+        sync: false
+      - key: AttendanceQrSettings__SigningKey
+        sync: false
+      - key: EmailSettings__Host
+        sync: false
+      - key: EmailSettings__Port
+        sync: false
+      - key: EmailSettings__Username
+        sync: false
+      - key: EmailSettings__Password
+        sync: false
+      - key: EmailSettings__FromAddress
+        sync: false
+      - key: EmailSettings__FromName
+        sync: false
+      - key: EmailSettings__UseSsl
+        sync: false

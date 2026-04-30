@@ -50,30 +50,11 @@
         else
         {
             <section class="grid-4 compact-gap">
-                <article class="stat-card">
-                    <p class="stat-title">Total Students</p>
-                    <p class="stat-value">@Model.TotalStudents</p>
-                </article>
-                <article class="stat-card">
-                    <p class="stat-title">Present</p>
-                    <p class="stat-value success">@Model.PresentCount</p>
-                    <p class="muted">@Model.PresentRate%</p>
-                </article>
-                <article class="stat-card">
-                    <p class="stat-title">Late</p>
-                    <p class="stat-value warning">@Model.LateCount</p>
-                    <p class="muted">@Model.LateRate%</p>
-                </article>
-                <article class="stat-card">
-                    <p class="stat-title">Absent</p>
-                    <p class="stat-value danger">@Model.AbsentCount</p>
-                    <p class="muted">@Model.AbsentRate%</p>
-                </article>
-                <article class="stat-card">
-                    <p class="stat-title">Unmarked</p>
-                    <p class="stat-value">@Model.UnmarkedCount</p>
-                    <p class="muted">@Model.UnmarkedRate%</p>
-                </article>
+                <app-stat-card title="Total Students" value="@Model.TotalStudents"></app-stat-card>
+                <app-stat-card title="Present" value="@Model.PresentCount" tone="success" subtitle="@($"{Model.PresentRate}%")"></app-stat-card>
+                <app-stat-card title="Late" value="@Model.LateCount" tone="warning" subtitle="@($"{Model.LateRate}%")"></app-stat-card>
+                <app-stat-card title="Absent" value="@Model.AbsentCount" tone="danger" subtitle="@($"{Model.AbsentRate}%")"></app-stat-card>
+                <app-stat-card title="Unmarked" value="@Model.UnmarkedCount" subtitle="@($"{Model.UnmarkedRate}%")"></app-stat-card>
             </section>
         }
     </section>

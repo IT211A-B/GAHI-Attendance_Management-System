@@ -1,6 +1,8 @@
 using Attendance_Management_System.Backend;
 using Attendance_Management_System.Backend.Data;
+using Attendance_Management_System.Backend.Hubs;
 using Attendance_Management_System.Backend.Persistence;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Mvc.Razor;
 using Microsoft.EntityFrameworkCore;
 
@@ -25,12 +27,22 @@ builder.Services.Configure<RazorViewEngineOptions>(options =>
 // Register all backend services (database, auth, repositories, services)
 builder.Services.AddBackend(builder.Configuration);
 
+// Trust reverse proxy headers (Render) for HTTPS scheme and client IP.
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    options.KnownNetworks.Clear();
+    options.KnownProxies.Clear();
+});
+
 // Add health checks to monitor database connectivity
 builder.Services.AddHealthChecks()
     .AddNpgSql(builder.Configuration.GetConnectionString("Default")!);
 
 // Build the application from configured services
 var app = builder.Build();
+
+app.UseForwardedHeaders();
 
 // Configure production-specific error handling and security
 if (!app.Environment.IsDevelopment())
@@ -46,6 +58,7 @@ app.UseRouting();
 
 // Enable authentication and authorization middleware
 app.UseAuthentication();
+app.UseRateLimiter();
 app.UseAuthorization();
 
 // Configure default MVC route pattern
@@ -53,12 +66,15 @@ app.MapControllerRoute(
     name: "default",
     pattern: "{controller=Home}/{action=Index}/{id?}");
 
+app.MapHub<NotificationHub>("/hubs/notifications").DisableRateLimiting();
+
 // Expose health check endpoint for monitoring
-app.MapHealthChecks("/health");
+app.MapHealthChecks("/health").DisableRateLimiting();
 
 // Run database migrations and seed initial data on startup
-using (var scope = app.Services.CreateScope())
+if (!app.Environment.IsEnvironment("Testing"))
 {
+    using var scope = app.Services.CreateScope();
     var services = scope.ServiceProvider;
     try
     {
@@ -77,3 +93,5 @@ using (var scope = app.Services.CreateScope())
 
 // Start the web application
 app.Run();
+
+public partial class Program;

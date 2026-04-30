@@ -1,10 +1,12 @@
 using Attendance_Management_System.Backend.DTOs.Requests;
 using Attendance_Management_System.Backend.Entities;
 using Attendance_Management_System.Backend.Interfaces.Services;
+using Attendance_Management_System.Backend.Constants;
 using Attendance_Management_System.Backend.ViewModels.Auth;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Npgsql;
 
 namespace Attendance_Management_System.Backend.Controllers;
@@ -41,15 +43,14 @@ public class AccountController : Controller
             return RedirectToAction("Index", "Dashboard");
         }
 
+        if (TempData["AuthError"] is string authError)
+        {
+            ModelState.AddModelError(string.Empty, authError);
+        }
+
         return View(new LoginViewModel { ReturnUrl = returnUrl });
     }
 
-    [HttpGet("Account/Login")]
-    [AllowAnonymous]
-    public IActionResult LegacyLogin(string? returnUrl = null)
-    {
-        return RedirectToAction(nameof(Login), new { returnUrl });
-    }
 
     [HttpGet("signup")]
     [AllowAnonymous]
@@ -65,14 +66,8 @@ public class AccountController : Controller
         return View(viewModel);
     }
 
-    [HttpGet("Account/Register")]
-    [AllowAnonymous]
-    public IActionResult LegacyRegister()
-    {
-        return RedirectToAction(nameof(Signup));
-    }
-
     [HttpPost("login")]
+    [EnableRateLimiting(RateLimitingPolicyNames.AuthLogin)]
     [AllowAnonymous]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Login(LoginViewModel model)
@@ -106,6 +101,14 @@ public class AccountController : Controller
 
         if (!result.Succeeded)
         {
+            if (result.IsNotAllowed)
+            {
+                ViewData["EmailVerificationRequired"] = true;
+                ViewData["EmailVerificationAddress"] = model.Email;
+                ModelState.AddModelError(string.Empty, "Please verify your email before signing in. You can request a new verification link below.");
+                return View(model);
+            }
+
             ModelState.AddModelError(string.Empty, "Invalid email or password.");
             return View(model);
         }
@@ -119,6 +122,7 @@ public class AccountController : Controller
     }
 
     [HttpPost("signup")]
+    [EnableRateLimiting(RateLimitingPolicyNames.AuthSignup)]
     [AllowAnonymous]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Signup(StudentSignupViewModel model)
@@ -164,6 +168,36 @@ public class AccountController : Controller
         return RedirectToAction(nameof(Login));
     }
 
+    [HttpGet("confirm-email")]
+    [AllowAnonymous]
+    public async Task<IActionResult> ConfirmEmail([FromQuery] int userId, [FromQuery] string token)
+    {
+        var result = await _authService.ConfirmEmailAsync(userId, token);
+        if (result.Success)
+        {
+            TempData["AuthSuccess"] = result.Message;
+        }
+        else
+        {
+            TempData["AuthError"] = result.Message;
+        }
+
+        return RedirectToAction(nameof(Login));
+    }
+
+    [HttpPost("resend-verification")]
+    [EnableRateLimiting(RateLimitingPolicyNames.AuthResendVerification)]
+    [AllowAnonymous]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> ResendVerification([FromForm] string email)
+    {
+        var result = await _authService.ResendVerificationAsync(email);
+        TempData["ResendSuccess"] = result.Message;
+        TempData["AuthSuccess"] = result.Message;
+
+        return RedirectToAction(nameof(Login));
+    }
+
     [HttpPost("logout")]
     [Authorize]
     [ValidateAntiForgeryToken]
@@ -175,40 +209,66 @@ public class AccountController : Controller
 
     private async Task PopulateSignupOptionsAsync(StudentSignupViewModel model)
     {
-        var coursesResult = await _coursesService.GetAllCoursesAsync();
-        if (!coursesResult.Success || coursesResult.Data is null)
+        try
         {
-            model.ErrorMessage ??= coursesResult.Error?.Message ?? "Unable to load course options right now.";
+            var coursesResult = await _coursesService.GetAllCoursesAsync();
+            if (!coursesResult.Success || coursesResult.Data is null)
+            {
+                model.ErrorMessage ??= coursesResult.Error?.Message ?? "Unable to load course options right now.";
+            }
+            else
+            {
+                model.AvailableCourses = coursesResult.Data
+                    .OrderBy(course => course.Name)
+                    .Select(course => new SignupCourseOptionViewModel
+                    {
+                        Id = course.Id,
+                        Label = string.IsNullOrWhiteSpace(course.Code)
+                            ? course.Name
+                            : $"{course.Code} - {course.Name}"
+                    })
+                    .ToList();
+            }
         }
-        else
+        catch (PostgresException ex) when (ex.SqlState == PostgresErrorCodes.InvalidPassword)
         {
-            model.AvailableCourses = coursesResult.Data
-                .OrderBy(course => course.Name)
-                .Select(course => new SignupCourseOptionViewModel
-                {
-                    Id = course.Id,
-                    Label = string.IsNullOrWhiteSpace(course.Code)
-                        ? course.Name
-                        : $"{course.Code} - {course.Name}"
-                })
-                .ToList();
+            _logger.LogError(ex, "PostgreSQL authentication failed while loading signup course options.");
+            model.ErrorMessage ??= "Signup is temporarily unavailable due to a database configuration issue.";
+        }
+        catch (NpgsqlException ex)
+        {
+            _logger.LogError(ex, "PostgreSQL connection failure while loading signup course options.");
+            model.ErrorMessage ??= "Unable to load signup options right now. Please try again later.";
         }
 
-        var academicYearsResult = await _academicYearsService.GetAllAcademicYearsAsync();
-        if (!academicYearsResult.Success || academicYearsResult.Data is null)
+        try
         {
-            model.ErrorMessage ??= academicYearsResult.Error?.Message ?? "Unable to load academic period options right now.";
+            var academicYearsResult = await _academicYearsService.GetAllAcademicYearsAsync();
+            if (!academicYearsResult.Success || academicYearsResult.Data is null)
+            {
+                model.ErrorMessage ??= academicYearsResult.Error?.Message ?? "Unable to load academic period options right now.";
+            }
+            else
+            {
+                model.AvailableAcademicYears = academicYearsResult.Data
+                    .OrderByDescending(year => year.StartDate)
+                    .Select(year => new SignupAcademicYearOptionViewModel
+                    {
+                        Id = year.Id,
+                        Label = year.YearLabel
+                    })
+                    .ToList();
+            }
         }
-        else
+        catch (PostgresException ex) when (ex.SqlState == PostgresErrorCodes.InvalidPassword)
         {
-            model.AvailableAcademicYears = academicYearsResult.Data
-                .OrderByDescending(year => year.StartDate)
-                .Select(year => new SignupAcademicYearOptionViewModel
-                {
-                    Id = year.Id,
-                    Label = year.YearLabel
-                })
-                .ToList();
+            _logger.LogError(ex, "PostgreSQL authentication failed while loading signup academic period options.");
+            model.ErrorMessage ??= "Signup is temporarily unavailable due to a database configuration issue.";
+        }
+        catch (NpgsqlException ex)
+        {
+            _logger.LogError(ex, "PostgreSQL connection failure while loading signup academic period options.");
+            model.ErrorMessage ??= "Unable to load signup options right now. Please try again later.";
         }
 
     }

@@ -1,4 +1,3 @@
-using System;
 using System.ComponentModel.DataAnnotations;
 using Attendance_Management_System.Backend.Enums;
 

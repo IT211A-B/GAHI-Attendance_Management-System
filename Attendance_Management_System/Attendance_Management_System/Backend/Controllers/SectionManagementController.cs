@@ -701,7 +701,9 @@ public class SectionManagementController : Controller
         var summaryResult = await _attendanceService.GetSectionAttendanceAsync(
             selectedSectionId,
             viewModel.SelectedAttendanceDate,
-            selectedScheduleId.Value);
+            selectedScheduleId.Value,
+            currentUserId,
+            role);
 
         if (!summaryResult.Success || summaryResult.Data is null)
         {
