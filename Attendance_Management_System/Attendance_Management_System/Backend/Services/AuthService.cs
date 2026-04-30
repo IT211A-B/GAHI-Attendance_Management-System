@@ -507,9 +507,12 @@ public class AuthService : IAuthService
 
     private string ResolvePublicBaseUrl()
     {
-        return string.IsNullOrWhiteSpace(_emailSettings.PublicBaseUrl)
-            ? "https://localhost:5001"
-            : _emailSettings.PublicBaseUrl.Trim();
+        if (string.IsNullOrWhiteSpace(_emailSettings.PublicBaseUrl))
+        {
+            throw new InvalidOperationException($"{EmailSettings.SectionName}:{nameof(EmailSettings.PublicBaseUrl)} is not configured.");
+        }
+
+        return _emailSettings.PublicBaseUrl.Trim();
     }
 
     private static string? DecodeEmailToken(string token)

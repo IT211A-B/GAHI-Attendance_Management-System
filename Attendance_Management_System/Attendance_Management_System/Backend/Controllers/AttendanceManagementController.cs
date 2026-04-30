@@ -7,6 +7,7 @@ using Attendance_Management_System.Backend.Interfaces.Services;
 using Attendance_Management_System.Backend.ViewModels.Attendance;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Extensions.Options;
 
 namespace Attendance_Management_System.Backend.Controllers;
@@ -101,6 +102,7 @@ public class AttendanceManagementController : Controller
     }
 
     [HttpPost("qr/sessions")]
+    [EnableRateLimiting(RateLimitingPolicyNames.QrSessionMutation)]
     [Authorize(Policy = "AdminOrTeacher")]
     public async Task<IActionResult> CreateQrSession([FromBody] CreateAttendanceQrSessionRequest request)
     {
@@ -124,6 +126,7 @@ public class AttendanceManagementController : Controller
     }
 
     [HttpPost("qr/sessions/{sessionId}/refresh")]
+    [EnableRateLimiting(RateLimitingPolicyNames.QrSessionMutation)]
     [Authorize(Policy = "AdminOrTeacher")]
     public async Task<IActionResult> RefreshQrSession(string sessionId)
     {
@@ -140,6 +143,7 @@ public class AttendanceManagementController : Controller
     }
 
     [HttpPost("qr/sessions/{sessionId}/close")]
+    [EnableRateLimiting(RateLimitingPolicyNames.QrSessionMutation)]
     [Authorize(Policy = "AdminOrTeacher")]
     public async Task<IActionResult> CloseQrSession(string sessionId)
     {
@@ -156,6 +160,7 @@ public class AttendanceManagementController : Controller
     }
 
     [HttpGet("qr/sessions/{sessionId}/checkins")]
+    [EnableRateLimiting(RateLimitingPolicyNames.QrLiveFeed)]
     [Authorize(Policy = "AdminOrTeacher")]
     public async Task<IActionResult> GetQrSessionCheckins(string sessionId)
     {
@@ -172,6 +177,7 @@ public class AttendanceManagementController : Controller
     }
 
     [HttpPost("qr/checkins")]
+    [EnableRateLimiting(RateLimitingPolicyNames.QrCheckin)]
     [Authorize(Policy = "StudentOnly")]
     public async Task<IActionResult> SubmitQrCheckin([FromBody] SubmitAttendanceQrCheckinRequest request)
     {

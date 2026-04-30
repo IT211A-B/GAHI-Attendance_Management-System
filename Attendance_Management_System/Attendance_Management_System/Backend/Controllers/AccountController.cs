@@ -1,10 +1,12 @@
 using Attendance_Management_System.Backend.DTOs.Requests;
 using Attendance_Management_System.Backend.Entities;
 using Attendance_Management_System.Backend.Interfaces.Services;
+using Attendance_Management_System.Backend.Constants;
 using Attendance_Management_System.Backend.ViewModels.Auth;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Npgsql;
 
 namespace Attendance_Management_System.Backend.Controllers;
@@ -65,6 +67,7 @@ public class AccountController : Controller
     }
 
     [HttpPost("login")]
+    [EnableRateLimiting(RateLimitingPolicyNames.AuthLogin)]
     [AllowAnonymous]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Login(LoginViewModel model)
@@ -119,6 +122,7 @@ public class AccountController : Controller
     }
 
     [HttpPost("signup")]
+    [EnableRateLimiting(RateLimitingPolicyNames.AuthSignup)]
     [AllowAnonymous]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Signup(StudentSignupViewModel model)
@@ -182,6 +186,7 @@ public class AccountController : Controller
     }
 
     [HttpPost("resend-verification")]
+    [EnableRateLimiting(RateLimitingPolicyNames.AuthResendVerification)]
     [AllowAnonymous]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> ResendVerification([FromForm] string email)
