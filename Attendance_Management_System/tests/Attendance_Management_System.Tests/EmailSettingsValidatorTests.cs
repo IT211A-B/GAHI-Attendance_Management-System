@@ -1,3 +1,8 @@
+using Attendance_Management_System.Backend.Configuration;
+using Microsoft.Extensions.FileProviders;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Options;
+
 namespace Attendance_Management_System.Tests;
 
 public class EmailSettingsValidatorTests

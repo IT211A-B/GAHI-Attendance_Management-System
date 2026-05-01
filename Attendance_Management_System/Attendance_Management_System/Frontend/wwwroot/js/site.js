@@ -15,6 +15,54 @@
 		return typeof window.anime === "function";
 	}
 
+	function initializeLazyLoading() {
+		var lazyImages = Array.from(document.querySelectorAll("img[data-lazy-src]"));
+		if (!lazyImages.length) {
+			return;
+		}
+
+		function loadImage(image) {
+			if (!image || image.getAttribute("data-lazy-loaded") === "true") {
+				return;
+			}
+
+			var source = image.getAttribute("data-lazy-src");
+			if (!source) {
+				return;
+			}
+
+			image.addEventListener("load", function () {
+				image.classList.add("is-loaded");
+			}, { once: true });
+
+			image.src = source;
+			image.setAttribute("data-lazy-loaded", "true");
+			image.removeAttribute("data-lazy-src");
+		}
+
+		if (!("IntersectionObserver" in window)) {
+			lazyImages.forEach(loadImage);
+			return;
+		}
+
+		var observer = new IntersectionObserver(function (entries) {
+			entries.forEach(function (entry) {
+				if (!entry.isIntersecting) {
+					return;
+				}
+
+				loadImage(entry.target);
+				observer.unobserve(entry.target);
+			});
+		}, {
+			rootMargin: "160px 0px"
+		});
+
+		lazyImages.forEach(function (image) {
+			observer.observe(image);
+		});
+	}
+
 	// Animate multiple elements in a staggered reveal sequence.
 	function revealSequence(selector, options) {
 		var nodes = document.querySelectorAll(selector);
@@ -224,6 +272,832 @@
 		});
 	}
 
+	// Initialize floating help chat with role-filtered predefined Q&A entries.
+	function initializePredefinedChatWidget() {
+		var widget = document.getElementById("predefined-chat-widget");
+		if (!widget) {
+			return;
+		}
+
+		var launcher = document.getElementById("chat-widget-launcher");
+		var panel = document.getElementById("chat-widget-panel");
+		var closeBtn = panel ? panel.querySelector("[data-chat-widget-close='true']") : null;
+		var questionList = document.getElementById("chat-widget-question-list");
+		var answer = document.getElementById("chat-widget-answer");
+		var searchInput = document.getElementById("chat-widget-search");
+		var categoryTabs = document.getElementById("chat-widget-categories");
+
+		if (!launcher || !panel || !questionList || !answer) {
+			return;
+		}
+
+		var currentRole = (widget.getAttribute("data-user-role") || "guest").toLowerCase();
+		var apiUrl = (widget.getAttribute("data-chat-api-url") || "").trim();
+		var activeQuestionId = null;
+		var activeCategory = "all";
+		var entries = [];
+
+		// Keep these entries as plain objects so an API payload can swap in later.
+		var fallbackEntries = [
+			{
+				id: "scan_qr",
+				roles: ["student"],
+				question: "How do I scan my attendance QR code?",
+				answer: "Open Scan QR in the left menu, allow camera access, and point your camera at the teacher's QR. If camera fails, paste the token manually and submit.",
+				tags: ["scan", "qr", "attendance", "camera"],
+				category: "attendance"
+			},
+			{
+				id: "attendance_missing",
+				roles: ["student"],
+				question: "What should I do if my attendance is missing?",
+				answer: "Open your attendance details and note the date and subject, then message your teacher with the session information so they can review the check-in log.",
+				tags: ["attendance", "missing", "record"],
+				category: "attendance"
+			},
+			{
+				id: "late_policy",
+				roles: ["student", "teacher"],
+				question: "What if I am marked late?",
+				answer: "Late status is based on the session window set by your teacher. If you think it is incorrect, contact your teacher immediately for attendance review.",
+				tags: ["late", "status", "attendance"],
+				category: "attendance"
+			},
+			{
+				id: "create_qr",
+				roles: ["teacher"],
+				question: "How do I create a QR attendance session?",
+				answer: "Go to Attendance QR, pick section, subject, and academic period, then click Generate Session QR. Share the displayed code with students before the session expires.",
+				tags: ["teacher", "generate", "session", "qr"],
+				category: "attendance"
+			},
+			{
+				id: "session_expired",
+				roles: ["teacher", "student"],
+				question: "Why is the QR session expired?",
+				answer: "Each attendance QR has a time limit for security. Teachers should regenerate a new QR session and students should scan immediately.",
+				tags: ["qr", "expired", "session", "attendance"],
+				category: "attendance"
+			},
+			{
+				id: "schedule_conflict",
+				roles: ["teacher", "admin"],
+				question: "Why can I not save this schedule slot?",
+				answer: "A slot may fail if times overlap, required fields are missing, or ownership rules block updates. Check section, subject, day, and time range, then try again.",
+				tags: ["schedule", "conflict", "save"],
+				category: "schedule"
+			},
+			{
+				id: "schedule_quick_add",
+				roles: ["teacher", "admin"],
+				question: "How can I add classes faster in timetable?",
+				answer: "Use the quick-add slots in the timetable grid. Pick the subject, verify start and end time, then apply to selected days before saving.",
+				tags: ["quick add", "timetable", "schedule"],
+				category: "schedule"
+			},
+			{
+				id: "teacher_ownership",
+				roles: ["teacher"],
+				question: "Why can I not edit another teacher's schedule?",
+				answer: "Schedule ownership rules restrict teachers to their assigned schedules. Contact an admin if reassignment is needed.",
+				tags: ["teacher", "ownership", "schedule"],
+				category: "schedule"
+			},
+			{
+				id: "password_update",
+				roles: ["student", "teacher", "admin"],
+				question: "How can I change my password?",
+				answer: "Open Settings, enter your current password, then set a new password with confirmation and save changes.",
+				tags: ["password", "settings", "account"],
+				category: "account"
+			},
+			{
+				id: "profile_update",
+				roles: ["student", "teacher", "admin"],
+				question: "How do I update my profile details?",
+				answer: "Go to Settings, edit allowed fields, and save. Some fields may be locked by system policy.",
+				tags: ["profile", "settings", "account"],
+				category: "account"
+			},
+			{
+				id: "manage_users",
+				roles: ["admin"],
+				question: "How do I manage user accounts?",
+				answer: "Go to Users from the sidebar. You can review user details, update roles, and maintain access based on school policy.",
+				tags: ["users", "admin", "roles", "accounts"],
+				category: "account"
+			},
+			{
+				id: "enrollments_manage",
+				roles: ["admin", "student"],
+				question: "Where do I check enrollment status?",
+				answer: "Open Enrollments in the sidebar to view current status and required actions for your account or managed students.",
+				tags: ["enrollment", "status", "student"],
+				category: "account"
+			},
+			{
+				id: "report_export",
+				roles: ["teacher", "admin"],
+				question: "How do I view attendance reports?",
+				answer: "Open Reports, apply your filters (period, section, subject), then run the report. Export options depend on your role and current report type.",
+				tags: ["reports", "attendance", "export"],
+				category: "attendance"
+			},
+			{
+				id: "programs_periods",
+				roles: ["admin"],
+				question: "When should I configure programs and academic periods?",
+				answer: "Set academic periods first, then programs and sections. This order keeps enrollment, schedule, and reporting consistent.",
+				tags: ["programs", "periods", "admin", "setup"],
+				category: "schedule"
+			}
+		];
+
+		function createFallbackId(index) {
+			return "faq_" + String(index + 1);
+		}
+
+		function normalizeEntry(raw, index) {
+			if (!raw || typeof raw !== "object") {
+				return null;
+			}
+
+			var roles = Array.isArray(raw.roles) && raw.roles.length
+				? raw.roles.map(function (role) { return String(role).toLowerCase(); })
+				: ["student", "teacher", "admin"];
+
+			var question = String(raw.question || "").trim();
+			var response = String(raw.answer || "").trim();
+			if (!question || !response) {
+				return null;
+			}
+
+			var category = String(raw.category || "all").trim().toLowerCase();
+			if (!category) {
+				category = "all";
+			}
+
+			var tags = Array.isArray(raw.tags)
+				? raw.tags.map(function (tag) { return String(tag).toLowerCase(); })
+				: [];
+
+			return {
+				id: String(raw.id || createFallbackId(index)),
+				roles: roles,
+				question: question,
+				answer: response,
+				tags: tags,
+				category: category
+			};
+		}
+
+		function normalizeEntries(rawItems) {
+			if (!Array.isArray(rawItems)) {
+				return [];
+			}
+
+			return rawItems
+				.map(function (item, index) {
+					return normalizeEntry(item, index);
+				})
+				.filter(function (item) {
+					return item !== null;
+				});
+		}
+
+		function loadEntries() {
+			if (!apiUrl) {
+				return Promise.resolve(normalizeEntries(fallbackEntries));
+			}
+
+			return fetch(apiUrl, {
+				method: "GET",
+				headers: {
+					Accept: "application/json"
+				},
+				credentials: "same-origin"
+			})
+				.then(function (response) {
+					if (!response.ok) {
+						throw new Error("Failed to load chat entries.");
+					}
+
+					return response.json();
+				})
+				.then(function (payload) {
+					var rawItems = Array.isArray(payload)
+						? payload
+						: payload && Array.isArray(payload.items)
+							? payload.items
+							: [];
+
+					var normalized = normalizeEntries(rawItems);
+					if (normalized.length) {
+						return normalized;
+					}
+
+					throw new Error("Empty chat data payload.");
+				})
+				.catch(function () {
+					return normalizeEntries(fallbackEntries);
+				});
+		}
+
+		function canAccess(entry) {
+			return entry.roles.indexOf(currentRole) >= 0;
+		}
+
+		function matchesCategory(entry) {
+			if (activeCategory === "all") {
+				return true;
+			}
+
+			return entry.category === activeCategory;
+		}
+
+		function matchesSearch(entry, query) {
+			if (!query) {
+				return true;
+			}
+
+			var normalized = query.toLowerCase();
+			if (entry.question.toLowerCase().indexOf(normalized) >= 0) {
+				return true;
+			}
+
+			return entry.tags.some(function (tag) {
+				return tag.indexOf(normalized) >= 0;
+			});
+		}
+
+		function getVisibleEntries() {
+			var query = searchInput ? searchInput.value.trim() : "";
+			return entries.filter(function (entry) {
+				return canAccess(entry) && matchesCategory(entry) && matchesSearch(entry, query);
+			});
+		}
+
+		function setAnswer(entry) {
+			if (!entry) {
+				answer.textContent = "No answer available.";
+				return;
+			}
+
+			activeQuestionId = entry.id;
+			answer.replaceChildren();
+
+			var questionText = document.createElement("p");
+			var questionLabel = document.createElement("strong");
+			questionLabel.textContent = "Q: ";
+			questionText.appendChild(questionLabel);
+			questionText.appendChild(document.createTextNode(entry.question));
+
+			var answerText = document.createElement("p");
+			var answerLabel = document.createElement("strong");
+			answerLabel.textContent = "A: ";
+			answerText.appendChild(answerLabel);
+			answerText.appendChild(document.createTextNode(entry.answer));
+
+			answer.appendChild(questionText);
+			answer.appendChild(answerText);
+			refreshActiveState();
+		}
+
+		function refreshActiveState() {
+			var buttons = questionList.querySelectorAll(".chat-widget-question");
+			buttons.forEach(function (button) {
+				var isActive = button.getAttribute("data-question-id") === activeQuestionId;
+				button.classList.toggle("active", isActive);
+				button.setAttribute("aria-selected", isActive ? "true" : "false");
+			});
+		}
+
+		function renderQuestions() {
+			var visible = getVisibleEntries();
+			questionList.replaceChildren();
+
+			if (!visible.length) {
+				activeQuestionId = null;
+				answer.textContent = "No predefined questions matched your search.";
+				var emptyNote = document.createElement("p");
+				emptyNote.className = "chat-widget-empty";
+				emptyNote.textContent = "No questions found.";
+				questionList.appendChild(emptyNote);
+				return;
+			}
+
+			visible.forEach(function (entry) {
+				var button = document.createElement("button");
+				button.type = "button";
+				button.className = "chat-widget-question";
+				button.setAttribute("role", "option");
+				button.setAttribute("data-question-id", entry.id);
+				button.textContent = entry.question;
+				button.addEventListener("click", function () {
+					setAnswer(entry);
+				});
+				questionList.appendChild(button);
+			});
+
+			var activeEntry = visible.find(function (entry) {
+				return entry.id === activeQuestionId;
+			});
+
+			if (!activeEntry) {
+				setAnswer(visible[0]);
+			} else {
+				refreshActiveState();
+			}
+		}
+
+		function refreshCategoryState() {
+			if (!categoryTabs) {
+				return;
+			}
+
+			var tabs = categoryTabs.querySelectorAll("[data-chat-category]");
+			tabs.forEach(function (tab) {
+				var isActive = tab.getAttribute("data-chat-category") === activeCategory;
+				tab.classList.toggle("active", isActive);
+				tab.setAttribute("aria-selected", isActive ? "true" : "false");
+			});
+		}
+
+		function openWidget() {
+			panel.hidden = false;
+			widget.setAttribute("data-widget-state", "open");
+			launcher.setAttribute("aria-expanded", "true");
+			if (searchInput) {
+				searchInput.focus();
+			}
+		}
+
+		function closeWidget() {
+			panel.hidden = true;
+			widget.setAttribute("data-widget-state", "closed");
+			launcher.setAttribute("aria-expanded", "false");
+		}
+
+		launcher.addEventListener("click", function () {
+			if (panel.hidden) {
+				openWidget();
+				return;
+			}
+
+			closeWidget();
+		});
+
+		if (closeBtn) {
+			closeBtn.addEventListener("click", closeWidget);
+		}
+
+		document.addEventListener("keydown", function (event) {
+			if (event.key === "Escape" && !panel.hidden) {
+				closeWidget();
+			}
+		});
+
+		document.addEventListener("click", function (event) {
+			if (panel.hidden) {
+				return;
+			}
+
+			var clickedInsideWidget = widget.contains(event.target);
+			if (!clickedInsideWidget) {
+				closeWidget();
+			}
+		});
+
+		if (searchInput) {
+			searchInput.addEventListener("input", renderQuestions);
+		}
+
+		if (categoryTabs) {
+			categoryTabs.addEventListener("click", function (event) {
+				var tab = event.target.closest("[data-chat-category]");
+				if (!tab) {
+					return;
+				}
+
+				activeCategory = String(tab.getAttribute("data-chat-category") || "all").toLowerCase();
+				refreshCategoryState();
+				renderQuestions();
+			});
+		}
+
+		loadEntries().then(function (loadedEntries) {
+			entries = loadedEntries;
+			refreshCategoryState();
+			renderQuestions();
+		});
+	}
+
+	function initializeNotificationCenter() {
+		var center = document.querySelector("[data-notification-center='true']");
+		if (!center) {
+			return;
+		}
+
+		var toggleBtn = document.getElementById("notification-toggle");
+		var panel = document.getElementById("notification-panel");
+		var listContainer = document.getElementById("notification-list");
+		var unreadBadge = document.getElementById("notification-unread-badge");
+		var markAllBtn = document.getElementById("notification-mark-all-btn");
+
+		if (!toggleBtn || !panel || !listContainer || !unreadBadge || !markAllBtn) {
+			return;
+		}
+
+		var listUrl = (center.getAttribute("data-list-url") || "").trim();
+		var markReadUrlTemplate = (center.getAttribute("data-mark-read-url-template") || "").trim();
+		var markAllReadUrl = (center.getAttribute("data-mark-all-read-url") || "").trim();
+		var hubUrl = (center.getAttribute("data-hub-url") || "").trim();
+		var maxItems = parseInt(center.getAttribute("data-max-items") || "20", 10);
+		if (Number.isNaN(maxItems) || maxItems < 5) {
+			maxItems = 20;
+		}
+
+		var notifications = [];
+		var hasLoaded = false;
+		var signalrConnection = null;
+
+		function buildNotificationMarkReadUrl(notificationId) {
+			if (!markReadUrlTemplate) {
+				return "";
+			}
+
+			return markReadUrlTemplate.replace("__ID__", encodeURIComponent(notificationId));
+		}
+
+		function formatNotificationTime(isoTime) {
+			if (!isoTime) {
+				return "";
+			}
+
+			var dateValue = new Date(isoTime);
+			if (Number.isNaN(dateValue.getTime())) {
+				return "";
+			}
+
+			return dateValue.toLocaleString();
+		}
+
+		function computeUnreadCount() {
+			return notifications.reduce(function (count, item) {
+				return count + (item.isRead ? 0 : 1);
+			}, 0);
+		}
+
+		function refreshUnreadBadge() {
+			var unreadCount = computeUnreadCount();
+			if (unreadCount <= 0) {
+				unreadBadge.textContent = "0";
+				unreadBadge.hidden = true;
+				return;
+			}
+
+			unreadBadge.textContent = unreadCount > 99 ? "99+" : String(unreadCount);
+			unreadBadge.hidden = false;
+		}
+
+		function markNotificationRead(notificationId) {
+			var url = buildNotificationMarkReadUrl(notificationId);
+			if (!url) {
+				return Promise.resolve(false);
+			}
+
+			return postApi(url, {})
+				.then(function (result) {
+					if (!result.ok) {
+						return false;
+					}
+
+					notifications = notifications.map(function (item) {
+						if (item.id !== notificationId) {
+							return item;
+						}
+
+						item.isRead = true;
+						return item;
+					});
+
+					refreshUnreadBadge();
+					renderNotifications();
+					return true;
+				});
+		}
+
+		function renderEmptyState(message) {
+			listContainer.replaceChildren();
+			var emptyText = document.createElement("p");
+			emptyText.className = "notification-empty";
+			emptyText.textContent = message;
+			listContainer.appendChild(emptyText);
+		}
+
+		function renderNotifications() {
+			listContainer.replaceChildren();
+
+			if (!notifications.length) {
+				renderEmptyState("No notifications yet.");
+				markAllBtn.disabled = true;
+				refreshUnreadBadge();
+				return;
+			}
+
+			markAllBtn.disabled = computeUnreadCount() === 0;
+
+			notifications.forEach(function (item) {
+				var card = document.createElement("article");
+				card.className = "notification-item" + (item.isRead ? "" : " unread");
+
+				var header = document.createElement("div");
+				header.className = "notification-item-header";
+
+				var title = document.createElement("p");
+				title.className = "notification-item-title";
+				title.textContent = item.title || "Notification";
+
+				var time = document.createElement("p");
+				time.className = "notification-item-time";
+				time.textContent = formatNotificationTime(item.createdAt);
+
+				header.appendChild(title);
+				header.appendChild(time);
+
+				var message = document.createElement("p");
+				message.className = "notification-item-message";
+				message.textContent = item.message || "";
+
+				var actions = document.createElement("div");
+				actions.className = "notification-item-actions";
+
+				if (item.linkUrl) {
+					var link = document.createElement("a");
+					link.className = "notification-link";
+					link.href = item.linkUrl;
+					link.textContent = "Open";
+					actions.appendChild(link);
+				}
+
+				if (!item.isRead) {
+					var readBtn = document.createElement("button");
+					readBtn.type = "button";
+					readBtn.className = "btn-secondary notification-read-btn";
+					readBtn.textContent = "Mark read";
+					readBtn.addEventListener("click", function () {
+						markNotificationRead(item.id);
+					});
+					actions.appendChild(readBtn);
+				}
+
+				card.appendChild(header);
+				card.appendChild(message);
+				card.appendChild(actions);
+				listContainer.appendChild(card);
+			});
+
+			refreshUnreadBadge();
+		}
+
+		function upsertRealtimeNotification(pushDto) {
+			if (!pushDto || typeof pushDto !== "object") {
+				return;
+			}
+
+			var incomingId = Number(pushDto.id);
+			if (!incomingId) {
+				return;
+			}
+
+			var existingIndex = notifications.findIndex(function (item) {
+				return item.id === incomingId;
+			});
+
+			var normalized = {
+				id: incomingId,
+				type: String(pushDto.type || ""),
+				title: String(pushDto.title || "Notification"),
+				message: String(pushDto.message || ""),
+				linkUrl: pushDto.linkUrl ? String(pushDto.linkUrl) : null,
+				isRead: false,
+				createdAt: pushDto.createdAt || new Date().toISOString()
+			};
+
+			if (existingIndex >= 0) {
+				normalized.isRead = notifications[existingIndex].isRead;
+				notifications[existingIndex] = normalized;
+			} else {
+				notifications.unshift(normalized);
+			}
+
+			notifications = notifications
+				.sort(function (a, b) {
+					return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+				})
+				.slice(0, maxItems);
+
+			renderNotifications();
+		}
+
+		function loadNotifications() {
+			if (!listUrl) {
+				renderEmptyState("Notification endpoint is unavailable.");
+				return;
+			}
+
+			return window.fetch(listUrl, {
+				method: "GET",
+				headers: {
+					Accept: "application/json"
+				},
+				credentials: "same-origin"
+			})
+				.then(function (response) {
+					if (!response.ok) {
+						throw new Error("Failed to load notifications.");
+					}
+
+					return response.json();
+				})
+				.then(function (payload) {
+					notifications = (Array.isArray(payload) ? payload : [])
+						.map(function (item) {
+							return {
+								id: Number(item.id),
+								type: String(item.type || ""),
+								title: String(item.title || "Notification"),
+								message: String(item.message || ""),
+								linkUrl: item.linkUrl ? String(item.linkUrl) : null,
+								isRead: Boolean(item.isRead),
+								createdAt: item.createdAt || new Date().toISOString()
+							};
+						})
+						.filter(function (item) {
+							return !!item.id;
+						})
+						.sort(function (a, b) {
+							return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+						})
+						.slice(0, maxItems);
+
+					hasLoaded = true;
+					renderNotifications();
+				})
+				.catch(function () {
+					renderEmptyState("Unable to load notifications right now.");
+				});
+		}
+
+		function openPanel() {
+			panel.hidden = false;
+			toggleBtn.setAttribute("aria-expanded", "true");
+			if (!hasLoaded) {
+				loadNotifications();
+			}
+		}
+
+		function closePanel() {
+			panel.hidden = true;
+			toggleBtn.setAttribute("aria-expanded", "false");
+		}
+
+		toggleBtn.addEventListener("click", function () {
+			if (panel.hidden) {
+				openPanel();
+				return;
+			}
+
+			closePanel();
+		});
+
+		markAllBtn.addEventListener("click", function () {
+			if (!markAllReadUrl) {
+				return;
+			}
+
+			postApi(markAllReadUrl, {})
+				.then(function (result) {
+					if (!result.ok) {
+						return;
+					}
+
+					notifications = notifications.map(function (item) {
+						item.isRead = true;
+						return item;
+					});
+
+					renderNotifications();
+				});
+		});
+
+		document.addEventListener("click", function (event) {
+			if (panel.hidden) {
+				return;
+			}
+
+			var clickedInside = center.contains(event.target);
+			if (!clickedInside) {
+				closePanel();
+			}
+		});
+
+		document.addEventListener("keydown", function (event) {
+			if (event.key === "Escape" && !panel.hidden) {
+				closePanel();
+			}
+		});
+
+		if (window.signalR && hubUrl) {
+			signalrConnection = new window.signalR.HubConnectionBuilder()
+				.withUrl(hubUrl)
+				.withAutomaticReconnect()
+				.build();
+
+			signalrConnection.on("notification:new", function (payload) {
+				upsertRealtimeNotification(payload);
+			});
+
+			signalrConnection.start().catch(function () {
+				// Keep polling/list mode even if live channel is unavailable.
+			});
+		}
+
+		window.addEventListener("beforeunload", function () {
+			if (signalrConnection) {
+				signalrConnection.stop();
+			}
+		});
+
+		loadNotifications();
+	}
+
+	function initializeMobileSidebar() {
+		var toggleBtn = document.getElementById("mobile-nav-toggle");
+		var sidebar = document.getElementById("app-sidebar");
+		var backdrop = document.getElementById("mobile-sidebar-backdrop");
+
+		if (!toggleBtn || !sidebar || !backdrop) {
+			return;
+		}
+
+		function isMobileViewport() {
+			return window.matchMedia("(max-width: 860px)").matches;
+		}
+
+		function syncState(isOpen) {
+			document.body.classList.toggle("sidebar-open", isOpen);
+			backdrop.hidden = !isOpen;
+			toggleBtn.setAttribute("aria-expanded", isOpen ? "true" : "false");
+		}
+
+		function openSidebar() {
+			if (!isMobileViewport()) {
+				return;
+			}
+
+			syncState(true);
+		}
+
+		function closeSidebar() {
+			syncState(false);
+		}
+
+		toggleBtn.addEventListener("click", function () {
+			var isOpen = document.body.classList.contains("sidebar-open");
+			if (isOpen) {
+				closeSidebar();
+				return;
+			}
+
+			openSidebar();
+		});
+
+		backdrop.addEventListener("click", closeSidebar);
+
+		document.addEventListener("keydown", function (event) {
+			if (event.key === "Escape" && document.body.classList.contains("sidebar-open")) {
+				closeSidebar();
+			}
+		});
+
+		sidebar.querySelectorAll("a").forEach(function (link) {
+			link.addEventListener("click", function () {
+				if (isMobileViewport()) {
+					closeSidebar();
+				}
+			});
+		});
+
+		window.addEventListener("resize", function () {
+			if (!isMobileViewport()) {
+				closeSidebar();
+			}
+		});
+
+		closeSidebar();
+	}
+
 	// Determine whether the content area or window is the primary scroll container.
 	function getPrimaryScrollTarget() {
 		var content = document.querySelector(".content");
@@ -423,17 +1297,34 @@
 		return url.toString();
 	}
 
+	function getAntiForgeryToken() {
+		var tokenInput = document.getElementById("anti-forgery-token");
+		if (!tokenInput) {
+			return "";
+		}
+
+		return String(tokenInput.value || "");
+	}
+
 	function requestApi(method, url, body) {
 		var options = {
 			method: method,
 			headers: {
 				Accept: "application/json"
-			}
+			},
+			credentials: "same-origin"
 		};
 
 		if (body !== undefined) {
 			options.headers["Content-Type"] = "application/json";
 			options.body = JSON.stringify(body);
+		}
+
+		if (method !== "GET" && method !== "HEAD") {
+			var token = getAntiForgeryToken();
+			if (token) {
+				options.headers["RequestVerificationToken"] = token;
+			}
 		}
 
 		return window.fetch(url, options)
@@ -596,9 +1487,9 @@
 			configuredFeedPollSeconds = 3;
 		}
 
-		var configuredRefreshThresholdSeconds = parseInt(page.getAttribute("data-refresh-threshold-seconds") || "10", 10);
+		var configuredRefreshThresholdSeconds = parseInt(page.getAttribute("data-refresh-threshold-seconds") || "60", 10);
 		if (Number.isNaN(configuredRefreshThresholdSeconds) || configuredRefreshThresholdSeconds < 2) {
-			configuredRefreshThresholdSeconds = 10;
+			configuredRefreshThresholdSeconds = 60;
 		}
 
 		var sectionInput = document.getElementById("qr-section-search");
@@ -1219,8 +2110,6 @@
 				return;
 			}
 
-			studentLastSubmitAt = Date.now();
-
 			var token = tokenInput.value.trim();
 			if (!token) {
 				setSubmitResult("QR token is required.", "result-error");
@@ -1236,6 +2125,8 @@
 				setSubmitResult("Check-in endpoint is unavailable.", "result-error");
 				return;
 			}
+
+			studentLastSubmitAt = Date.now();
 
 			setSubmitResult("Submitting attendance...", null);
 			postApi(checkinUrl, {
@@ -1267,9 +2158,13 @@
 
 	// Initialize all features when the DOM is fully loaded.
 	document.addEventListener("DOMContentLoaded", function () {
+		initializeLazyLoading();
 		restoreScrollAfterPostback();
 		initializePostbackScrollRetention();
+		initializeMobileSidebar();
 		initializeTimetableQuickAdd();
+		initializePredefinedChatWidget();
+		initializeNotificationCenter();
 		initializeTeacherQrPage();
 		initializeStudentScanPage();
 

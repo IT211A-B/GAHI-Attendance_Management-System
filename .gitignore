@@ -78,6 +78,9 @@ secrets.json
 # Azure publish settings
 PublishProfiles/
 
+# Local publish check output
+publish-check/
+
 # Visual Studio temporary files
 *.tmp
 ~$*

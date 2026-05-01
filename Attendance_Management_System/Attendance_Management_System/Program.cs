@@ -2,6 +2,7 @@ using Attendance_Management_System.Backend;
 using Attendance_Management_System.Backend.Data;
 using Attendance_Management_System.Backend.Hubs;
 using Attendance_Management_System.Backend.Persistence;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Mvc.Razor;
 using Microsoft.EntityFrameworkCore;
 
@@ -26,12 +27,22 @@ builder.Services.Configure<RazorViewEngineOptions>(options =>
 // Register all backend services (database, auth, repositories, services)
 builder.Services.AddBackend(builder.Configuration);
 
+// Trust reverse proxy headers (Render) for HTTPS scheme and client IP.
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    options.KnownNetworks.Clear();
+    options.KnownProxies.Clear();
+});
+
 // Add health checks to monitor database connectivity
 builder.Services.AddHealthChecks()
     .AddNpgSql(builder.Configuration.GetConnectionString("Default")!);
 
 // Build the application from configured services
 var app = builder.Build();
+
+app.UseForwardedHeaders();
 
 // Configure production-specific error handling and security
 if (!app.Environment.IsDevelopment())

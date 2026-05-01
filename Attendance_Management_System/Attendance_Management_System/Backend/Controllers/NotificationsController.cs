@@ -33,6 +33,7 @@ public class NotificationsController : Controller
     }
 
     [HttpPost("{id:int}/read")]
+    [ValidateAntiForgeryToken]
     public async Task<IActionResult> MarkRead(int id)
     {
         var userId = GetCurrentUserId();
@@ -46,6 +47,7 @@ public class NotificationsController : Controller
     }
 
     [HttpPost("read-all")]
+    [ValidateAntiForgeryToken]
     public async Task<IActionResult> MarkAllRead()
     {
         var userId = GetCurrentUserId();

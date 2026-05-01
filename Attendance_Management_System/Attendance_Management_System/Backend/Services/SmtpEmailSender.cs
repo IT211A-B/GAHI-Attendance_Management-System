@@ -98,9 +98,8 @@ public class SmtpEmailSender : IEmailSender
     private void LogEmail(string toAddress, string subject, string htmlBody)
     {
         _logger.LogInformation(
-            "DEV EMAIL FALLBACK\nTo: {To}\nSubject: {Subject}\nBody:\n{Body}",
-            toAddress,
-            subject,
-            htmlBody);
+            "DEV EMAIL FALLBACK\nSubjectLength: {SubjectLength}\nBodyLength: {BodyLength}",
+            subject?.Length ?? 0,
+            htmlBody?.Length ?? 0);
     }
 }
