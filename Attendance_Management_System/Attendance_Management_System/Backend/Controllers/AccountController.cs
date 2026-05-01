@@ -1,12 +1,14 @@
 using Attendance_Management_System.Backend.DTOs.Requests;
 using Attendance_Management_System.Backend.Entities;
 using Attendance_Management_System.Backend.Interfaces.Services;
+using Attendance_Management_System.Backend.Persistence;
 using Attendance_Management_System.Backend.Constants;
 using Attendance_Management_System.Backend.ViewModels.Auth;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.EntityFrameworkCore;
 using Npgsql;
 
 namespace Attendance_Management_System.Backend.Controllers;
@@ -15,22 +17,28 @@ namespace Attendance_Management_System.Backend.Controllers;
 public class AccountController : Controller
 {
     private readonly SignInManager<User> _signInManager;
+    private readonly UserManager<User> _userManager;
     private readonly IAuthService _authService;
     private readonly ICoursesService _coursesService;
     private readonly IAcademicYearsService _academicYearsService;
+    private readonly AppDbContext _context;
     private readonly ILogger<AccountController> _logger;
 
     public AccountController(
         SignInManager<User> signInManager,
+        UserManager<User> userManager,
         IAuthService authService,
         ICoursesService coursesService,
         IAcademicYearsService academicYearsService,
+        AppDbContext context,
         ILogger<AccountController> logger)
     {
         _signInManager = signInManager;
+        _userManager = userManager;
         _authService = authService;
         _coursesService = coursesService;
         _academicYearsService = academicYearsService;
+        _context = context;
         _logger = logger;
     }
 
@@ -76,6 +84,8 @@ public class AccountController : Controller
         {
             return View(model);
         }
+
+        await EnsureReviewedStudentAccountCanSignInAsync(model.Email);
 
         Microsoft.AspNetCore.Identity.SignInResult result;
         try
@@ -278,5 +288,35 @@ public class AccountController : Controller
     {
         var trimmed = value?.Trim();
         return string.IsNullOrWhiteSpace(trimmed) ? null : trimmed;
+    }
+
+    private async Task EnsureReviewedStudentAccountCanSignInAsync(string? email)
+    {
+        if (string.IsNullOrWhiteSpace(email))
+        {
+            return;
+        }
+
+        var user = await _userManager.FindByEmailAsync(email.Trim());
+        if (user == null || user.Role != "student" || user.EmailConfirmed)
+        {
+            return;
+        }
+
+        var hasReviewedEnrollment = await _context.Enrollments
+            .AsNoTracking()
+            .AnyAsync(enrollment =>
+                (enrollment.Status == "approved" || enrollment.Status == "rejected")
+                && enrollment.Student != null
+                && enrollment.Student.UserId == user.Id);
+
+        if (!hasReviewedEnrollment)
+        {
+            return;
+        }
+
+        user.IsActive = true;
+        user.EmailConfirmed = true;
+        await _userManager.UpdateAsync(user);
     }
 }

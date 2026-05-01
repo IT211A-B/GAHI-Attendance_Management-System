@@ -16,10 +16,14 @@ namespace Attendance_Management_System.Backend.Services;
 // Service implementation for managing student enrollments
 public class EnrollmentService : IEnrollmentService
 {
+    private const string EnrollmentApprovedStatus = "approved";
+    private const string EnrollmentRejectedStatus = "rejected";
+
     private readonly AppDbContext _context;
     private readonly EnrollmentSettings _enrollmentSettings;
     private readonly ISectionAllocationService _sectionAllocationService;
     private readonly INotificationService _notificationService;
+    private readonly IAccountEmailService _accountEmailService;
     private readonly ILogger<EnrollmentService> _logger;
 
     public EnrollmentService(
@@ -27,6 +31,7 @@ public class EnrollmentService : IEnrollmentService
         IOptions<EnrollmentSettings> enrollmentSettings,
         ISectionAllocationService sectionAllocationService,
         INotificationService notificationService,
+        IAccountEmailService accountEmailService,
         ILogger<EnrollmentService> logger)
     {
         _context = context;
@@ -35,6 +40,7 @@ public class EnrollmentService : IEnrollmentService
             : EnrollmentSettings.Default;
         _sectionAllocationService = sectionAllocationService;
         _notificationService = notificationService;
+        _accountEmailService = accountEmailService;
         _logger = logger;
     }
 
@@ -157,6 +163,7 @@ public class EnrollmentService : IEnrollmentService
         // Get enrollment with all related data
         var enrollment = await _context.Enrollments
             .Include(e => e.Student)
+                .ThenInclude(student => student!.User)
             .Include(e => e.Section)
             .Include(e => e.AcademicYear)
             .Include(e => e.Processor)
@@ -181,7 +188,7 @@ public class EnrollmentService : IEnrollmentService
         var status = request.Status.ToLower();
 
         // Validate status value
-        if (status != "approved" && status != "rejected")
+        if (status != EnrollmentApprovedStatus && status != EnrollmentRejectedStatus)
         {
             return ApiResponse<EnrollmentDto>.ErrorResponse(
                 "INVALID_STATUS",
@@ -189,7 +196,7 @@ public class EnrollmentService : IEnrollmentService
         }
 
         // Require rejection reason when rejecting
-        if (status == "rejected" && string.IsNullOrWhiteSpace(request.RejectionReason))
+        if (status == EnrollmentRejectedStatus && string.IsNullOrWhiteSpace(request.RejectionReason))
         {
             return ApiResponse<EnrollmentDto>.ErrorResponse(
                 "REJECTION_REASON_REQUIRED",
@@ -197,13 +204,13 @@ public class EnrollmentService : IEnrollmentService
         }
 
         // Check for duplicate approved enrollment for same student/section/year
-        if (status == "approved")
+        if (status == EnrollmentApprovedStatus)
         {
             var existingApproved = await _context.Enrollments
                 .AnyAsync(e => e.StudentId == enrollment.StudentId
                     && e.SectionId == enrollment.SectionId
                     && e.AcademicYearId == enrollment.AcademicYearId
-                    && e.Status == "approved"
+                    && e.Status == EnrollmentApprovedStatus
                     && e.Id != enrollmentId);
 
             if (existingApproved)
@@ -216,10 +223,10 @@ public class EnrollmentService : IEnrollmentService
 
         // Check capacity and generate warnings if approving
         EnrollmentWarning? warning = null;
-        if (status == "approved")
+        if (status == EnrollmentApprovedStatus)
         {
             var currentCount = await _context.Enrollments
-                .CountAsync(e => e.SectionId == enrollment.SectionId && e.Status == "approved");
+                .CountAsync(e => e.SectionId == enrollment.SectionId && e.Status == EnrollmentApprovedStatus);
 
             if (currentCount >= _enrollmentSettings.OverCapacityLimit)
             {
@@ -248,19 +255,26 @@ public class EnrollmentService : IEnrollmentService
         enrollment.ProcessedBy = adminId;
         enrollment.RejectionReason = request.RejectionReason;
 
-        // If approved, assign the student to the section
-        if (status == "approved")
+        // Ensure reviewed students can still access their existing account.
+        if (enrollment.Student?.User != null)
         {
-            var student = await _context.Students.FindAsync(enrollment.StudentId);
-            if (student != null)
+            enrollment.Student.User.IsActive = true;
+            enrollment.Student.User.EmailConfirmed = true;
+        }
+
+        // If approved, assign the student to the section.
+        if (status == EnrollmentApprovedStatus)
+        {
+            if (enrollment.Student != null)
             {
-                student.SectionId = enrollment.SectionId;
+                enrollment.Student.SectionId = enrollment.SectionId;
             }
         }
 
         await _context.SaveChangesAsync();
 
         await TryCreateEnrollmentStatusNotificationAsync(enrollment, status, request.RejectionReason);
+        await TrySendEnrollmentStatusEmailAsync(enrollment, status, request.RejectionReason);
 
         // Get processor name for the response
         var teacher = await _context.Teachers
@@ -635,9 +649,9 @@ public class EnrollmentService : IEnrollmentService
         }
 
         var studentName = BuildStudentDisplayName(enrollment.Student.FirstName, enrollment.Student.MiddleName, enrollment.Student.LastName);
-        var title = status == "approved" ? "Enrollment Approved" : "Enrollment Rejected";
+        var title = status == EnrollmentApprovedStatus ? "Enrollment Approved" : "Enrollment Rejected";
 
-        var message = status == "approved"
+        var message = status == EnrollmentApprovedStatus
             ? $"Your enrollment has been approved, {studentName}."
             : string.IsNullOrWhiteSpace(rejectionReason)
                 ? $"Your enrollment has been rejected, {studentName}."
@@ -664,6 +678,29 @@ public class EnrollmentService : IEnrollmentService
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Failed to create enrollment notification for enrollment {EnrollmentId}.", enrollment.Id);
+        }
+    }
+
+    private async Task TrySendEnrollmentStatusEmailAsync(Enrollment enrollment, string status, string? rejectionReason)
+    {
+        if (enrollment.Student?.User?.Email is not string recipientEmail || string.IsNullOrWhiteSpace(recipientEmail))
+        {
+            return;
+        }
+
+        var studentName = BuildStudentDisplayName(enrollment.Student.FirstName, enrollment.Student.MiddleName, enrollment.Student.LastName);
+
+        try
+        {
+            await _accountEmailService.SendEnrollmentStatusUpdateAsync(
+                recipientEmail,
+                studentName,
+                status,
+                rejectionReason);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to send enrollment status email for enrollment {EnrollmentId}.", enrollment.Id);
         }
     }
 }
