@@ -21,7 +21,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Content Include="Frontend/**">
+    <Content Update="Frontend/**">
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
     </Content>
   </ItemGroup>
