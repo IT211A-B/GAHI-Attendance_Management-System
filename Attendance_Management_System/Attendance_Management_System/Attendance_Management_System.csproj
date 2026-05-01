@@ -20,6 +20,12 @@
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="9.0.0" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Content Include="Frontend/**">
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </Content>
+  </ItemGroup>
+
   <Target Name="ClearStaleBuildFileList" BeforeTargets="PrepareForBuild">
     <Delete Files="$(MSBuildProjectExtensionsPath)$(MSBuildProjectFile).FileListAbsolute.txt" ContinueOnError="true" />
   </Target>
