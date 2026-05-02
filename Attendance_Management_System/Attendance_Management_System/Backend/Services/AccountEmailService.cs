@@ -53,4 +53,43 @@ public class AccountEmailService : IAccountEmailService
 
         return _emailSender.SendAsync(toAddress, subject, htmlBody);
     }
+
+    public Task SendEnrollmentStatusUpdateAsync(string toAddress, string studentName, string status, string? rejectionReason = null)
+    {
+        var normalizedStatus = (status ?? string.Empty).Trim().ToLowerInvariant();
+        var safeName = WebUtility.HtmlEncode(studentName);
+
+        if (normalizedStatus == "approved")
+        {
+            var subjectApproved = "Your DonBosco AMS enrollment was approved";
+            var htmlBodyApproved = $"""
+                <div style=\"font-family:Arial,sans-serif;line-height:1.6;color:#1f2937;\">
+                  <h2 style=\"margin-bottom:8px;\">Enrollment Approved</h2>
+                  <p>Hello {safeName},</p>
+                  <p>Your enrollment request has been approved. You can now sign in to DonBosco AMS.</p>
+                  <p style=\"margin-top:20px;\">DonBosco AMS Team</p>
+                </div>
+                """;
+
+            return _emailSender.SendAsync(toAddress, subjectApproved, htmlBodyApproved);
+        }
+
+        var safeReason = string.IsNullOrWhiteSpace(rejectionReason)
+            ? "No specific reason was provided."
+            : WebUtility.HtmlEncode(rejectionReason.Trim());
+
+        var subjectRejected = "Your DonBosco AMS enrollment was rejected";
+        var htmlBodyRejected = $"""
+            <div style=\"font-family:Arial,sans-serif;line-height:1.6;color:#1f2937;\">
+              <h2 style=\"margin-bottom:8px;\">Enrollment Rejected</h2>
+              <p>Hello {safeName},</p>
+              <p>Your enrollment request was rejected.</p>
+              <p><strong>Reason:</strong> {safeReason}</p>
+              <p>You can sign in to your existing account and submit a new enrollment request.</p>
+              <p style=\"margin-top:20px;\">DonBosco AMS Team</p>
+            </div>
+            """;
+
+        return _emailSender.SendAsync(toAddress, subjectRejected, htmlBodyRejected);
+    }
 }
