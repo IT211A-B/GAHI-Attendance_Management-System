@@ -7,10 +7,14 @@ using Microsoft.AspNetCore.Mvc.Razor;
 using Microsoft.EntityFrameworkCore;
 
 // Create the web application builder with frontend web root configured up-front
+var webRootPath = Directory.Exists(Path.Combine(Directory.GetCurrentDirectory(), "Frontend", "wwwroot"))
+    ? "Frontend/wwwroot"
+    : "wwwroot";
+
 var builder = WebApplication.CreateBuilder(new WebApplicationOptions
 {
     Args = args,
-    WebRootPath = "Frontend/wwwroot"
+    WebRootPath = webRootPath
 });
 
 // Add MVC controllers with views for handling web and API requests

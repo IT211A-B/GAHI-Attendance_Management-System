@@ -21,8 +21,9 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Content Update="Frontend/**">
+    <Content Include="Frontend/wwwroot/**">
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <Link>wwwroot/%(RecursiveDir)%(Filename)%(Extension)</Link>
     </Content>
   </ItemGroup>
 
