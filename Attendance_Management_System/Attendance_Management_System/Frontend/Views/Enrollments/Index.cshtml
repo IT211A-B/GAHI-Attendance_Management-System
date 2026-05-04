@@ -4,6 +4,51 @@
     ViewData["Title"] = "Enrollments";
 }
 
+@functions {
+    private static string ToOrdinal(int value)
+    {
+        var remainderHundred = value % 100;
+        if (remainderHundred >= 11 && remainderHundred <= 13)
+        {
+            return $"{value}th";
+        }
+
+        return (value % 10) switch
+        {
+            1 => $"{value}st",
+            2 => $"{value}nd",
+            3 => $"{value}rd",
+            _ => $"{value}th"
+        };
+    }
+
+    private static string? ExtractCourseCode(string? courseText)
+    {
+        if (string.IsNullOrWhiteSpace(courseText)
+            || courseText.Equals("Not assigned", StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        var normalized = courseText.Trim();
+        var firstSpaceIndex = normalized.IndexOf(' ');
+        return firstSpaceIndex > 0 ? normalized[..firstSpaceIndex] : normalized;
+    }
+
+    private static string FormatYearLevelDisplay(int yearLevel, bool isCollege, string? courseCode = null)
+    {
+        if (!isCollege)
+        {
+            return $"Year Level {yearLevel}";
+        }
+
+        var label = $"{ToOrdinal(yearLevel)} Year";
+        return string.IsNullOrWhiteSpace(courseCode)
+            ? label
+            : $"{label} {courseCode}";
+    }
+}
+
 <section class="panel">
     <h3>Enrollments</h3>
     <p class="muted">Server-rendered enrollment workflows for student requests and admin approvals.</p>
@@ -248,6 +293,10 @@
             }
             else
             {
+                var isCollegeEducationLevel = Model.StudentProfile.EducationLevel ==
+                    Attendance_Management_System.Backend.Enums.EducationLevel.College;
+                var studentCourseCode = ExtractCourseCode(Model.StudentProfile.CourseText);
+
                 <section class="info-grid">
                     <article class="info-card">
                         <span class="muted">Student Number</span>
@@ -259,106 +308,258 @@
                     </article>
                     <article class="info-card">
                         <span class="muted">Year Level</span>
-                        <strong>@Model.StudentProfile.YearLevel</strong>
-                    </article>
-                    <article class="info-card">
-                        <span class="muted">Course</span>
-                        <strong>@Model.StudentProfile.CourseText</strong>
-                    </article>
-                </section>
+                        <strong>@FormatYearLevelDisplay(Model.StudentProfile.YearLevel, isCollegeEducationLevel,
+                                                studentCourseCode)</strong>
+                        </article>
+                        <article class="info-card">
+                            <span class="muted">Course</span>
+                            <strong>@Model.StudentProfile.CourseText</strong>
+                        </article>
+                        <article class="info-card">
+                            <span class="muted">Education Level</span>
+                            <strong>@Model.StudentProfile.EducationLevelText</strong>
+                        </article>
+                    </section>
 
-                <form asp-controller="Enrollments" asp-action="Create" method="post" class="filters-grid three">
-                    @Html.AntiForgeryToken()
-                    <div asp-validation-summary="ModelOnly" class="form-validation"></div>
+                    <form asp-controller="Enrollments" asp-action="Create" method="post" class="filters-grid three">
+                        @Html.AntiForgeryToken()
+                        <div asp-validation-summary="ModelOnly" class="form-validation"></div>
 
-                    <div>
-                        <label asp-for="CreateForm.CourseId"></label>
-                        @if (Model.StudentProfile.CourseId.HasValue)
+                        <div>
+                            <label asp-for="CreateForm.CourseId"></label>
+                            @if (Model.StudentProfile.CourseId.HasValue)
+                            {
+                                <input class="input-select" value="@Model.StudentProfile.CourseText" disabled />
+                                <input asp-for="CreateForm.CourseId" type="hidden" />
+                            }
+                            else
+                            {
+                                <select asp-for="CreateForm.CourseId" class="input-select">
+                                    <option value="">Choose a course</option>
+                                    @foreach (var courseItem in Model.Courses)
+                                    {
+                                        <option value="@courseItem.Id" data-min-year-level="@courseItem.MinYearLevel"
+                                                data-max-year-level="@courseItem.MaxYearLevel"
+                                                data-education-level="@courseItem.EducationLevel">
+                                            @courseItem.Label
+                                        </option>
+                                    }
+                                </select>
+                            }
+                            <span asp-validation-for="CreateForm.CourseId" class="field-validation"></span>
+                        </div>
+
+                        <div>
+                            <label asp-for="CreateForm.YearLevel"></label>
+                            <select asp-for="CreateForm.YearLevel" class="input-select"
+                                    data-selected-year-level="@Model.CreateForm.YearLevel">
+                                <option value="">Choose a course first</option>
+                            </select>
+                            <p id="enrollment-year-level-hint" class="field-helper compact">Choose a course to load valid year
+                                levels.</p>
+                                <span asp-validation-for="CreateForm.YearLevel" class="field-validation"></span>
+                            </div>
+
+                            <div>
+                                <label asp-for="CreateForm.AcademicYearId"></label>
+                                <select asp-for="CreateForm.AcademicYearId" class="input-select">
+                                    <option value="">Choose academic period</option>
+                                    @foreach (var period in Model.AcademicYears)
+                                    {
+                                        <option value="@period.Id">@period.Label</option>
+                                    }
+                                </select>
+                                <span asp-validation-for="CreateForm.AcademicYearId" class="field-validation"></span>
+                            </div>
+
+                            <button type="submit" class="btn-primary btn-inline">Submit Enrollment Request</button>
+                        </form>
+
+                        <select id="enrollment-course-rules" hidden>
+                            @foreach (var courseItem in Model.Courses)
+                            {
+                                <option value="@courseItem.Id" data-min-year-level="@courseItem.MinYearLevel"
+                                        data-max-year-level="@courseItem.MaxYearLevel"
+                                        data-education-level-label="@courseItem.EducationLevelLabel">
+                                    @courseItem.Label
+                                </option>
+                            }
+                        </select>
+
+                        @if (!Model.AvailableSections.Any())
                         {
-                            <input class="input-select" value="@Model.StudentProfile.CourseText" disabled />
-                            <input asp-for="CreateForm.CourseId" type="hidden" />
+                            <p class="footer-note">No matching sections are currently available for your course and year level.</p>
                         }
                         else
                         {
-                            <select asp-for="CreateForm.CourseId" class="input-select">
-                                <option value="">Choose a course</option>
-                                @foreach (var courseItem in Model.Courses)
-                                {
-                                    <option value="@courseItem.Id">@courseItem.Label</option>
-                                }
-                            </select>
+                            <h3>Available Sections</h3>
+                            <div class="table-wrap">
+                                <table class="app-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Section</th>
+                                            <th>Year</th>
+                                            <th>Current Enrollment</th>
+                                            <th>Available Slots</th>
+                                            <th>Status</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var sectionInfo in Model.AvailableSections)
+                                        {
+                                            <tr>
+                                                <td>@sectionInfo.SectionName</td>
+                                                <td>@FormatYearLevelDisplay(sectionInfo.YearLevel, isCollegeEducationLevel, studentCourseCode)
+                                                </td>
+                                                <td>@sectionInfo.CurrentEnrollment</td>
+                                                <td>@sectionInfo.AvailableSlots</td>
+                                                <td>
+                                                    @if (sectionInfo.Status ==
+                                                                                                                                                                                                                                                                                                                    Attendance_Management_System.Backend.Enums.SectionCapacityStatus.Available)
+                                                    {
+                                                        <span class="status-pill active">@sectionInfo.StatusText</span>
+                                                    }
+                                                    else if (sectionInfo.Status ==
+                                    Attendance_Management_System.Backend.Enums.SectionCapacityStatus.AtWarning)
+                                                    {
+                                                        <span class="role-pill">@sectionInfo.StatusText</span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="status-pill inactive">@sectionInfo.StatusText</span>
+                                                    }
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
                         }
-                        <span asp-validation-for="CreateForm.CourseId" class="field-validation"></span>
-                    </div>
-
-                    <div>
-                        <label asp-for="CreateForm.AcademicYearId"></label>
-                        <select asp-for="CreateForm.AcademicYearId" class="input-select">
-                            <option value="">Choose academic period</option>
-                            @foreach (var period in Model.AcademicYears)
-                            {
-                                <option value="@period.Id">@period.Label</option>
-                            }
-                        </select>
-                        <span asp-validation-for="CreateForm.AcademicYearId" class="field-validation"></span>
-                    </div>
-
-                    <button type="submit" class="btn-primary btn-inline">Submit Enrollment Request</button>
-                </form>
-
-                @if (!Model.AvailableSections.Any())
-                {
-                    <p class="footer-note">No matching sections are currently available for your course and year level.</p>
-                }
-                else
-                {
-                    <h3>Available Sections</h3>
-                    <div class="table-wrap">
-                        <table class="app-table">
-                            <thead>
-                                <tr>
-                                    <th>Section</th>
-                                    <th>Year</th>
-                                    <th>Current Enrollment</th>
-                                    <th>Available Slots</th>
-                                    <th>Status</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @foreach (var sectionInfo in Model.AvailableSections)
-                                {
-                                    <tr>
-                                        <td>@sectionInfo.SectionName</td>
-                                        <td>@sectionInfo.YearLevel</td>
-                                        <td>@sectionInfo.CurrentEnrollment</td>
-                                        <td>@sectionInfo.AvailableSlots</td>
-                                        <td>
-                                            @if (sectionInfo.Status ==
-                                                                                                                                                                Attendance_Management_System.Backend.Enums.SectionCapacityStatus.Available)
-                                            {
-                                                <span class="status-pill active">@sectionInfo.StatusText</span>
-                                            }
-                                            else if (sectionInfo.Status ==
-                            Attendance_Management_System.Backend.Enums.SectionCapacityStatus.AtWarning)
-                                            {
-                                                <span class="role-pill">@sectionInfo.StatusText</span>
-                                            }
-                                            else
-                                            {
-                                                <span class="status-pill inactive">@sectionInfo.StatusText</span>
-                                            }
-                                        </td>
-                                    </tr>
-                                }
-                            </tbody>
-                        </table>
-                    </div>
-                }
+                    }
+                </article>
             }
-        </article>
-    }
-</section>
+        </section>
 
-@section Scripts {
-    <partial name="_ValidationScriptsPartial" />
-}
+        @section Scripts {
+            <partial name="_ValidationScriptsPartial" />
+
+            <script>
+                (() => {
+                    const courseInput = document.getElementById("CreateForm_CourseId");
+                    const yearLevelSelect = document.getElementById("CreateForm_YearLevel");
+                    const hint = document.getElementById("enrollment-year-level-hint");
+                    const ruleOptions = Array.from(document.querySelectorAll("#enrollment-course-rules option[data-min-year-level]"));
+
+                    if (!courseInput || !yearLevelSelect || ruleOptions.length === 0) {
+                        return;
+                    }
+
+                    const resetYearLevelOptions = (placeholder) => {
+                        yearLevelSelect.innerHTML = "";
+                        const option = document.createElement("option");
+                        option.value = "";
+                        option.textContent = placeholder;
+                        yearLevelSelect.appendChild(option);
+                    };
+
+                    const toOrdinal = (value) => {
+                        const remainderHundred = value % 100;
+                        if (remainderHundred >= 11 && remainderHundred <= 13) {
+                            return `${value}th`;
+                        }
+
+                        switch (value % 10) {
+                            case 1:
+                                return `${value}st`;
+                            case 2:
+                                return `${value}nd`;
+                            case 3:
+                                return `${value}rd`;
+                            default:
+                                return `${value}th`;
+                        }
+                    };
+
+                    const formatYearLevelOption = (yearLevel, levelLabel, courseLabel) => {
+                        if (String(levelLabel).toLowerCase() === "college") {
+                            const normalizedCourseLabel = String(courseLabel || "").replace(/\s+/g, " ").trim();
+                            const courseCode = normalizedCourseLabel.includes(" - ")
+                                ? normalizedCourseLabel.split(" - ")[0].trim()
+                                : normalizedCourseLabel;
+
+                            return courseCode
+                                ? `${toOrdinal(yearLevel)} Year ${courseCode}`
+                                : `${toOrdinal(yearLevel)} Year`;
+                        }
+
+                        return `Year Level ${yearLevel}`;
+                    };
+
+                    const formatRangeHint = (minYearLevel, maxYearLevel, levelLabel) => {
+                        if (String(levelLabel).toLowerCase() === "college") {
+                            return `${toOrdinal(minYearLevel)} Year to ${toOrdinal(maxYearLevel)} Year`;
+                        }
+
+                        return `year levels ${minYearLevel}-${maxYearLevel}`;
+                    };
+
+                    const findRule = (courseId) => {
+                        return ruleOptions.find(option => option.value === courseId) ?? null;
+                    };
+
+                    const refreshYearLevelOptions = () => {
+                        const selectedCourseId = courseInput.value;
+                        const selectedYearLevel = yearLevelSelect.value || yearLevelSelect.dataset.selectedYearLevel || "";
+                        const selectedRule = findRule(selectedCourseId);
+
+                        if (!selectedRule) {
+                            resetYearLevelOptions("Choose a course first");
+                            yearLevelSelect.disabled = true;
+                            if (hint) {
+                                hint.textContent = "Choose a course to load valid year levels.";
+                            }
+                            return;
+                        }
+
+                        const minYearLevel = Number(selectedRule.dataset.minYearLevel ?? 0);
+                        const maxYearLevel = Number(selectedRule.dataset.maxYearLevel ?? 0);
+                        const levelLabel = selectedRule.dataset.educationLevelLabel || "Selected program";
+                        const selectedCourseLabel = selectedRule.textContent || "";
+
+                        if (minYearLevel <= 0 || maxYearLevel <= 0 || maxYearLevel < minYearLevel) {
+                            resetYearLevelOptions("No valid year levels for this course");
+                            yearLevelSelect.disabled = true;
+                            if (hint) {
+                                hint.textContent = "No valid year levels found for the selected program.";
+                            }
+                            return;
+                        }
+
+                        resetYearLevelOptions("Choose year level");
+                        for (let yearLevel = minYearLevel; yearLevel <= maxYearLevel; yearLevel++) {
+                            const option = document.createElement("option");
+                            option.value = String(yearLevel);
+                            option.textContent = formatYearLevelOption(yearLevel, levelLabel, selectedCourseLabel);
+                            yearLevelSelect.appendChild(option);
+                        }
+
+                        if (selectedYearLevel !== "" && Number(selectedYearLevel) >= minYearLevel && Number(selectedYearLevel) <= maxYearLevel) {
+                            yearLevelSelect.value = selectedYearLevel;
+                        } else {
+                            yearLevelSelect.value = String(minYearLevel);
+                        }
+
+                        yearLevelSelect.disabled = false;
+                        if (hint) {
+                            hint.textContent = `${levelLabel} allows ${formatRangeHint(minYearLevel, maxYearLevel, levelLabel)}.`;
+                        }
+                    };
+
+                    if (courseInput.tagName === "SELECT") {
+                        courseInput.addEventListener("change", refreshYearLevelOptions);
+                    }
+
+                    refreshYearLevelOptions();
+                })();
+            </script>
+        }

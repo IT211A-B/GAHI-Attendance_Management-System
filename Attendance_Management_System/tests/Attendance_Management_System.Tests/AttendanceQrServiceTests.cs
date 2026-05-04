@@ -2,6 +2,7 @@ using Attendance_Management_System.Backend.Configuration;
 using Attendance_Management_System.Backend.Constants;
 using Attendance_Management_System.Backend.DTOs.Responses;
 using Attendance_Management_System.Backend.Entities;
+using Attendance_Management_System.Backend.Enums;
 using Attendance_Management_System.Backend.Interfaces.Services;
 using Attendance_Management_System.Backend.Persistence;
 using Attendance_Management_System.Backend.Services;
@@ -334,7 +335,8 @@ public class AttendanceQrServiceTests
         {
             Id = 1,
             Name = "Computer Science",
-            Code = "BSCS"
+            Code = "BSCS",
+            EducationLevel = EducationLevel.College
         });
 
         context.Subjects.Add(new Subject

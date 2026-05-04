@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using Attendance_Management_System.Backend.DTOs.Requests;
+using Attendance_Management_System.Backend.Helpers;
 using Attendance_Management_System.Backend.Interfaces.Services;
 using Attendance_Management_System.Backend.ViewModels.Enrollments;
 using Microsoft.AspNetCore.Authorization;
@@ -93,6 +94,7 @@ public class EnrollmentsController : Controller
         var result = await _enrollmentService.CreateEnrollmentAsync(new CreateEnrollmentRequest
         {
             CourseId = form.CourseId,
+            YearLevel = form.YearLevel,
             AcademicYearId = form.AcademicYearId
         }, userId.Value);
 
@@ -317,6 +319,10 @@ public class EnrollmentsController : Controller
             .Select(course => new EnrollmentOptionViewModel
             {
                 Id = course.Id,
+                EducationLevel = course.EducationLevel,
+                EducationLevelLabel = EducationLevelPolicy.ToDisplayLabel(course.EducationLevel),
+                MinYearLevel = EducationLevelPolicy.GetAllowedYearRange(course.EducationLevel).MinYearLevel,
+                MaxYearLevel = EducationLevelPolicy.GetAllowedYearRange(course.EducationLevel).MaxYearLevel,
                 Label = string.IsNullOrWhiteSpace(course.Code)
                     ? course.Name
                     : $"{course.Code} - {course.Name}"
@@ -385,15 +391,6 @@ public class EnrollmentsController : Controller
             ? "Not assigned"
             : $"{profile.CourseCode} {profile.CourseName}".Trim();
 
-        model.StudentProfile = new StudentEnrollmentProfileViewModel
-        {
-            StudentNumber = profile.StudentNumber,
-            FullName = fullName,
-            YearLevel = profile.YearLevel,
-            CourseId = profile.CourseId > 0 ? profile.CourseId : null,
-            CourseText = courseText
-        };
-
         if (profile.CourseId > 0)
         {
             model.CreateForm.CourseId = profile.CourseId;
@@ -403,21 +400,54 @@ public class EnrollmentsController : Controller
             model.CreateForm.CourseId = model.Courses[0].Id;
         }
 
+        var selectedCourseOption = model.CreateForm.CourseId > 0
+            ? model.Courses.FirstOrDefault(course => course.Id == model.CreateForm.CourseId)
+            : null;
+
+        var minYearLevel = selectedCourseOption?.MinYearLevel ?? 1;
+        var maxYearLevel = selectedCourseOption?.MaxYearLevel ?? 12;
+
+        var profileYearLevel = profile.YearLevel > 0 ? profile.YearLevel : minYearLevel;
+        if (profileYearLevel < minYearLevel || profileYearLevel > maxYearLevel)
+        {
+            profileYearLevel = minYearLevel;
+        }
+
+        model.StudentProfile = new StudentEnrollmentProfileViewModel
+        {
+            StudentNumber = profile.StudentNumber,
+            FullName = fullName,
+            YearLevel = profileYearLevel,
+            CourseId = profile.CourseId > 0 ? profile.CourseId : null,
+            EducationLevel = selectedCourseOption?.EducationLevel,
+            MinYearLevel = minYearLevel,
+            MaxYearLevel = maxYearLevel,
+            CourseText = courseText
+        };
+
         if (model.CreateForm.AcademicYearId <= 0)
         {
             model.CreateForm.AcademicYearId = model.SelectedAcademicYearId ?? model.AcademicYears.FirstOrDefault()?.Id ?? 0;
         }
 
-        if (model.CreateForm.CourseId <= 0 || model.CreateForm.AcademicYearId <= 0)
+        if (model.CreateForm.YearLevel <= 0)
+        {
+            model.CreateForm.YearLevel = profileYearLevel;
+        }
+
+        if (model.CreateForm.YearLevel < minYearLevel || model.CreateForm.YearLevel > maxYearLevel)
+        {
+            model.CreateForm.YearLevel = minYearLevel;
+        }
+
+        if (model.CreateForm.CourseId <= 0 || model.CreateForm.YearLevel <= 0 || model.CreateForm.AcademicYearId <= 0)
         {
             return;
         }
 
-        var studentYearLevel = profile.YearLevel > 0 ? profile.YearLevel : 1;
-
         var sections = await _enrollmentService.GetAvailableSectionsForStudentAsync(
             model.CreateForm.CourseId,
-            studentYearLevel,
+            model.CreateForm.YearLevel,
             model.CreateForm.AcademicYearId);
 
         model.AvailableSections = sections

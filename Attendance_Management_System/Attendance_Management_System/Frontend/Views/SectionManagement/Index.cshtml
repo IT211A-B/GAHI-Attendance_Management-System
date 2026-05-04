@@ -509,6 +509,7 @@
                         <div>
                             <label asp-for="CreateForm.YearLevel"></label>
                             <input asp-for="CreateForm.YearLevel" class="input-select" type="number" min="1" />
+                            <p id="create-year-level-hint" class="field-helper compact">Choose a course to load the allowed year-level range.</p>
                             <span asp-validation-for="CreateForm.YearLevel" class="field-validation"></span>
                         </div>
                         <div>
@@ -528,7 +529,12 @@
                                 <option value="">Choose course</option>
                                 @foreach (var course in Model.Courses)
                                 {
-                                    <option value="@course.Id">@course.Label</option>
+                                    <option value="@course.Id"
+                                            data-min-year-level="@course.MinYearLevel"
+                                            data-max-year-level="@course.MaxYearLevel"
+                                            data-education-level-label="@course.EducationLevelLabel">
+                                        @course.Label
+                                    </option>
                                 }
                             </select>
                             <p class="field-helper compact">Choose the course first to unlock matching subjects.</p>
@@ -681,6 +687,8 @@
                 (() => {
                     const courseSelect = document.getElementById("CreateForm_CourseId");
                     const subjectSelect = document.getElementById("CreateForm_SubjectId");
+                    const yearLevelInput = document.getElementById("CreateForm_YearLevel");
+                    const yearLevelHint = document.getElementById("create-year-level-hint");
 
                     if (!courseSelect || !subjectSelect) {
                         return;
@@ -722,8 +730,35 @@
                         subjectSelect.disabled = selectedCourseId === "" || filteredOptions.length === 0;
                     };
 
-                    courseSelect.addEventListener("change", refreshSubjectOptions);
+                    const refreshYearLevelBounds = () => {
+                        if (!yearLevelInput) {
+                            return;
+                        }
+
+                        const selectedCourseOption = courseSelect.options[courseSelect.selectedIndex];
+                        const minYearLevel = Number(selectedCourseOption?.dataset.minYearLevel ?? 1);
+                        const maxYearLevel = Number(selectedCourseOption?.dataset.maxYearLevel ?? 12);
+                        const levelLabel = selectedCourseOption?.dataset.educationLevelLabel || "Selected course";
+
+                        yearLevelInput.min = String(minYearLevel);
+                        yearLevelInput.max = String(maxYearLevel);
+
+                        const parsedValue = Number(yearLevelInput.value || "0");
+                        if (!yearLevelInput.value || Number.isNaN(parsedValue) || parsedValue < minYearLevel || parsedValue > maxYearLevel) {
+                            yearLevelInput.value = String(minYearLevel);
+                        }
+
+                        if (yearLevelHint) {
+                            yearLevelHint.textContent = `${levelLabel} allows year levels ${minYearLevel}-${maxYearLevel}.`;
+                        }
+                    };
+
+                    courseSelect.addEventListener("change", () => {
+                        refreshSubjectOptions();
+                        refreshYearLevelBounds();
+                    });
                     refreshSubjectOptions();
+                    refreshYearLevelBounds();
                 })();
             </script>
         }

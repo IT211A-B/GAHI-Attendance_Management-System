@@ -4,6 +4,7 @@ using Attendance_Management_System.Backend.DTOs.Requests;
 using Attendance_Management_System.Backend.DTOs.Responses;
 using Attendance_Management_System.Backend.Entities;
 using Attendance_Management_System.Backend.Enums;
+using Attendance_Management_System.Backend.Helpers;
 using Attendance_Management_System.Backend.Interfaces.Services;
 using Attendance_Management_System.Backend.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -184,10 +185,20 @@ public class SectionsService : ISectionsService
         }
 
         // Validate course exists
-        var courseExists = await _context.Courses.AnyAsync(c => c.Id == request.CourseId);
-        if (!courseExists)
+        var course = await _context.Courses
+            .AsNoTracking()
+            .FirstOrDefaultAsync(selectedCourse => selectedCourse.Id == request.CourseId);
+        if (course == null)
         {
             return ApiResponse<SectionDto>.ErrorResponse("VALIDATION_ERROR", "Course not found.");
+        }
+
+        if (!EducationLevelPolicy.IsYearLevelAllowed(course.EducationLevel, request.YearLevel))
+        {
+            var allowedRange = EducationLevelPolicy.GetAllowedYearRange(course.EducationLevel);
+            return ApiResponse<SectionDto>.ErrorResponse(
+                "VALIDATION_ERROR",
+                $"Year level {request.YearLevel} is not valid for {EducationLevelPolicy.ToDisplayLabel(course.EducationLevel)}. Allowed range is {allowedRange.MinYearLevel}-{allowedRange.MaxYearLevel}.");
         }
 
         // Validate subject exists and belongs to the selected course
@@ -280,6 +291,26 @@ public class SectionsService : ISectionsService
             {
                 return ApiResponse<SectionDto>.ErrorResponse("VALIDATION_ERROR", "Classroom not found.");
             }
+        }
+
+        var targetCourseId = request.CourseId ?? section.CourseId;
+        var targetYearLevel = request.YearLevel ?? section.YearLevel;
+
+        var targetCourse = await _context.Courses
+            .AsNoTracking()
+            .FirstOrDefaultAsync(selectedCourse => selectedCourse.Id == targetCourseId);
+
+        if (targetCourse == null)
+        {
+            return ApiResponse<SectionDto>.ErrorResponse("VALIDATION_ERROR", "Course not found.");
+        }
+
+        if (!EducationLevelPolicy.IsYearLevelAllowed(targetCourse.EducationLevel, targetYearLevel))
+        {
+            var allowedRange = EducationLevelPolicy.GetAllowedYearRange(targetCourse.EducationLevel);
+            return ApiResponse<SectionDto>.ErrorResponse(
+                "VALIDATION_ERROR",
+                $"Year level {targetYearLevel} is not valid for {EducationLevelPolicy.ToDisplayLabel(targetCourse.EducationLevel)}. Allowed range is {allowedRange.MinYearLevel}-{allowedRange.MaxYearLevel}.");
         }
 
         if (!string.IsNullOrEmpty(request.Name))
@@ -574,6 +605,23 @@ public class SectionsService : ISectionsService
     // Retrieves sections filtered by course and year level for enrollment purposes
     public async Task<ApiResponse<List<SectionDto>>> GetSectionsByCourseAndYearLevelAsync(int courseId, int yearLevel, int? academicYearId = null)
     {
+        var course = await _context.Courses
+            .AsNoTracking()
+            .FirstOrDefaultAsync(selectedCourse => selectedCourse.Id == courseId);
+
+        if (course == null)
+        {
+            return ApiResponse<List<SectionDto>>.ErrorResponse("NOT_FOUND", "Course not found.");
+        }
+
+        if (!EducationLevelPolicy.IsYearLevelAllowed(course.EducationLevel, yearLevel))
+        {
+            var allowedRange = EducationLevelPolicy.GetAllowedYearRange(course.EducationLevel);
+            return ApiResponse<List<SectionDto>>.ErrorResponse(
+                "VALIDATION_ERROR",
+                $"Year level {yearLevel} is not valid for {EducationLevelPolicy.ToDisplayLabel(course.EducationLevel)}. Allowed range is {allowedRange.MinYearLevel}-{allowedRange.MaxYearLevel}.");
+        }
+
         var query = _context.Sections
             .Include(s => s.AcademicYear)
             .Include(s => s.Course)

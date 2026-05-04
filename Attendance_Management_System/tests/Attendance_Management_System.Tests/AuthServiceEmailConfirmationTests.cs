@@ -1,6 +1,8 @@
 using System.Text;
 using Attendance_Management_System.Backend.Configuration;
+using Attendance_Management_System.Backend.DTOs.Requests;
 using Attendance_Management_System.Backend.Entities;
+using Attendance_Management_System.Backend.Enums;
 using Attendance_Management_System.Backend.Interfaces.Services;
 using Attendance_Management_System.Backend.Persistence;
 using Attendance_Management_System.Backend.Services;
@@ -112,6 +114,50 @@ public class AuthServiceEmailConfirmationTests
         Assert.True(result.Success);
         Assert.Equal("Email is already confirmed. You can sign in.", result.Message);
         Assert.Equal(0, userManager.ConfirmEmailCallCount);
+    }
+
+    [Fact]
+    public async Task RegisterStudentAsync_ReturnsFailure_WhenYearLevelOutsideCourseRange()
+    {
+        await using var context = CreateContext();
+        var userManager = CreateUserManager();
+        var accountEmailServiceMock = new Mock<IAccountEmailService>(MockBehavior.Strict);
+
+        context.Courses.Add(new Course
+        {
+            Id = 900,
+            Name = "Diploma in Mechanical Technology",
+            Code = "DMT",
+            EducationLevel = EducationLevel.Tvet
+        });
+
+        await context.SaveChangesAsync();
+
+        userManager.FindByEmailHandler = _ => Task.FromResult<User?>(null);
+
+        var service = CreateService(context, userManager, accountEmailServiceMock);
+        var request = new RegisterRequest
+        {
+            Email = "new.student@example.com",
+            Password = "Password123!",
+            ConfirmPassword = "Password123!",
+            StudentNumber = "2026-TEST-0001",
+            FirstName = "Test",
+            LastName = "Student",
+            Birthdate = new DateOnly(2009, 1, 1),
+            Gender = "M",
+            Address = "Cebu City",
+            GuardianName = "Parent",
+            GuardianContact = "09123456789",
+            CourseId = 900,
+            YearLevel = 4,
+            AcademicYearId = 1
+        };
+
+        var result = await service.RegisterStudentAsync(request);
+
+        Assert.False(result.Success);
+        Assert.Equal("Year level 4 is not valid for TVET. Allowed range is 1-2.", result.Message);
     }
 
     private static AuthService CreateService(

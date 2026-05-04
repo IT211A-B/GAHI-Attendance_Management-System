@@ -1,5 +1,6 @@
 using Attendance_Management_System.Backend.Constants;
 using Attendance_Management_System.Backend.Entities;
+using Attendance_Management_System.Backend.Enums;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
@@ -66,8 +67,15 @@ public class AppDbContext : IdentityDbContext<User, IdentityRole<int>, int>
         {
             entity.Property(c => c.Name).IsRequired();
             entity.Property(c => c.Code).IsRequired();
+            entity.Property(c => c.EducationLevel)
+                .HasConversion<int>()
+                .IsRequired();
             entity.HasIndex(c => c.Name).IsUnique();
             entity.HasIndex(c => c.Code).IsUnique();
+
+            entity.ToTable(t => t.HasCheckConstraint(
+                "CK_Course_EducationLevel",
+                $"\"EducationLevel\" IN ({(int)EducationLevel.Elementary}, {(int)EducationLevel.JuniorHigh}, {(int)EducationLevel.SeniorHigh}, {(int)EducationLevel.College}, {(int)EducationLevel.Tvet})"));
         });
 
         // Subject configuration

@@ -3,6 +3,7 @@ using Attendance_Management_System.Backend.Entities;
 using Attendance_Management_System.Backend.Interfaces.Services;
 using Attendance_Management_System.Backend.Persistence;
 using Attendance_Management_System.Backend.Constants;
+using Attendance_Management_System.Backend.Helpers;
 using Attendance_Management_System.Backend.ViewModels.Auth;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
@@ -164,6 +165,7 @@ public class AccountController : Controller
             GuardianName = model.GuardianName.Trim(),
             GuardianContact = model.GuardianContact.Trim(),
             CourseId = model.CourseId,
+            YearLevel = model.YearLevel,
             AcademicYearId = model.AcademicYearId
         };
 
@@ -235,9 +237,24 @@ public class AccountController : Controller
                         Id = course.Id,
                         Label = string.IsNullOrWhiteSpace(course.Code)
                             ? course.Name
-                            : $"{course.Code} - {course.Name}"
+                            : $"{course.Code} - {course.Name}",
+                        EducationLevel = course.EducationLevel,
+                        EducationLevelLabel = EducationLevelPolicy.ToDisplayLabel(course.EducationLevel),
+                        MinYearLevel = EducationLevelPolicy.GetAllowedYearRange(course.EducationLevel).MinYearLevel,
+                        MaxYearLevel = EducationLevelPolicy.GetAllowedYearRange(course.EducationLevel).MaxYearLevel
                     })
                     .ToList();
+
+                if (model.YearLevel <= 0)
+                {
+                    var selectedCourse = model.AvailableCourses.FirstOrDefault(course => course.Id == model.CourseId)
+                        ?? model.AvailableCourses.FirstOrDefault();
+
+                    if (selectedCourse != null)
+                    {
+                        model.YearLevel = selectedCourse.MinYearLevel;
+                    }
+                }
             }
         }
         catch (PostgresException ex) when (ex.SqlState == PostgresErrorCodes.InvalidPassword)

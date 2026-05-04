@@ -1,6 +1,7 @@
 using Attendance_Management_System.Backend.DTOs.Requests;
 using Attendance_Management_System.Backend.DTOs.Responses;
 using Attendance_Management_System.Backend.Entities;
+using Attendance_Management_System.Backend.Enums;
 using Attendance_Management_System.Backend.Interfaces.Services;
 using Attendance_Management_System.Backend.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -28,6 +29,7 @@ public class CoursesService : ICoursesService
                 Id = c.Id,
                 Name = c.Name,
                 Code = c.Code,
+                EducationLevel = c.EducationLevel,
                 Description = c.Description,
                 CreatedAt = c.CreatedAt
             })
@@ -52,6 +54,7 @@ public class CoursesService : ICoursesService
             Id = course.Id,
             Name = course.Name,
             Code = course.Code,
+            EducationLevel = course.EducationLevel,
             Description = course.Description,
             CreatedAt = course.CreatedAt
         };
@@ -73,6 +76,7 @@ public class CoursesService : ICoursesService
         {
             Name = request.Name,
             Code = request.Code,
+            EducationLevel = request.EducationLevel,
             Description = request.Description
         };
 
@@ -85,6 +89,7 @@ public class CoursesService : ICoursesService
             Id = course.Id,
             Name = course.Name,
             Code = course.Code,
+            EducationLevel = course.EducationLevel,
             Description = course.Description,
             CreatedAt = course.CreatedAt
         };
@@ -117,6 +122,15 @@ public class CoursesService : ICoursesService
             course.Name = request.Name;
         if (!string.IsNullOrEmpty(request.Code))
             course.Code = request.Code;
+        if (request.EducationLevel.HasValue)
+        {
+            if (!Enum.IsDefined(typeof(EducationLevel), request.EducationLevel.Value))
+            {
+                return ApiResponse<CourseDto>.ErrorResponse("VALIDATION_ERROR", "Please select a valid education level.");
+            }
+
+            course.EducationLevel = request.EducationLevel.Value;
+        }
         // Description can be explicitly set to empty, so check for null only
         if (request.Description != null)
             course.Description = request.Description;
@@ -129,6 +143,7 @@ public class CoursesService : ICoursesService
             Id = course.Id,
             Name = course.Name,
             Code = course.Code,
+            EducationLevel = course.EducationLevel,
             Description = course.Description,
             CreatedAt = course.CreatedAt
         };

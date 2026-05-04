@@ -5,6 +5,7 @@ using Attendance_Management_System.Backend.DTOs.Requests;
 using Attendance_Management_System.Backend.DTOs.Responses;
 using Attendance_Management_System.Backend.Entities;
 using Attendance_Management_System.Backend.Enums;
+using Attendance_Management_System.Backend.Helpers;
 using Attendance_Management_System.Backend.Interfaces.Services;
 using Attendance_Management_System.Backend.Persistence;
 using Attendance_Management_System.Backend.ValueObjects;
@@ -348,6 +349,14 @@ public class EnrollmentService : IEnrollmentService
                 "Course not found.");
         }
 
+        if (!EducationLevelPolicy.IsYearLevelAllowed(course.EducationLevel, request.YearLevel))
+        {
+            var allowedRange = EducationLevelPolicy.GetAllowedYearRange(course.EducationLevel);
+            return ApiResponse<EnrollmentResultDto>.ErrorResponse(
+                ErrorCodes.BadRequest,
+                $"Year level {request.YearLevel} is not valid for {EducationLevelPolicy.ToDisplayLabel(course.EducationLevel)}. Allowed range is {allowedRange.MinYearLevel}-{allowedRange.MaxYearLevel}.");
+        }
+
         // Validate academic year exists
         var academicYear = await _context.AcademicYears.FindAsync(request.AcademicYearId);
         if (academicYear == null)
@@ -372,12 +381,9 @@ public class EnrollmentService : IEnrollmentService
                 "You already have an enrollment for this course and academic year.");
         }
 
-        // Get student's year level (default to 1 if not set)
-        var yearLevel = student.YearLevel > 0 ? student.YearLevel : 1;
-
         // Resolve section through centralized allocation policy.
         var section = await _sectionAllocationService
-            .AllocateSectionAsync(request.CourseId, request.AcademicYearId, yearLevel);
+            .AllocateSectionAsync(request.CourseId, request.AcademicYearId, request.YearLevel);
 
         // If still no section available, return error
         if (section == null)
@@ -385,6 +391,13 @@ public class EnrollmentService : IEnrollmentService
             return ApiResponse<EnrollmentResultDto>.ErrorResponse(
                 ErrorCodes.NoAvailableSections,
                 "No available sections found for your course and year level. Please contact an administrator.");
+        }
+
+        if (section.YearLevel != request.YearLevel)
+        {
+            return ApiResponse<EnrollmentResultDto>.ErrorResponse(
+                ErrorCodes.NoAvailableSections,
+                "No available section matches the selected year level for this program.");
         }
 
         // Get current enrollment count for the selected section
@@ -415,6 +428,9 @@ public class EnrollmentService : IEnrollmentService
         }
 
         _context.Enrollments.Add(enrollment);
+
+        // Persist chosen level so the next enrollment cycle starts from latest profile level.
+        student.YearLevel = request.YearLevel;
         await _context.SaveChangesAsync();
 
         // Build response
@@ -554,6 +570,15 @@ public class EnrollmentService : IEnrollmentService
     // Gets sections matching student's course and year level with capacity info
     public async Task<List<SectionCapacityDto>> GetAvailableSectionsForStudentAsync(int courseId, int yearLevel, int academicYearId)
     {
+        var course = await _context.Courses
+            .AsNoTracking()
+            .FirstOrDefaultAsync(selectedCourse => selectedCourse.Id == courseId);
+
+        if (course == null || !EducationLevelPolicy.IsYearLevelAllowed(course.EducationLevel, yearLevel))
+        {
+            return [];
+        }
+
         var sections = await _context.Sections
             .Include(s => s.Course)
             .Include(s => s.AcademicYear)

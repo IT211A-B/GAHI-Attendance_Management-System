@@ -1,3 +1,4 @@
+using Attendance_Management_System.Backend.Helpers;
 using System.ComponentModel.DataAnnotations;
 using Attendance_Management_System.Backend.Enums;
 
@@ -60,6 +61,10 @@ public class EnrollmentOptionViewModel
 {
     public int Id { get; set; }
     public int? CourseId { get; set; }
+    public EducationLevel? EducationLevel { get; set; }
+    public string? EducationLevelLabel { get; set; }
+    public int? MinYearLevel { get; set; }
+    public int? MaxYearLevel { get; set; }
     public string Label { get; set; } = string.Empty;
 }
 
@@ -69,7 +74,14 @@ public class StudentEnrollmentProfileViewModel
     public string FullName { get; set; } = "-";
     public int YearLevel { get; set; }
     public int? CourseId { get; set; }
+    public EducationLevel? EducationLevel { get; set; }
+    public int MinYearLevel { get; set; } = 1;
+    public int MaxYearLevel { get; set; } = 12;
     public string CourseText { get; set; } = "-";
+
+    public string EducationLevelText => EducationLevel.HasValue
+        ? EducationLevelPolicy.ToDisplayLabel(EducationLevel.Value)
+        : "-";
 }
 
 public class SectionCapacityItemViewModel
@@ -96,6 +108,11 @@ public class CreateEnrollmentFormViewModel
     [Range(1, int.MaxValue, ErrorMessage = "Please select a valid course")]
     [Display(Name = "Course")]
     public int CourseId { get; set; }
+
+    [Required(ErrorMessage = "Year level is required")]
+    [Range(1, 12, ErrorMessage = "Please select a valid year level")]
+    [Display(Name = "Year Level")]
+    public int YearLevel { get; set; }
 
     [Required(ErrorMessage = "Academic period is required")]
     [Range(1, int.MaxValue, ErrorMessage = "Please select a valid academic period")]

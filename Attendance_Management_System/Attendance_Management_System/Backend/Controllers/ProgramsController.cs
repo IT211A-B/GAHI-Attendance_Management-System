@@ -1,4 +1,6 @@
 using Attendance_Management_System.Backend.DTOs.Requests;
+using Attendance_Management_System.Backend.Enums;
+using Attendance_Management_System.Backend.Helpers;
 using Attendance_Management_System.Backend.Interfaces.Services;
 using Attendance_Management_System.Backend.ViewModels.Programs;
 using Microsoft.AspNetCore.Authorization;
@@ -40,6 +42,7 @@ public class ProgramsController : Controller
         {
             Code = form.Code.Trim(),
             Name = form.Name.Trim(),
+            EducationLevel = form.EducationLevel,
             Description = NormalizeOptional(form.Description)
         });
 
@@ -67,6 +70,7 @@ public class ProgramsController : Controller
         {
             Code = form.Code.Trim(),
             Name = form.Name.Trim(),
+            EducationLevel = form.EducationLevel,
             Description = NormalizeOptional(form.Description)
         });
 
@@ -114,8 +118,19 @@ public class ProgramsController : Controller
                 Id = program.Id,
                 Code = program.Code,
                 Name = program.Name,
+                EducationLevel = program.EducationLevel,
+                EducationLevelLabel = EducationLevelPolicy.ToDisplayLabel(program.EducationLevel),
                 Description = string.IsNullOrWhiteSpace(program.Description) ? "-" : program.Description,
                 CreatedAt = program.CreatedAt.ToString("yyyy-MM-dd")
+            })
+            .ToList();
+
+        viewModel.EducationLevels = Enum
+            .GetValues<EducationLevel>()
+            .Select(level => new ProgramEducationLevelOptionViewModel
+            {
+                Value = level,
+                Label = EducationLevelPolicy.ToDisplayLabel(level)
             })
             .ToList();
 

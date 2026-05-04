@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using Attendance_Management_System.Backend.DTOs.Requests;
 using Attendance_Management_System.Backend.DTOs.Responses;
+using Attendance_Management_System.Backend.Helpers;
 using Attendance_Management_System.Backend.Interfaces.Services;
 using Attendance_Management_System.Backend.ValueObjects;
 using Attendance_Management_System.Backend.ViewModels.Sections;
@@ -812,11 +813,28 @@ public class SectionManagementController : Controller
                 .Select(course => new SectionReferenceOptionViewModel
                 {
                     Id = course.Id,
+                    EducationLevel = course.EducationLevel,
+                    EducationLevelLabel = EducationLevelPolicy.ToDisplayLabel(course.EducationLevel),
+                    MinYearLevel = EducationLevelPolicy.GetAllowedYearRange(course.EducationLevel).MinYearLevel,
+                    MaxYearLevel = EducationLevelPolicy.GetAllowedYearRange(course.EducationLevel).MaxYearLevel,
                     Label = string.IsNullOrWhiteSpace(course.Code)
                         ? course.Name
                         : $"{course.Code} - {course.Name}"
                 })
                 .ToList();
+
+            if (viewModel.CreateForm.CourseId <= 0 && viewModel.Courses.Count > 0)
+            {
+                viewModel.CreateForm.CourseId = viewModel.Courses[0].Id;
+            }
+
+            var selectedCourse = viewModel.Courses.FirstOrDefault(course => course.Id == viewModel.CreateForm.CourseId);
+            if (selectedCourse?.MinYearLevel is int minYearLevel
+                && selectedCourse.MaxYearLevel is int maxYearLevel
+                && (viewModel.CreateForm.YearLevel < minYearLevel || viewModel.CreateForm.YearLevel > maxYearLevel))
+            {
+                viewModel.CreateForm.YearLevel = minYearLevel;
+            }
         }
 
         if (!subjectsResult.Success || subjectsResult.Data is null)
