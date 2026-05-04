@@ -4,7 +4,7 @@ services:
     runtime: dotnet
     rootDir: Attendance_Management_System/Attendance_Management_System
     buildCommand: dotnet restore Attendance_Management_System.csproj; dotnet publish Attendance_Management_System.csproj -c Release -o out
-    startCommand: dotnet out/Attendance_Management_System.dll
+    startCommand: cd out; dotnet Attendance_Management_System.dll
     healthCheckPath: /health
     envVars:
       - key: ASPNETCORE_ENVIRONMENT
