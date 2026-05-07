@@ -5,6 +5,7 @@ using Attendance_Management_System.Backend.Persistence;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Mvc.Razor;
 using Microsoft.EntityFrameworkCore;
+using Scalar.AspNetCore;
 
 // Create the web application builder with frontend web root configured up-front
 var webRootPath = Directory.Exists(Path.Combine(Directory.GetCurrentDirectory(), "Frontend", "wwwroot"))
@@ -19,6 +20,22 @@ var builder = WebApplication.CreateBuilder(new WebApplicationOptions
 
 // Add MVC controllers with views for handling web and API requests
 builder.Services.AddControllersWithViews();
+
+// Generate a dedicated API-focused OpenAPI document for Scalar.
+builder.Services.AddOpenApi("api", options =>
+{
+    options.ShouldInclude = apiDescription =>
+    {
+        var relativePath = apiDescription.RelativePath?.TrimStart('/');
+        if (string.IsNullOrWhiteSpace(relativePath))
+        {
+            return false;
+        }
+
+        return relativePath.StartsWith("attendance/qr", StringComparison.OrdinalIgnoreCase)
+            || relativePath.StartsWith("notifications", StringComparison.OrdinalIgnoreCase);
+    };
+});
 
 // Tell Razor to resolve pages from Frontend/Views instead of root Views
 builder.Services.Configure<RazorViewEngineOptions>(options =>
@@ -64,6 +81,16 @@ app.UseRouting();
 app.UseAuthentication();
 app.UseRateLimiter();
 app.UseAuthorization();
+
+if (app.Environment.IsDevelopment())
+{
+    // Expose OpenAPI JSON and Scalar UI only during development.
+    app.MapOpenApi("/openapi/{documentName}.json").AllowAnonymous();
+    app.MapScalarApiReference("/scalar", options =>
+    {
+        options.AddDocument("api", "Attendance API");
+    }).AllowAnonymous();
+}
 
 // Configure default MVC route pattern
 app.MapControllerRoute(
