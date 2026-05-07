@@ -1,4 +1,4 @@
-using System.Security.Claims;
+﻿using System.Security.Claims;
 using Attendance_Management_System.Backend.DTOs.Requests;
 using Attendance_Management_System.Backend.Interfaces.Services;
 using Attendance_Management_System.Backend.ViewModels.Settings;
@@ -9,7 +9,7 @@ namespace Attendance_Management_System.Backend.Controllers;
 
 [Authorize]
 [Route("settings")]
-public class SettingsController : Controller
+public class SettingsController : AppControllerBase
 {
     private readonly IUsersService _usersService;
 
@@ -56,7 +56,7 @@ public class SettingsController : Controller
             LastName = NormalizeOptional(form.LastName)
         };
 
-        var result = await _usersService.UpdateProfileAsync(userId.Value, request);
+        var result = await ExecuteServiceCallAsync(() => _usersService.UpdateProfileAsync(userId.Value, request));
         if (!result.Success)
         {
             ModelState.AddModelError("ProfileForm.FirstName", result.Error?.Message ?? "Unable to update profile right now.");
@@ -91,7 +91,7 @@ public class SettingsController : Controller
             NewPassword = form.NewPassword
         };
 
-        var result = await _usersService.UpdateProfileAsync(userId.Value, request);
+        var result = await ExecuteServiceCallAsync(() => _usersService.UpdateProfileAsync(userId.Value, request));
         if (!result.Success)
         {
             ModelState.AddModelError("PasswordForm.CurrentPassword", result.Error?.Message ?? "Unable to change password right now.");
@@ -119,7 +119,7 @@ public class SettingsController : Controller
             Role = User.FindFirstValue(ClaimTypes.Role) ?? "-"
         };
 
-        var userResult = await _usersService.GetUserByIdAsync(userId);
+        var userResult = await ExecuteServiceCallAsync(() => _usersService.GetUserByIdAsync(userId));
         if (!userResult.Success || userResult.Data is null)
         {
             return viewModel;
@@ -154,3 +154,4 @@ public class SettingsController : Controller
         return string.IsNullOrWhiteSpace(trimmed) ? null : trimmed;
     }
 }
+

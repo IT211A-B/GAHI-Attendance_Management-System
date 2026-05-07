@@ -2,7 +2,6 @@ using System.Security.Claims;
 using Attendance_Management_System.Backend.Configuration;
 using Attendance_Management_System.Backend.Constants;
 using Attendance_Management_System.Backend.DTOs.Requests;
-using Attendance_Management_System.Backend.DTOs.Responses;
 using Attendance_Management_System.Backend.Interfaces.Services;
 using Attendance_Management_System.Backend.ViewModels.Attendance;
 using Microsoft.AspNetCore.Authorization;
@@ -60,13 +59,13 @@ public class AttendanceManagementController : Controller
         var userContext = GetUserContext();
         if (!userContext.IsValid)
         {
-            return Unauthorized(ApiResponse<object>.ErrorResponse(
-                ErrorCodes.Unauthorized,
-                "Unable to resolve current user context."));
+            return Problem(
+                statusCode: StatusCodes.Status401Unauthorized,
+                title: "Unauthorized",
+                detail: "Unable to resolve current user context.");
         }
 
-        var result = await _attendanceQrService.SearchSectionsAsync(userContext.UserId, userContext.Role, q, take);
-        return BuildApiResult(result);
+        return await ExecuteApiAsync(() => _attendanceQrService.SearchSectionsAsync(userContext.UserId, userContext.Role, q, take));
     }
 
     [HttpGet("qr/options/subjects")]
@@ -76,13 +75,13 @@ public class AttendanceManagementController : Controller
         var userContext = GetUserContext();
         if (!userContext.IsValid)
         {
-            return Unauthorized(ApiResponse<object>.ErrorResponse(
-                ErrorCodes.Unauthorized,
-                "Unable to resolve current user context."));
+            return Problem(
+                statusCode: StatusCodes.Status401Unauthorized,
+                title: "Unauthorized",
+                detail: "Unable to resolve current user context.");
         }
 
-        var result = await _attendanceQrService.SearchSubjectsAsync(userContext.UserId, userContext.Role, sectionId, q, take);
-        return BuildApiResult(result);
+        return await ExecuteApiAsync(() => _attendanceQrService.SearchSubjectsAsync(userContext.UserId, userContext.Role, sectionId, q, take));
     }
 
     [HttpGet("qr/options/periods")]
@@ -92,13 +91,13 @@ public class AttendanceManagementController : Controller
         var userContext = GetUserContext();
         if (!userContext.IsValid)
         {
-            return Unauthorized(ApiResponse<object>.ErrorResponse(
-                ErrorCodes.Unauthorized,
-                "Unable to resolve current user context."));
+            return Problem(
+                statusCode: StatusCodes.Status401Unauthorized,
+                title: "Unauthorized",
+                detail: "Unable to resolve current user context.");
         }
 
-        var result = await _attendanceQrService.SearchPeriodsAsync(userContext.UserId, userContext.Role, sectionId, subjectId, q, take);
-        return BuildApiResult(result);
+        return await ExecuteApiAsync(() => _attendanceQrService.SearchPeriodsAsync(userContext.UserId, userContext.Role, sectionId, subjectId, q, take));
     }
 
     [HttpPost("qr/sessions")]
@@ -110,20 +109,21 @@ public class AttendanceManagementController : Controller
         var userContext = GetUserContext();
         if (!userContext.IsValid)
         {
-            return Unauthorized(ApiResponse<object>.ErrorResponse(
-                ErrorCodes.Unauthorized,
-                "Unable to resolve current user context."));
+            return Problem(
+                statusCode: StatusCodes.Status401Unauthorized,
+                title: "Unauthorized",
+                detail: "Unable to resolve current user context.");
         }
 
         if (request is null)
         {
-            return BadRequest(ApiResponse<object>.ErrorResponse(
-                ErrorCodes.BadRequest,
-                "Request payload is required."));
+            return Problem(
+                statusCode: StatusCodes.Status400BadRequest,
+                title: "Bad Request",
+                detail: "Request payload is required.");
         }
 
-        var result = await _attendanceQrService.CreateSessionAsync(userContext.UserId, userContext.Role, request);
-        return BuildApiResult(result);
+        return await ExecuteApiAsync(() => _attendanceQrService.CreateSessionAsync(userContext.UserId, userContext.Role, request));
     }
 
     [HttpPost("qr/sessions/{sessionId}/refresh")]
@@ -135,13 +135,13 @@ public class AttendanceManagementController : Controller
         var userContext = GetUserContext();
         if (!userContext.IsValid)
         {
-            return Unauthorized(ApiResponse<object>.ErrorResponse(
-                ErrorCodes.Unauthorized,
-                "Unable to resolve current user context."));
+            return Problem(
+                statusCode: StatusCodes.Status401Unauthorized,
+                title: "Unauthorized",
+                detail: "Unable to resolve current user context.");
         }
 
-        var result = await _attendanceQrService.RefreshSessionAsync(userContext.UserId, userContext.Role, sessionId);
-        return BuildApiResult(result);
+        return await ExecuteApiAsync(() => _attendanceQrService.RefreshSessionAsync(userContext.UserId, userContext.Role, sessionId));
     }
 
     [HttpPost("qr/sessions/{sessionId}/close")]
@@ -153,13 +153,15 @@ public class AttendanceManagementController : Controller
         var userContext = GetUserContext();
         if (!userContext.IsValid)
         {
-            return Unauthorized(ApiResponse<object>.ErrorResponse(
-                ErrorCodes.Unauthorized,
-                "Unable to resolve current user context."));
+            return Problem(
+                statusCode: StatusCodes.Status401Unauthorized,
+                title: "Unauthorized",
+                detail: "Unable to resolve current user context.");
         }
 
-        var result = await _attendanceQrService.CloseSessionAsync(userContext.UserId, userContext.Role, sessionId);
-        return BuildApiResult(result);
+        return await ExecuteApiAsync(
+            () => _attendanceQrService.CloseSessionAsync(userContext.UserId, userContext.Role, sessionId),
+            "QR session closed.");
     }
 
     [HttpGet("qr/sessions/{sessionId}/checkins")]
@@ -170,13 +172,13 @@ public class AttendanceManagementController : Controller
         var userContext = GetUserContext();
         if (!userContext.IsValid)
         {
-            return Unauthorized(ApiResponse<object>.ErrorResponse(
-                ErrorCodes.Unauthorized,
-                "Unable to resolve current user context."));
+            return Problem(
+                statusCode: StatusCodes.Status401Unauthorized,
+                title: "Unauthorized",
+                detail: "Unable to resolve current user context.");
         }
 
-        var result = await _attendanceQrService.GetLiveFeedAsync(userContext.UserId, userContext.Role, sessionId);
-        return BuildApiResult(result);
+        return await ExecuteApiAsync(() => _attendanceQrService.GetLiveFeedAsync(userContext.UserId, userContext.Role, sessionId));
     }
 
     [HttpPost("qr/checkins")]
@@ -188,20 +190,21 @@ public class AttendanceManagementController : Controller
         var userContext = GetUserContext();
         if (!userContext.IsValid)
         {
-            return Unauthorized(ApiResponse<object>.ErrorResponse(
-                ErrorCodes.Unauthorized,
-                "Unable to resolve current user context."));
+            return Problem(
+                statusCode: StatusCodes.Status401Unauthorized,
+                title: "Unauthorized",
+                detail: "Unable to resolve current user context.");
         }
 
         if (request is null)
         {
-            return BadRequest(ApiResponse<object>.ErrorResponse(
-                ErrorCodes.BadRequest,
-                "Request payload is required."));
+            return Problem(
+                statusCode: StatusCodes.Status400BadRequest,
+                title: "Bad Request",
+                detail: "Request payload is required.");
         }
 
-        var result = await _attendanceQrService.SubmitCheckinAsync(userContext.UserId, userContext.Role, request);
-        return BuildApiResult(result);
+        return await ExecuteApiAsync(() => _attendanceQrService.SubmitCheckinAsync(userContext.UserId, userContext.Role, request));
     }
 
     [HttpGet("scan")]
@@ -239,27 +242,72 @@ public class AttendanceManagementController : Controller
         return (true, userId, role);
     }
 
-    private static IActionResult BuildApiResult<T>(ApiResponse<T> response)
+    private async Task<IActionResult> ExecuteApiAsync<T>(Func<Task<T>> action)
     {
-        if (response.Success)
+        try
         {
-            return new OkObjectResult(response);
+            var payload = await action();
+            return Ok(payload);
+        }
+        catch (Exception ex)
+        {
+            return BuildProblemResult(ex);
+        }
+    }
+
+    private async Task<IActionResult> ExecuteApiAsync(Func<Task> action, string successMessage)
+    {
+        try
+        {
+            await action();
+            return Ok(new { message = successMessage });
+        }
+        catch (Exception ex)
+        {
+            return BuildProblemResult(ex);
+        }
+    }
+
+    private IActionResult BuildProblemResult(Exception ex)
+    {
+        var statusCode = ex switch
+        {
+            UnauthorizedAccessException => StatusCodes.Status403Forbidden,
+            KeyNotFoundException => StatusCodes.Status404NotFound,
+            InvalidOperationException => MapInvalidOperationStatusCode(ex.Message),
+            _ => StatusCodes.Status500InternalServerError
+        };
+
+        var title = statusCode switch
+        {
+            StatusCodes.Status400BadRequest => "Bad Request",
+            StatusCodes.Status403Forbidden => "Forbidden",
+            StatusCodes.Status404NotFound => "Not Found",
+            StatusCodes.Status409Conflict => "Conflict",
+            _ => "Server Error"
+        };
+
+        return Problem(
+            statusCode: statusCode,
+            title: title,
+            detail: string.IsNullOrWhiteSpace(ex.Message) ? "Request failed." : ex.Message);
+    }
+
+    private static int MapInvalidOperationStatusCode(string? message)
+    {
+        if (string.IsNullOrWhiteSpace(message))
+        {
+            return StatusCodes.Status400BadRequest;
         }
 
-        var statusCode = response.Error?.Code switch
+        if (message.Contains("already", StringComparison.OrdinalIgnoreCase)
+            || message.Contains("inactive", StringComparison.OrdinalIgnoreCase)
+            || message.Contains("conflict", StringComparison.OrdinalIgnoreCase)
+            || message.Contains("outside", StringComparison.OrdinalIgnoreCase))
         {
-            ErrorCodes.Unauthorized => StatusCodes.Status401Unauthorized,
-            ErrorCodes.Forbidden => StatusCodes.Status403Forbidden,
-            ErrorCodes.NotFound => StatusCodes.Status404NotFound,
-            ErrorCodes.Conflict => StatusCodes.Status409Conflict,
-            "ALREADY_CHECKED_IN" => StatusCodes.Status409Conflict,
-            "SESSION_INACTIVE" => StatusCodes.Status409Conflict,
-            _ => StatusCodes.Status400BadRequest
-        };
+            return StatusCodes.Status409Conflict;
+        }
 
-        return new ObjectResult(response)
-        {
-            StatusCode = statusCode
-        };
+        return StatusCodes.Status400BadRequest;
     }
 }

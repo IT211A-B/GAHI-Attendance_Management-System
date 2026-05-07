@@ -1,4 +1,4 @@
-using System.Security.Claims;
+﻿using System.Security.Claims;
 using Attendance_Management_System.Backend.Interfaces.Services;
 using Attendance_Management_System.Backend.ViewModels.Reports;
 using Microsoft.AspNetCore.Authorization;
@@ -8,7 +8,7 @@ namespace Attendance_Management_System.Backend.Controllers;
 
 [Authorize(Policy = "AdminOrTeacher")]
 [Route("reports")]
-public class ReportsController : Controller
+public class ReportsController : AppControllerBase
 {
     private readonly ISectionsService _sectionsService;
     private readonly ISchedulesService _schedulesService;
@@ -42,7 +42,7 @@ public class ReportsController : Controller
             SelectedDate = selectedDate
         };
 
-        var schedulesResult = await _schedulesService.GetSchedulesAsync(userId, role);
+        var schedulesResult = await ExecuteServiceCallAsync(() => _schedulesService.GetSchedulesAsync(userId, role));
         if (!schedulesResult.Success || schedulesResult.Data is null)
         {
             model.ErrorMessage = schedulesResult.Error?.Message ?? "Unable to load schedules.";
@@ -57,7 +57,7 @@ public class ReportsController : Controller
 
         if (string.Equals(role, "admin", StringComparison.OrdinalIgnoreCase))
         {
-            var sectionsResult = await _sectionsService.GetAllSectionsAsync();
+            var sectionsResult = await ExecuteServiceCallAsync(() => _sectionsService.GetAllSectionsAsync());
             if (!sectionsResult.Success || sectionsResult.Data is null)
             {
                 model.ErrorMessage = sectionsResult.Error?.Message ?? "Unable to load sections.";
@@ -122,12 +122,12 @@ public class ReportsController : Controller
             return View(model);
         }
 
-        var summaryResult = await _attendanceService.GetSectionAttendanceAsync(
+        var summaryResult = await ExecuteServiceCallAsync(() => _attendanceService.GetSectionAttendanceAsync(
             sectionId.Value,
             selectedDate,
             scheduleId.Value,
             userId,
-            role);
+            role));
         if (!summaryResult.Success || summaryResult.Data is null)
         {
             model.ErrorMessage = summaryResult.Error?.Message ?? "Unable to load report data.";
@@ -151,3 +151,4 @@ public class ReportsController : Controller
         return View(model);
     }
 }
+

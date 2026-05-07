@@ -8,7 +8,7 @@ namespace Attendance_Management_System.Backend.Controllers;
 
 [Authorize(Policy = "AdminOnly")]
 [Route("users")]
-public class UserManagementController : Controller
+public class UserManagementController : AppControllerBase
 {
     private readonly IUsersService _usersService;
 
@@ -43,7 +43,7 @@ public class UserManagementController : Controller
             Role = form.Role.Trim().ToLowerInvariant()
         };
 
-        var result = await _usersService.CreateUserAsync(request);
+        var result = await ExecuteServiceCallAsync(() => _usersService.CreateUserAsync(request));
         if (!result.Success)
         {
             ModelState.AddModelError("CreateForm.Email", result.Error?.Message ?? "Unable to create user right now.");
@@ -58,7 +58,7 @@ public class UserManagementController : Controller
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> SetStatus(int id, bool isActive)
     {
-        var result = await _usersService.UpdateUserAsync(id, new UpdateUserRequest { IsActive = isActive });
+        var result = await ExecuteServiceCallAsync(() => _usersService.UpdateUserAsync(id, new UpdateUserRequest { IsActive = isActive }));
 
         if (!result.Success)
         {
@@ -75,7 +75,7 @@ public class UserManagementController : Controller
 
     private async Task<UsersIndexViewModel> BuildIndexViewModelAsync()
     {
-        var result = await _usersService.GetAllUsersAsync();
+        var result = await ExecuteServiceCallAsync(() => _usersService.GetAllUsersAsync());
 
         var viewModel = new UsersIndexViewModel();
 

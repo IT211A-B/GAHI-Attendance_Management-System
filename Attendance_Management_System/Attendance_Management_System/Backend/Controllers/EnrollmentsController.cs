@@ -1,5 +1,6 @@
-using System.Security.Claims;
+﻿using System.Security.Claims;
 using Attendance_Management_System.Backend.DTOs.Requests;
+using Attendance_Management_System.Backend.DTOs.Responses;
 using Attendance_Management_System.Backend.Helpers;
 using Attendance_Management_System.Backend.Interfaces.Services;
 using Attendance_Management_System.Backend.ViewModels.Enrollments;
@@ -10,7 +11,7 @@ namespace Attendance_Management_System.Backend.Controllers;
 
 [Authorize]
 [Route("enrollments")]
-public class EnrollmentsController : Controller
+public class EnrollmentsController : AppControllerBase
 {
     private const int DefaultPageSize = 20;
 
@@ -91,12 +92,12 @@ public class EnrollmentsController : Controller
             return View(nameof(Index), viewModel);
         }
 
-        var result = await _enrollmentService.CreateEnrollmentAsync(new CreateEnrollmentRequest
+        var result = await ExecuteServiceCallAsync(() => _enrollmentService.CreateEnrollmentAsync(new CreateEnrollmentRequest
         {
             CourseId = form.CourseId,
             YearLevel = form.YearLevel,
             AcademicYearId = form.AcademicYearId
-        }, userId.Value);
+        }, userId.Value));
 
         if (!result.Success)
         {
@@ -123,10 +124,10 @@ public class EnrollmentsController : Controller
             return Challenge();
         }
 
-        var result = await _enrollmentService.UpdateEnrollmentStatusAsync(id, new UpdateEnrollmentStatusRequest
+        var result = await ExecuteServiceCallAsync(() => _enrollmentService.UpdateEnrollmentStatusAsync(id, new UpdateEnrollmentStatusRequest
         {
             Status = "approved"
-        }, adminId.Value);
+        }, adminId.Value));
 
         if (!result.Success)
         {
@@ -162,11 +163,11 @@ public class EnrollmentsController : Controller
             return Challenge();
         }
 
-        var result = await _enrollmentService.UpdateEnrollmentStatusAsync(id, new UpdateEnrollmentStatusRequest
+        var result = await ExecuteServiceCallAsync(() => _enrollmentService.UpdateEnrollmentStatusAsync(id, new UpdateEnrollmentStatusRequest
         {
             Status = "rejected",
             RejectionReason = form.RejectionReason.Trim()
-        }, adminId.Value);
+        }, adminId.Value));
 
         if (!result.Success)
         {
@@ -202,11 +203,11 @@ public class EnrollmentsController : Controller
             return Challenge();
         }
 
-        var result = await _enrollmentService.ReassignSectionAsync(id, new ReassignSectionRequest
+        var result = await ExecuteServiceCallAsync(() => _enrollmentService.ReassignSectionAsync(id, new ReassignSectionRequest
         {
             NewSectionId = form.NewSectionId,
             Reason = string.IsNullOrWhiteSpace(form.Reason) ? null : form.Reason.Trim()
-        }, adminId.Value);
+        }, adminId.Value));
 
         if (!result.Success)
         {
@@ -256,14 +257,21 @@ public class EnrollmentsController : Controller
 
     private async Task PopulateAcademicYearOptionsAsync(EnrollmentsIndexViewModel model)
     {
-        var result = await _academicYearsService.GetAllAcademicYearsAsync();
-        if (!result.Success || result.Data is null)
+        List<AcademicYearDto> academicYears;
+
+        try
         {
-            model.ErrorMessage ??= result.Error?.Message ?? "Unable to load academic periods right now.";
+            academicYears = await _academicYearsService.GetAllAcademicYearsAsync();
+        }
+        catch (Exception ex)
+        {
+            model.ErrorMessage ??= string.IsNullOrWhiteSpace(ex.Message)
+                ? "Unable to load academic periods right now."
+                : ex.Message;
             return;
         }
 
-        model.AcademicYears = result.Data
+        model.AcademicYears = academicYears
             .OrderByDescending(y => y.StartDate)
             .Select(year => new EnrollmentOptionViewModel
             {
@@ -275,8 +283,8 @@ public class EnrollmentsController : Controller
         if (model.IsStudent)
         {
             var defaultAcademicYearId = model.SelectedAcademicYearId
-                ?? result.Data.FirstOrDefault(y => y.IsActive)?.Id
-                ?? result.Data.OrderByDescending(y => y.StartDate).Select(y => (int?)y.Id).FirstOrDefault();
+                ?? academicYears.FirstOrDefault(y => y.IsActive)?.Id
+                ?? academicYears.OrderByDescending(y => y.StartDate).Select(y => (int?)y.Id).FirstOrDefault();
 
             if (defaultAcademicYearId.HasValue)
             {
@@ -287,7 +295,7 @@ public class EnrollmentsController : Controller
 
     private async Task PopulateSectionOptionsAsync(EnrollmentsIndexViewModel model)
     {
-        var result = await _sectionsService.GetAllSectionsAsync();
+        var result = await ExecuteServiceCallAsync(() => _sectionsService.GetAllSectionsAsync());
         if (!result.Success || result.Data is null)
         {
             model.ErrorMessage ??= result.Error?.Message ?? "Unable to load section options right now.";
@@ -307,14 +315,21 @@ public class EnrollmentsController : Controller
 
     private async Task PopulateCourseOptionsAsync(EnrollmentsIndexViewModel model)
     {
-        var result = await _coursesService.GetAllCoursesAsync();
-        if (!result.Success || result.Data is null)
+        List<CourseDto> courses;
+
+        try
         {
-            model.ErrorMessage ??= result.Error?.Message ?? "Unable to load course options right now.";
+            courses = await _coursesService.GetAllCoursesAsync();
+        }
+        catch (Exception ex)
+        {
+            model.ErrorMessage ??= string.IsNullOrWhiteSpace(ex.Message)
+                ? "Unable to load course options right now."
+                : ex.Message;
             return;
         }
 
-        model.Courses = result.Data
+        model.Courses = courses
             .OrderBy(c => c.Name)
             .Select(course => new EnrollmentOptionViewModel
             {
@@ -332,18 +347,26 @@ public class EnrollmentsController : Controller
 
     private async Task PopulateAdminDataAsync(EnrollmentsIndexViewModel model)
     {
-        var result = await _enrollmentService.GetAllEnrollmentsAsync(
+        var result = await ExecuteServiceCallAsync(() => _enrollmentService.GetAllEnrollmentsAsync(
             model.SelectedStatus,
             model.SelectedAcademicYearId,
             model.Page,
-            model.PageSize);
+            model.PageSize));
 
-        model.TotalCount = result.TotalCount;
-        model.PendingCount = result.PendingCount;
-        model.ApprovedCount = result.ApprovedCount;
-        model.RejectedCount = result.RejectedCount;
+        if (!result.Success || result.Data is null)
+        {
+            model.ErrorMessage ??= result.Error?.Message ?? "Unable to load enrollments right now.";
+            return;
+        }
 
-        model.Enrollments = result.Enrollments
+        var list = result.Data;
+
+        model.TotalCount = list.TotalCount;
+        model.PendingCount = list.PendingCount;
+        model.ApprovedCount = list.ApprovedCount;
+        model.RejectedCount = list.RejectedCount;
+
+        model.Enrollments = list.Enrollments
             .OrderByDescending(enrollment => enrollment.CreatedAt)
             .Select(enrollment => new EnrollmentListItemViewModel
             {
@@ -376,7 +399,7 @@ public class EnrollmentsController : Controller
             return;
         }
 
-        var profileResult = await _studentsService.GetMyProfileAsync(userId.Value);
+        var profileResult = await ExecuteServiceCallAsync(() => _studentsService.GetMyProfileAsync(userId.Value));
         if (!profileResult.Success || profileResult.Data is null)
         {
             model.ErrorMessage ??= profileResult.Error?.Message ?? "Unable to load student profile right now.";
@@ -498,3 +521,4 @@ public class EnrollmentsController : Controller
         return int.TryParse(userIdClaim, out var userId) ? userId : null;
     }
 }
+

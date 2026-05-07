@@ -1,6 +1,5 @@
 using Attendance_Management_System.Backend.Configuration;
 using Attendance_Management_System.Backend.Constants;
-using Attendance_Management_System.Backend.DTOs.Responses;
 using Attendance_Management_System.Backend.Entities;
 using Attendance_Management_System.Backend.Interfaces.Repositories;
 using Attendance_Management_System.Backend.Interfaces.Services;
@@ -12,6 +11,7 @@ using System.Globalization;
 using System.Security.Claims;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
@@ -169,16 +169,20 @@ public static class DependencyInjection
 
                 if (ShouldReturnJsonRateLimitResponse(context.HttpContext.Request))
                 {
-                    var details = retryAfterSeconds > 0
-                        ? new { retryAfterSeconds }
-                        : null;
+                    var payload = new ProblemDetails
+                    {
+                        Type = "https://httpstatuses.com/429",
+                        Title = "Too many requests",
+                        Detail = "Too many requests. Please try again later.",
+                        Status = StatusCodes.Status429TooManyRequests
+                    };
 
-                    var payload = ApiResponse<object>.ErrorResponse(
-                        ErrorCodes.TooManyRequests,
-                        "Too many requests. Please try again later.",
-                        details);
+                    if (retryAfterSeconds > 0)
+                    {
+                        payload.Extensions["retryAfterSeconds"] = retryAfterSeconds;
+                    }
 
-                    context.HttpContext.Response.ContentType = "application/json";
+                    context.HttpContext.Response.ContentType = "application/problem+json";
                     await context.HttpContext.Response.WriteAsJsonAsync(payload, cancellationToken);
                     return;
                 }

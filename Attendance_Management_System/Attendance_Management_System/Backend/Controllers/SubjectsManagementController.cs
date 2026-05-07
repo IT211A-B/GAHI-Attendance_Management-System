@@ -1,4 +1,5 @@
-using Attendance_Management_System.Backend.DTOs.Requests;
+﻿using Attendance_Management_System.Backend.DTOs.Requests;
+using Attendance_Management_System.Backend.DTOs.Responses;
 using Attendance_Management_System.Backend.Interfaces.Services;
 using Attendance_Management_System.Backend.ViewModels.Subjects;
 using Microsoft.AspNetCore.Authorization;
@@ -8,7 +9,7 @@ namespace Attendance_Management_System.Backend.Controllers;
 
 [Authorize(Policy = "AdminOrTeacher")]
 [Route("subjects")]
-public class SubjectsManagementController : Controller
+public class SubjectsManagementController : AppControllerBase
 {
     private readonly ISubjectsService _subjectsService;
     private readonly ICoursesService _coursesService;
@@ -39,13 +40,13 @@ public class SubjectsManagementController : Controller
             return View(nameof(Index), viewModel);
         }
 
-        var result = await _subjectsService.CreateSubjectAsync(new CreateSubjectRequest
+        var result = await ExecuteServiceCallAsync(() => _subjectsService.CreateSubjectAsync(new CreateSubjectRequest
         {
             Name = form.Name.Trim(),
             Code = form.Code.Trim(),
             CourseId = form.CourseId,
             Units = form.Units
-        });
+        }));
 
         if (!result.Success)
         {
@@ -68,13 +69,13 @@ public class SubjectsManagementController : Controller
             return RedirectToAction(nameof(Index));
         }
 
-        var result = await _subjectsService.UpdateSubjectAsync(id, new UpdateSubjectRequest
+        var result = await ExecuteServiceCallAsync(() => _subjectsService.UpdateSubjectAsync(id, new UpdateSubjectRequest
         {
             Name = form.Name.Trim(),
             Code = form.Code.Trim(),
             CourseId = form.CourseId,
             Units = form.Units
-        });
+        }));
 
         if (!result.Success)
         {
@@ -91,7 +92,7 @@ public class SubjectsManagementController : Controller
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Delete(int id, int? replacementSubjectId)
     {
-        var result = await _subjectsService.DeleteSubjectAsync(id, replacementSubjectId);
+        var result = await ExecuteServiceCallAsync(() => _subjectsService.DeleteSubjectAsync(id, replacementSubjectId));
 
         if (!result.Success)
         {
@@ -106,15 +107,20 @@ public class SubjectsManagementController : Controller
     private async Task<SubjectsIndexViewModel> BuildIndexViewModelAsync()
     {
         var viewModel = new SubjectsIndexViewModel();
-        var coursesResult = await _coursesService.GetAllCoursesAsync();
 
-        if (!coursesResult.Success || coursesResult.Data is null)
+        List<CourseDto> courses;
+
+        try
         {
-            viewModel.ErrorMessage = coursesResult.Error?.Message ?? "Unable to load courses right now.";
+            courses = await _coursesService.GetAllCoursesAsync();
+        }
+        catch (Exception ex)
+        {
+            viewModel.ErrorMessage = string.IsNullOrWhiteSpace(ex.Message) ? "Unable to load courses right now." : ex.Message;
             return viewModel;
         }
 
-        viewModel.Courses = coursesResult.Data
+        viewModel.Courses = courses
             .OrderBy(course => course.Name)
             .Select(course => new SubjectCourseOptionViewModel
             {
@@ -127,7 +133,7 @@ public class SubjectsManagementController : Controller
             .GroupBy(course => course.Id)
             .ToDictionary(group => group.Key, group => group.First().Label);
 
-        var result = await _subjectsService.GetAllSubjectsAsync();
+        var result = await ExecuteServiceCallAsync(() => _subjectsService.GetAllSubjectsAsync());
 
         if (!result.Success || result.Data is null)
         {
@@ -162,3 +168,4 @@ public class SubjectsManagementController : Controller
             : $"{code.Trim()} - {courseName}";
     }
 }
+

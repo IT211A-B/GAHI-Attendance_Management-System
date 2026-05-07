@@ -36,16 +36,18 @@ public class AcademicPeriodsController : Controller
             return View(nameof(Index), viewModel);
         }
 
-        var result = await _academicYearsService.CreateAcademicYearAsync(new CreateAcademicYearRequest
+        try
         {
-            YearLabel = form.YearLabel.Trim(),
-            StartDate = form.StartDate,
-            EndDate = form.EndDate
-        });
-
-        if (!result.Success)
+            await _academicYearsService.CreateAcademicYearAsync(new CreateAcademicYearRequest
+            {
+                YearLabel = form.YearLabel.Trim(),
+                StartDate = form.StartDate,
+                EndDate = form.EndDate
+            });
+        }
+        catch (Exception ex)
         {
-            ModelState.AddModelError("CreateForm.YearLabel", result.Error?.Message ?? "Unable to create academic period right now.");
+            ModelState.AddModelError("CreateForm.YearLabel", string.IsNullOrWhiteSpace(ex.Message) ? "Unable to create academic period right now." : ex.Message);
             return View(nameof(Index), viewModel);
         }
 
@@ -63,16 +65,18 @@ public class AcademicPeriodsController : Controller
             return RedirectToAction(nameof(Index));
         }
 
-        var result = await _academicYearsService.UpdateAcademicYearAsync(id, new UpdateAcademicYearRequest
+        try
         {
-            YearLabel = form.YearLabel.Trim(),
-            StartDate = form.StartDate,
-            EndDate = form.EndDate
-        });
-
-        if (!result.Success)
+            await _academicYearsService.UpdateAcademicYearAsync(id, new UpdateAcademicYearRequest
+            {
+                YearLabel = form.YearLabel.Trim(),
+                StartDate = form.StartDate,
+                EndDate = form.EndDate
+            });
+        }
+        catch (Exception ex)
         {
-            TempData["AcademicPeriodsError"] = result.Error?.Message ?? "Unable to update academic period right now.";
+            TempData["AcademicPeriodsError"] = string.IsNullOrWhiteSpace(ex.Message) ? "Unable to update academic period right now." : ex.Message;
             return RedirectToAction(nameof(Index));
         }
 
@@ -84,11 +88,13 @@ public class AcademicPeriodsController : Controller
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Delete(int id)
     {
-        var result = await _academicYearsService.DeleteAcademicYearAsync(id);
-
-        if (!result.Success)
+        try
         {
-            TempData["AcademicPeriodsError"] = result.Error?.Message ?? "Unable to delete academic period right now.";
+            await _academicYearsService.DeleteAcademicYearAsync(id);
+        }
+        catch (Exception ex)
+        {
+            TempData["AcademicPeriodsError"] = string.IsNullOrWhiteSpace(ex.Message) ? "Unable to delete academic period right now." : ex.Message;
             return RedirectToAction(nameof(Index));
         }
 
@@ -100,11 +106,13 @@ public class AcademicPeriodsController : Controller
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Activate(int id)
     {
-        var result = await _academicYearsService.ActivateAcademicYearAsync(id);
-
-        if (!result.Success)
+        try
         {
-            TempData["AcademicPeriodsError"] = result.Error?.Message ?? "Unable to activate academic period right now.";
+            await _academicYearsService.ActivateAcademicYearAsync(id);
+        }
+        catch (Exception ex)
+        {
+            TempData["AcademicPeriodsError"] = string.IsNullOrWhiteSpace(ex.Message) ? "Unable to activate academic period right now." : ex.Message;
             return RedirectToAction(nameof(Index));
         }
 
@@ -114,26 +122,28 @@ public class AcademicPeriodsController : Controller
 
     private async Task<AcademicPeriodsIndexViewModel> BuildIndexViewModelAsync()
     {
-        var result = await _academicYearsService.GetAllAcademicYearsAsync();
         var viewModel = new AcademicPeriodsIndexViewModel();
 
-        if (!result.Success || result.Data is null)
+        try
         {
-            viewModel.ErrorMessage = result.Error?.Message ?? "Unable to load academic periods right now.";
-            return viewModel;
-        }
+            var periods = await _academicYearsService.GetAllAcademicYearsAsync();
 
-        viewModel.Periods = result.Data
-            .OrderByDescending(p => p.StartDate)
-            .Select(period => new AcademicPeriodListItemViewModel
-            {
-                Id = period.Id,
-                YearLabel = period.YearLabel,
-                StartDate = period.StartDate.ToString("yyyy-MM-dd"),
-                EndDate = period.EndDate.ToString("yyyy-MM-dd"),
-                IsActive = period.IsActive
-            })
-            .ToList();
+            viewModel.Periods = periods
+                .OrderByDescending(p => p.StartDate)
+                .Select(period => new AcademicPeriodListItemViewModel
+                {
+                    Id = period.Id,
+                    YearLabel = period.YearLabel,
+                    StartDate = period.StartDate.ToString("yyyy-MM-dd"),
+                    EndDate = period.EndDate.ToString("yyyy-MM-dd"),
+                    IsActive = period.IsActive
+                })
+                .ToList();
+        }
+        catch (Exception ex)
+        {
+            viewModel.ErrorMessage = string.IsNullOrWhiteSpace(ex.Message) ? "Unable to load academic periods right now." : ex.Message;
+        }
 
         return viewModel;
     }

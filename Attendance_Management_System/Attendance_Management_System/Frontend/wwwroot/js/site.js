@@ -1331,19 +1331,30 @@
 			.then(function (response) {
 				return response.text().then(function (rawText) {
 					var payload = parseJsonSafe(rawText);
-					if (response.ok && payload && payload.success === true) {
+					if (response.ok) {
+						var data = payload;
+						if (payload && payload.success === true && Object.prototype.hasOwnProperty.call(payload, "data")) {
+							data = payload.data;
+						}
+
 						return {
 							ok: true,
-							data: payload.data,
+							data: data,
 							status: response.status,
 							payload: payload
 						};
 					}
 
-					var errorCode = payload && payload.error && payload.error.code ? payload.error.code : "BAD_REQUEST";
+					var errorCode = payload && payload.error && payload.error.code
+						? payload.error.code
+						: "HTTP_" + String(response.status || 400);
 					var message = payload && payload.error && payload.error.message
 						? payload.error.message
-						: "Request failed.";
+						: (payload && payload.detail
+							? payload.detail
+							: (payload && payload.title
+								? payload.title
+								: "Request failed."));
 
 					return {
 						ok: false,

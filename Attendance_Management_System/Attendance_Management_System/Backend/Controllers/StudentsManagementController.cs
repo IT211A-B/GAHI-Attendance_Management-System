@@ -1,4 +1,4 @@
-using System.Security.Claims;
+﻿using System.Security.Claims;
 using Attendance_Management_System.Backend.Interfaces.Services;
 using Attendance_Management_System.Backend.ViewModels.Students;
 using Microsoft.AspNetCore.Authorization;
@@ -9,7 +9,7 @@ namespace Attendance_Management_System.Backend.Controllers;
 [Authorize(Policy = "AdminOrTeacher")]
 [Route("students")]
 [Route("student")]
-public class StudentsManagementController : Controller
+public class StudentsManagementController : AppControllerBase
 {
     private readonly ISectionsService _sectionsService;
     private readonly IStudentsService _studentsService;
@@ -38,8 +38,8 @@ public class StudentsManagementController : Controller
         };
 
         var sectionsResult = isTeacher
-            ? await _sectionsService.GetSectionsByTeacherUserIdAsync(userId)
-            : await _sectionsService.GetAllSectionsAsync();
+            ? await ExecuteServiceCallAsync(() => _sectionsService.GetSectionsByTeacherUserIdAsync(userId))
+            : await ExecuteServiceCallAsync(() => _sectionsService.GetAllSectionsAsync());
 
         if (!sectionsResult.Success || sectionsResult.Data is null)
         {
@@ -79,7 +79,7 @@ public class StudentsManagementController : Controller
 
         viewModel.IsCurrentTeacherAssignedToSelectedSection = isTeacher;
 
-        var studentsResult = await _studentsService.GetStudentsBySectionAsync(sectionId.Value, userId, role);
+        var studentsResult = await ExecuteServiceCallAsync(() => _studentsService.GetStudentsBySectionAsync(sectionId.Value, userId, role));
 
         if (!studentsResult.Success || studentsResult.Data is null)
         {
@@ -117,7 +117,7 @@ public class StudentsManagementController : Controller
             return Challenge();
         }
 
-        var teacherResult = await _teachersService.GetTeacherByUserIdAsync(userId);
+        var teacherResult = await ExecuteServiceCallAsync(() => _teachersService.GetTeacherByUserIdAsync(userId));
         if (!teacherResult.Success || teacherResult.Data is null)
         {
             TempData["StudentsError"] = teacherResult.Error?.Message ?? "Teacher profile not found for the current account.";
@@ -125,11 +125,11 @@ public class StudentsManagementController : Controller
         }
 
         // Self-unassign also removes schedules owned by this teacher in the section.
-        var removeResult = await _sectionsService.RemoveTeacherFromSectionAsync(
+        var removeResult = await ExecuteServiceCallAsync(() => _sectionsService.RemoveTeacherFromSectionAsync(
             id,
             teacherResult.Data.Id,
             isAdmin: true,
-            removeOwnedSchedules: true);
+            removeOwnedSchedules: true));
         if (!removeResult.Success)
         {
             TempData["StudentsError"] = removeResult.Error?.Message ?? "Unable to unassign from this section right now.";
@@ -154,3 +154,4 @@ public class StudentsManagementController : Controller
         return true;
     }
 }
+

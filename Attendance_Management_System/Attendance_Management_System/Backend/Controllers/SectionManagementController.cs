@@ -1,4 +1,4 @@
-using System.Security.Claims;
+﻿using System.Security.Claims;
 using Attendance_Management_System.Backend.DTOs.Requests;
 using Attendance_Management_System.Backend.DTOs.Responses;
 using Attendance_Management_System.Backend.Helpers;
@@ -12,7 +12,7 @@ namespace Attendance_Management_System.Backend.Controllers;
 
 [Authorize(Policy = "AdminOrTeacher")]
 [Route("sections")]
-public class SectionManagementController : Controller
+public class SectionManagementController : AppControllerBase
 {
     private readonly ISectionsService _sectionsService;
     private readonly ISchedulesService _schedulesService;
@@ -93,7 +93,7 @@ public class SectionManagementController : Controller
             return View(nameof(Index), viewModel);
         }
 
-        var result = await _sectionsService.CreateSectionAsync(new CreateSectionRequest
+        var result = await ExecuteServiceCallAsync(() => _sectionsService.CreateSectionAsync(new CreateSectionRequest
         {
             Name = form.Name.Trim(),
             YearLevel = form.YearLevel,
@@ -101,7 +101,7 @@ public class SectionManagementController : Controller
             CourseId = form.CourseId,
             SubjectId = form.SubjectId,
             ClassroomId = form.ClassroomId
-        });
+        }));
 
         if (!result.Success)
         {
@@ -124,11 +124,11 @@ public class SectionManagementController : Controller
             return RedirectToAction(nameof(Index));
         }
 
-        var result = await _sectionsService.UpdateSectionAsync(id, new UpdateSectionRequest
+        var result = await ExecuteServiceCallAsync(() => _sectionsService.UpdateSectionAsync(id, new UpdateSectionRequest
         {
             Name = form.Name.Trim(),
             YearLevel = form.YearLevel
-        });
+        }));
 
         if (!result.Success)
         {
@@ -145,7 +145,7 @@ public class SectionManagementController : Controller
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Delete(int id)
     {
-        var result = await _sectionsService.DeleteSectionAsync(id);
+        var result = await ExecuteServiceCallAsync(() => _sectionsService.DeleteSectionAsync(id));
 
         if (!result.Success)
         {
@@ -168,10 +168,10 @@ public class SectionManagementController : Controller
             return RedirectToAction(nameof(Index));
         }
 
-        var result = await _sectionsService.AssignTeacherToSectionAsync(id, new AssignTeacherRequest
+        var result = await ExecuteServiceCallAsync(() => _sectionsService.AssignTeacherToSectionAsync(id, new AssignTeacherRequest
         {
             TeacherId = form.TeacherId
-        });
+        }));
 
         if (!result.Success)
         {
@@ -203,7 +203,7 @@ public class SectionManagementController : Controller
 
         var teacherId = teacherContext.Context.TeacherId.Value;
 
-        var sectionTeachersResult = await _sectionsService.GetSectionTeachersAsync(id);
+        var sectionTeachersResult = await ExecuteServiceCallAsync(() => _sectionsService.GetSectionTeachersAsync(id));
         if (sectionTeachersResult.Success && sectionTeachersResult.Data is not null
             && sectionTeachersResult.Data.Any(assignment => assignment.TeacherId == teacherId))
         {
@@ -211,10 +211,10 @@ public class SectionManagementController : Controller
             return RedirectToAction(nameof(Index), new { sectionId = selectedSectionId ?? id });
         }
 
-        var assignResult = await _sectionsService.AssignTeacherToSectionAsync(id, new AssignTeacherRequest
+        var assignResult = await ExecuteServiceCallAsync(() => _sectionsService.AssignTeacherToSectionAsync(id, new AssignTeacherRequest
         {
             TeacherId = teacherId
-        });
+        }));
 
         if (!assignResult.Success)
         {
@@ -246,7 +246,7 @@ public class SectionManagementController : Controller
 
         var teacherId = teacherContext.Context.TeacherId.Value;
 
-        var sectionTeachersResult = await _sectionsService.GetSectionTeachersAsync(id);
+        var sectionTeachersResult = await ExecuteServiceCallAsync(() => _sectionsService.GetSectionTeachersAsync(id));
         if (!sectionTeachersResult.Success || sectionTeachersResult.Data is null)
         {
             TempData["SectionsError"] = sectionTeachersResult.Error?.Message ?? "Unable to load section teacher assignments right now.";
@@ -260,11 +260,11 @@ public class SectionManagementController : Controller
         }
 
         // Self-unassign also removes schedules owned by this teacher in the section.
-        var removeResult = await _sectionsService.RemoveTeacherFromSectionAsync(
+        var removeResult = await ExecuteServiceCallAsync(() => _sectionsService.RemoveTeacherFromSectionAsync(
             id,
             teacherId,
             isAdmin: true,
-            removeOwnedSchedules: true);
+            removeOwnedSchedules: true));
         if (!removeResult.Success)
         {
             TempData["SectionsError"] = removeResult.Error?.Message ?? "Unable to unassign from this section right now.";
@@ -283,7 +283,7 @@ public class SectionManagementController : Controller
         var role = User.FindFirstValue(ClaimTypes.Role) ?? string.Empty;
         var isAdmin = role == "admin";
 
-        var result = await _sectionsService.RemoveTeacherFromSectionAsync(id, teacherId, isAdmin);
+        var result = await ExecuteServiceCallAsync(() => _sectionsService.RemoveTeacherFromSectionAsync(id, teacherId, isAdmin));
 
         if (!result.Success)
         {
@@ -319,7 +319,7 @@ public class SectionManagementController : Controller
             return RedirectToAction(nameof(Index), new { sectionId = selectedSectionId ?? sectionId });
         }
 
-        var result = await _schedulesService.CreateScheduleAsync(new CreateScheduleRequest
+        var result = await ExecuteServiceCallAsync(() => _schedulesService.CreateScheduleAsync(new CreateScheduleRequest
         {
             SectionId = sectionId,
             SubjectId = subjectId,
@@ -327,7 +327,7 @@ public class SectionManagementController : Controller
             StartTime = startTime,
             EndTime = endTime,
             EffectiveFrom = DateOnly.FromDateTime(DateTime.Today)
-        }, context.UserId);
+        }, context.UserId));
 
         if (!result.Success)
         {
@@ -375,7 +375,7 @@ public class SectionManagementController : Controller
             return RedirectToAction(nameof(Index), new { sectionId = selectedSectionId ?? sectionId });
         }
 
-        var result = await _schedulesService.CreateScheduleRangeAsync(new CreateScheduleRangeRequest
+        var result = await ExecuteServiceCallAsync(() => _schedulesService.CreateScheduleRangeAsync(new CreateScheduleRangeRequest
         {
             SectionId = sectionId,
             SubjectId = subjectId,
@@ -383,7 +383,7 @@ public class SectionManagementController : Controller
             StartTime = startTime,
             EndTime = endTime,
             EffectiveFrom = DateOnly.FromDateTime(DateTime.Today)
-        }, context.UserId);
+        }, context.UserId));
 
         if (!result.Success)
         {
@@ -422,13 +422,13 @@ public class SectionManagementController : Controller
             return RedirectToAction(nameof(Index), new { sectionId = selectedSectionId });
         }
 
-        var result = await _schedulesService.UpdateScheduleAsync(scheduleId, new UpdateScheduleRequest
+        var result = await ExecuteServiceCallAsync(() => _schedulesService.UpdateScheduleAsync(scheduleId, new UpdateScheduleRequest
         {
             SubjectId = subjectId,
             DayOfWeek = dayOfWeek,
             StartTime = startTime,
             EndTime = endTime
-        }, context.UserId);
+        }, context.UserId));
 
         if (!result.Success)
         {
@@ -451,7 +451,7 @@ public class SectionManagementController : Controller
             return Challenge();
         }
 
-        var result = await _schedulesService.DeleteScheduleAsync(scheduleId, context.UserId, isAdmin: false);
+        var result = await ExecuteServiceCallAsync(() => _schedulesService.DeleteScheduleAsync(scheduleId, context.UserId, isAdmin: false));
 
         if (!result.Success)
         {
@@ -497,7 +497,7 @@ public class SectionManagementController : Controller
             });
         }
 
-        var result = await _attendanceService.MarkAttendanceAsync(new MarkAttendanceRequest
+        var result = await ExecuteServiceCallAsync(() => _attendanceService.MarkAttendanceAsync(new MarkAttendanceRequest
         {
             SectionId = form.SectionId,
             ScheduleId = form.ScheduleId,
@@ -505,7 +505,7 @@ public class SectionManagementController : Controller
             Date = form.Date,
             TimeIn = form.TimeIn,
             Remarks = NormalizeOptional(form.Remarks)
-        }, teacherContextResult.Context);
+        }, teacherContextResult.Context));
 
         if (!result.Success)
         {
@@ -534,7 +534,7 @@ public class SectionManagementController : Controller
         int? requestedScheduleId,
         DateOnly? requestedAttendanceDate)
     {
-        var result = await _sectionsService.GetAllSectionsAsync();
+        var result = await ExecuteServiceCallAsync(() => _sectionsService.GetAllSectionsAsync());
 
         var viewModel = new SectionsIndexViewModel
         {
@@ -598,7 +598,7 @@ public class SectionManagementController : Controller
         await PopulateTimetableSubjectOptionsAsync(viewModel, selectedSection);
         await PopulateTeacherAssignmentStateAsync(viewModel, currentUserId, role, selectedSectionId);
 
-        var timetableResult = await _sectionsService.GetTimetableAsync(selectedSectionId, currentUserId);
+        var timetableResult = await ExecuteServiceCallAsync(() => _sectionsService.GetTimetableAsync(selectedSectionId, currentUserId));
         if (!timetableResult.Success || timetableResult.Data is null)
         {
             viewModel.TimetableErrorMessage = timetableResult.Error?.Message ?? "Unable to load timetable right now.";
@@ -649,7 +649,7 @@ public class SectionManagementController : Controller
         int selectedSectionId,
         int? requestedScheduleId)
     {
-        var schedulesResult = await _schedulesService.GetSchedulesAsync(currentUserId, role);
+        var schedulesResult = await ExecuteServiceCallAsync(() => _schedulesService.GetSchedulesAsync(currentUserId, role));
         if (!schedulesResult.Success || schedulesResult.Data is null)
         {
             viewModel.AttendanceErrorMessage = schedulesResult.Error?.Message ?? "Unable to load schedules for attendance.";
@@ -692,19 +692,19 @@ public class SectionManagementController : Controller
             return;
         }
 
-        var studentsResult = await _studentsService.GetStudentsBySectionAsync(selectedSectionId, currentUserId, role);
+        var studentsResult = await ExecuteServiceCallAsync(() => _studentsService.GetStudentsBySectionAsync(selectedSectionId, currentUserId, role));
         if (!studentsResult.Success || studentsResult.Data is null)
         {
             viewModel.AttendanceErrorMessage = studentsResult.Error?.Message ?? "Unable to load students for the selected section.";
             return;
         }
 
-        var summaryResult = await _attendanceService.GetSectionAttendanceAsync(
+        var summaryResult = await ExecuteServiceCallAsync(() => _attendanceService.GetSectionAttendanceAsync(
             selectedSectionId,
             viewModel.SelectedAttendanceDate,
             selectedScheduleId.Value,
             currentUserId,
-            role);
+            role));
 
         if (!summaryResult.Success || summaryResult.Data is null)
         {
@@ -779,20 +779,29 @@ public class SectionManagementController : Controller
 
         // These lookups share a request-scoped DbContext under the hood.
         // Run them sequentially to avoid concurrent DbContext operations.
-        var academicPeriodsResult = await _academicYearsService.GetAllAcademicYearsAsync();
-        var coursesResult = await _coursesService.GetAllCoursesAsync();
-        var subjectsResult = await _subjectsService.GetAllSubjectsAsync();
-        var classroomsResult = await _classroomsService.GetAllClassroomsAsync();
+        var subjectsResult = await ExecuteServiceCallAsync(() => _subjectsService.GetAllSubjectsAsync());
+        List<AcademicYearDto>? academicPeriods = null;
+        List<CourseDto>? courses = null;
+        List<ClassroomDto>? classrooms = null;
 
         var lookupLoadFailures = new List<string>();
 
-        if (!academicPeriodsResult.Success || academicPeriodsResult.Data is null)
+        try
+        {
+            academicPeriods = await _academicYearsService.GetAllAcademicYearsAsync();
+        }
+        catch
         {
             lookupLoadFailures.Add("academic periods");
         }
+
+        if (academicPeriods is null)
+        {
+            // Added to lookup failures in catch block.
+        }
         else
         {
-            viewModel.AcademicPeriods = academicPeriodsResult.Data
+            viewModel.AcademicPeriods = academicPeriods
                 .OrderByDescending(period => period.StartDate)
                 .Select(period => new SectionReferenceOptionViewModel
                 {
@@ -802,13 +811,22 @@ public class SectionManagementController : Controller
                 .ToList();
         }
 
-        if (!coursesResult.Success || coursesResult.Data is null)
+        try
+        {
+            courses = await _coursesService.GetAllCoursesAsync();
+        }
+        catch
         {
             lookupLoadFailures.Add("courses");
         }
+
+        if (courses is null)
+        {
+            // Added to lookup failures in catch block.
+        }
         else
         {
-            viewModel.Courses = coursesResult.Data
+            viewModel.Courses = courses
                 .OrderBy(course => course.Name)
                 .Select(course => new SectionReferenceOptionViewModel
                 {
@@ -854,13 +872,22 @@ public class SectionManagementController : Controller
                 .ToList();
         }
 
-        if (!classroomsResult.Success || classroomsResult.Data is null)
+        try
+        {
+            classrooms = await _classroomsService.GetAllClassroomsAsync();
+        }
+        catch
         {
             lookupLoadFailures.Add("classrooms");
         }
+
+        if (classrooms is null)
+        {
+            // Added to lookup failures in catch block.
+        }
         else
         {
-            viewModel.Classrooms = classroomsResult.Data
+            viewModel.Classrooms = classrooms
                 .OrderBy(classroom => classroom.Name)
                 .Select(classroom => new SectionReferenceOptionViewModel
                 {
@@ -889,7 +916,7 @@ public class SectionManagementController : Controller
             return;
         }
 
-        var subjectsResult = await _subjectsService.GetAllSubjectsAsync();
+        var subjectsResult = await ExecuteServiceCallAsync(() => _subjectsService.GetAllSubjectsAsync());
         if (!subjectsResult.Success || subjectsResult.Data is null)
         {
             viewModel.TimetableSubjectsErrorMessage = subjectsResult.Error?.Message ?? "Unable to load timetable subject options right now.";
@@ -915,7 +942,7 @@ public class SectionManagementController : Controller
             return;
         }
 
-        var teachersResult = await _teachersService.GetAllTeachersAsync();
+        var teachersResult = await ExecuteServiceCallAsync(() => _teachersService.GetAllTeachersAsync());
         if (!teachersResult.Success || teachersResult.Data is null)
         {
             return;
@@ -930,7 +957,7 @@ public class SectionManagementController : Controller
             return;
         }
 
-        var sectionTeachersResult = await _sectionsService.GetSectionTeachersAsync(selectedSectionId);
+        var sectionTeachersResult = await ExecuteServiceCallAsync(() => _sectionsService.GetSectionTeachersAsync(selectedSectionId));
         if (!sectionTeachersResult.Success || sectionTeachersResult.Data is null)
         {
             return;
@@ -947,7 +974,7 @@ public class SectionManagementController : Controller
             return;
         }
 
-        var teachersResult = await _teachersService.GetAllTeachersWithSectionsAsync();
+        var teachersResult = await ExecuteServiceCallAsync(() => _teachersService.GetAllTeachersWithSectionsAsync());
         if (!teachersResult.Success || teachersResult.Data is null)
         {
             viewModel.TeacherOptionsErrorMessage = teachersResult.Error?.Message ?? "Unable to load teacher options right now.";
@@ -1050,13 +1077,13 @@ public class SectionManagementController : Controller
             return (false, "Select a subject before adding a timetable slot.");
         }
 
-        var sectionResult = await _sectionsService.GetSectionByIdAsync(sectionId);
+        var sectionResult = await ExecuteServiceCallAsync(() => _sectionsService.GetSectionByIdAsync(sectionId));
         if (!sectionResult.Success || sectionResult.Data is null)
         {
             return (false, sectionResult.Error?.Message ?? "Unable to load the selected section.");
         }
 
-        var subjectResult = await _subjectsService.GetSubjectByIdAsync(subjectId);
+        var subjectResult = await ExecuteServiceCallAsync(() => _subjectsService.GetSubjectByIdAsync(subjectId));
         if (!subjectResult.Success || subjectResult.Data is null)
         {
             return (false, subjectResult.Error?.Message ?? "Selected subject was not found.");
@@ -1073,7 +1100,7 @@ public class SectionManagementController : Controller
             return (true, new TeacherContext { UserId = userId, TeacherId = null, IsAdmin = true }, null);
         }
 
-        var teachersResult = await _teachersService.GetAllTeachersAsync();
+        var teachersResult = await ExecuteServiceCallAsync(() => _teachersService.GetAllTeachersAsync());
         if (!teachersResult.Success || teachersResult.Data is null)
         {
             return (false, default, "Unable to load teacher profile.");
@@ -1199,3 +1226,4 @@ public class SectionManagementController : Controller
         public bool IsMine { get; set; }
     }
 }
+

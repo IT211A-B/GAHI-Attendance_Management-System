@@ -20,9 +20,14 @@ var builder = WebApplication.CreateBuilder(new WebApplicationOptions
 
 // Add MVC controllers with views for handling web and API requests
 builder.Services.AddControllersWithViews();
+builder.Services.AddProblemDetails();
 builder.Services.AddHttpClient("AttendanceAPI", client =>
 {
-    client.BaseAddress = new Uri(builder.Configuration["AppSettings:BaseUrl"]);
+    var baseUrl = builder.Configuration["AppSettings:BaseUrl"];
+    if (Uri.TryCreate(baseUrl, UriKind.Absolute, out var parsedBaseUrl))
+    {
+        client.BaseAddress = parsedBaseUrl;
+    }
 });
 
 // Tell Razor to resolve pages from Frontend/Views instead of root Views
@@ -56,11 +61,11 @@ builder.Services.AddHealthChecks()
 var app = builder.Build();
 
 app.UseForwardedHeaders();
+app.UseExceptionHandler();
 
 // Configure production-specific error handling and security
 if (!app.Environment.IsDevelopment())
 {
-    app.UseExceptionHandler("/Home/Error");
     app.UseHsts();
 }
 

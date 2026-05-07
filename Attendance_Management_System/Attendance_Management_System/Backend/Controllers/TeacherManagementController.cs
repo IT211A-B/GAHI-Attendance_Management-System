@@ -8,7 +8,7 @@ namespace Attendance_Management_System.Backend.Controllers;
 
 [Authorize(Policy = "AdminOnly")]
 [Route("teachers")]
-public class TeacherManagementController : Controller
+public class TeacherManagementController : AppControllerBase
 {
     private readonly IAuthService _authService;
     private readonly ITeachersService _teachersService;
@@ -66,8 +66,8 @@ public class TeacherManagementController : Controller
     public async Task<IActionResult> SetStatus(int id, bool isActive)
     {
         var result = isActive
-            ? await _teachersService.ActivateTeacherAsync(id)
-            : await _teachersService.DeactivateTeacherAsync(id);
+            ? await ExecuteServiceCallAsync(() => _teachersService.ActivateTeacherAsync(id))
+            : await ExecuteServiceCallAsync(() => _teachersService.DeactivateTeacherAsync(id));
 
         if (!result.Success)
         {
@@ -84,7 +84,7 @@ public class TeacherManagementController : Controller
 
     private async Task<TeachersIndexViewModel> BuildIndexViewModelAsync()
     {
-        var result = await _teachersService.GetAllTeachersWithSectionsAsync();
+        var result = await ExecuteServiceCallAsync(() => _teachersService.GetAllTeachersWithSectionsAsync());
 
         var viewModel = new TeachersIndexViewModel();
 
