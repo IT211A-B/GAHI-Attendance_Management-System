@@ -1,4 +1,3 @@
-using Attendance_Management_System.Backend.Constants;
 using Attendance_Management_System.Backend.DTOs.Requests;
 using Attendance_Management_System.Backend.DTOs.Responses;
 using Attendance_Management_System.Backend.Entities;
@@ -29,7 +28,7 @@ public class SchedulesService : ISchedulesService
     }
 
     // Get all schedules (teacher sees their assigned sections, admin sees all)
-    public async Task<ApiResponse<List<ScheduleDto>>> GetSchedulesAsync(int userId, string role)
+    public async Task<List<ScheduleDto>> GetSchedulesAsync(int userId, string role)
     {
         List<Schedule> schedules;
 
@@ -51,7 +50,7 @@ public class SchedulesService : ISchedulesService
             var teacherId = await GetTeacherIdByUserIdAsync(userId);
             if (teacherId == null)
             {
-                return ApiResponse<List<ScheduleDto>>.ErrorResponse(ErrorCodes.NotFound, "Teacher profile not found.");
+                throw new KeyNotFoundException("Teacher profile not found.");
             }
 
             schedules = await _context.Schedules
@@ -71,11 +70,11 @@ public class SchedulesService : ISchedulesService
         }
 
         var dtos = await BuildScheduleDtosAsync(schedules, userId);
-        return ApiResponse<List<ScheduleDto>>.SuccessResponse(dtos);
+        return dtos;
     }
 
     // Get a single schedule by ID
-    public async Task<ApiResponse<ScheduleDto>> GetScheduleByIdAsync(int id, int userId)
+    public async Task<ScheduleDto> GetScheduleByIdAsync(int id, int userId)
     {
         var schedule = await _context.Schedules
             .Include(s => s.Section)
@@ -86,27 +85,27 @@ public class SchedulesService : ISchedulesService
 
         if (schedule == null)
         {
-            return ApiResponse<ScheduleDto>.ErrorResponse(ErrorCodes.NotFound, "Schedule not found.");
+            throw new KeyNotFoundException("Schedule not found.");
         }
 
         var dto = await BuildScheduleDtoAsync(schedule, userId);
-        return ApiResponse<ScheduleDto>.SuccessResponse(dto);
+        return dto;
     }
 
     // Create a new schedule slot with conflict validation
-    public async Task<ApiResponse<ScheduleDto>> CreateScheduleAsync(CreateScheduleRequest request, int userId)
+    public async Task<ScheduleDto> CreateScheduleAsync(CreateScheduleRequest request, int userId)
     {
         // Validate time range
         if (request.EndTime <= request.StartTime)
         {
-            return ApiResponse<ScheduleDto>.ErrorResponse(ErrorCodes.ValidationError, "End time must be after start time.");
+            throw new InvalidOperationException("End time must be after start time.");
         }
 
         // Get teacher ID and validate teacher is assigned to section
         var teacherId = await GetTeacherIdByUserIdAsync(userId);
         if (teacherId == null)
         {
-            return ApiResponse<ScheduleDto>.ErrorResponse(ErrorCodes.NotFound, "Teacher profile not found.");
+            throw new KeyNotFoundException("Teacher profile not found.");
         }
 
         // Validate section exists and get classroom
@@ -116,14 +115,14 @@ public class SchedulesService : ISchedulesService
 
         if (section == null)
         {
-            return ApiResponse<ScheduleDto>.ErrorResponse(ErrorCodes.NotFound, "Section not found.");
+            throw new KeyNotFoundException("Section not found.");
         }
 
         // Validate subject exists
         var subject = await _context.Subjects.FindAsync(request.SubjectId);
         if (subject == null)
         {
-            return ApiResponse<ScheduleDto>.ErrorResponse(ErrorCodes.NotFound, "Subject not found.");
+            throw new KeyNotFoundException("Subject not found.");
         }
 
         // Run conflict checks
@@ -138,10 +137,7 @@ public class SchedulesService : ISchedulesService
         if (conflictResult.HasConflict)
         {
             var errorDetails = _conflictService.BuildConflictDetail(conflictResult);
-            return ApiResponse<ScheduleDto>.ErrorResponse(
-                conflictResult.ConflictType ?? ErrorCodes.Conflict,
-                errorDetails.Message,
-                errorDetails);
+            throw new InvalidOperationException(errorDetails.Message);
         }
 
         // Auto-assign teacher to section if not already assigned
@@ -164,16 +160,16 @@ public class SchedulesService : ISchedulesService
         await _context.SaveChangesAsync();
 
         var dto = await BuildScheduleDtoAsync(schedule, userId);
-        return ApiResponse<ScheduleDto>.SuccessResponse(dto);
+        return dto;
     }
 
     // Create multiple schedule slots for one shared time range across weekdays
-    public async Task<ApiResponse<List<ScheduleDto>>> CreateScheduleRangeAsync(CreateScheduleRangeRequest request, int userId)
+    public async Task<List<ScheduleDto>> CreateScheduleRangeAsync(CreateScheduleRangeRequest request, int userId)
     {
         // Validate time range
         if (request.EndTime <= request.StartTime)
         {
-            return ApiResponse<List<ScheduleDto>>.ErrorResponse(ErrorCodes.ValidationError, "End time must be after start time.");
+            throw new InvalidOperationException("End time must be after start time.");
         }
 
         var targetDays = request.DaysOfWeek
@@ -184,14 +180,14 @@ public class SchedulesService : ISchedulesService
 
         if (targetDays.Count == 0)
         {
-            return ApiResponse<List<ScheduleDto>>.ErrorResponse(ErrorCodes.ValidationError, "Select at least one valid day.");
+            throw new InvalidOperationException("Select at least one valid day.");
         }
 
         // Get teacher profile for ownership and conflict checks
         var teacherId = await GetTeacherIdByUserIdAsync(userId);
         if (teacherId == null)
         {
-            return ApiResponse<List<ScheduleDto>>.ErrorResponse(ErrorCodes.NotFound, "Teacher profile not found.");
+            throw new KeyNotFoundException("Teacher profile not found.");
         }
 
         // Validate section and classroom
@@ -201,14 +197,14 @@ public class SchedulesService : ISchedulesService
 
         if (section == null)
         {
-            return ApiResponse<List<ScheduleDto>>.ErrorResponse(ErrorCodes.NotFound, "Section not found.");
+            throw new KeyNotFoundException("Section not found.");
         }
 
         // Validate subject
         var subject = await _context.Subjects.FindAsync(request.SubjectId);
         if (subject == null)
         {
-            return ApiResponse<List<ScheduleDto>>.ErrorResponse(ErrorCodes.NotFound, "Subject not found.");
+            throw new KeyNotFoundException("Subject not found.");
         }
 
         // Pre-validate all requested days to avoid partial inserts
@@ -226,10 +222,7 @@ public class SchedulesService : ISchedulesService
             {
                 var errorDetails = _conflictService.BuildConflictDetail(conflictResult);
                 var dayName = DayNames[dayOfWeek];
-                return ApiResponse<List<ScheduleDto>>.ErrorResponse(
-                    conflictResult.ConflictType ?? ErrorCodes.Conflict,
-                    $"{dayName}: {errorDetails.Message}",
-                    errorDetails);
+                throw new InvalidOperationException($"{dayName}: {errorDetails.Message}");
             }
         }
 
@@ -257,11 +250,11 @@ public class SchedulesService : ISchedulesService
         await transaction.CommitAsync();
 
         var dtos = await BuildScheduleDtosAsync(createdSchedules, userId);
-        return ApiResponse<List<ScheduleDto>>.SuccessResponse(dtos);
+        return dtos;
     }
 
     // Update an existing schedule slot with re-validation
-    public async Task<ApiResponse<ScheduleDto>> UpdateScheduleAsync(int id, UpdateScheduleRequest request, int userId)
+    public async Task<ScheduleDto> UpdateScheduleAsync(int id, UpdateScheduleRequest request, int userId)
     {
         var schedule = await _context.Schedules
             .Include(s => s.Section)
@@ -270,14 +263,14 @@ public class SchedulesService : ISchedulesService
 
         if (schedule == null)
         {
-            return ApiResponse<ScheduleDto>.ErrorResponse(ErrorCodes.NotFound, "Schedule not found.");
+            throw new KeyNotFoundException("Schedule not found.");
         }
 
         // Get teacher ID and validate ownership
         var teacherId = await GetTeacherIdByUserIdAsync(userId);
         if (teacherId == null)
         {
-            return ApiResponse<ScheduleDto>.ErrorResponse(ErrorCodes.NotFound, "Teacher profile not found.");
+            throw new KeyNotFoundException("Teacher profile not found.");
         }
 
         var isOwner = schedule.TeacherId.HasValue && schedule.TeacherId.Value == teacherId.Value;
@@ -287,7 +280,7 @@ public class SchedulesService : ISchedulesService
 
         if (!isOwner && !canClaimUnowned)
         {
-            return ApiResponse<ScheduleDto>.ErrorResponse(ErrorCodes.Forbidden, "You can only update your own schedule slots.");
+            throw new UnauthorizedAccessException("You can only update your own schedule slots.");
         }
 
         if (canClaimUnowned)
@@ -303,7 +296,7 @@ public class SchedulesService : ISchedulesService
         // Validate time range
         if (newEndTime <= newStartTime)
         {
-            return ApiResponse<ScheduleDto>.ErrorResponse(ErrorCodes.ValidationError, "End time must be after start time.");
+            throw new InvalidOperationException("End time must be after start time.");
         }
 
         // Validate subject if being changed
@@ -313,7 +306,7 @@ public class SchedulesService : ISchedulesService
             subject = await _context.Subjects.FindAsync(request.SubjectId.Value);
             if (subject == null)
             {
-                return ApiResponse<ScheduleDto>.ErrorResponse(ErrorCodes.NotFound, "Subject not found.");
+                throw new KeyNotFoundException("Subject not found.");
             }
         }
 
@@ -333,10 +326,7 @@ public class SchedulesService : ISchedulesService
             if (conflictResult.HasConflict)
             {
                 var errorDetails = _conflictService.BuildConflictDetail(conflictResult);
-                return ApiResponse<ScheduleDto>.ErrorResponse(
-                    conflictResult.ConflictType ?? ErrorCodes.Conflict,
-                    errorDetails.Message,
-                    errorDetails);
+                throw new InvalidOperationException(errorDetails.Message);
             }
         }
 
@@ -357,11 +347,11 @@ public class SchedulesService : ISchedulesService
         await _context.SaveChangesAsync();
 
         var dto = await BuildScheduleDtoAsync(schedule, userId);
-        return ApiResponse<ScheduleDto>.SuccessResponse(dto);
+        return dto;
     }
 
     // Delete a schedule slot (owner or admin only)
-    public async Task<ApiResponse<bool>> DeleteScheduleAsync(int id, int userId, bool isAdmin)
+    public async Task DeleteScheduleAsync(int id, int userId, bool isAdmin)
     {
         var schedule = await _context.Schedules
             .Include(s => s.Section)
@@ -369,7 +359,7 @@ public class SchedulesService : ISchedulesService
 
         if (schedule == null)
         {
-            return ApiResponse<bool>.ErrorResponse(ErrorCodes.NotFound, "Schedule not found.");
+            throw new KeyNotFoundException("Schedule not found.");
         }
 
         // Admin can delete any schedule
@@ -378,7 +368,7 @@ public class SchedulesService : ISchedulesService
             var teacherId = await GetTeacherIdByUserIdAsync(userId);
             if (teacherId == null)
             {
-                return ApiResponse<bool>.ErrorResponse(ErrorCodes.NotFound, "Teacher profile not found.");
+                throw new KeyNotFoundException("Teacher profile not found.");
             }
 
             var isOwner = schedule.TeacherId.HasValue && schedule.TeacherId.Value == teacherId.Value;
@@ -388,7 +378,7 @@ public class SchedulesService : ISchedulesService
 
             if (!isOwner && !canManageUnowned)
             {
-                return ApiResponse<bool>.ErrorResponse(ErrorCodes.Forbidden, "You can only delete your own schedule slots.");
+                throw new UnauthorizedAccessException("You can only delete your own schedule slots.");
             }
         }
 
@@ -396,7 +386,7 @@ public class SchedulesService : ISchedulesService
         var hasAttendance = await _context.Attendances.AnyAsync(a => a.ScheduleId == id);
         if (hasAttendance)
         {
-            return ApiResponse<bool>.ErrorResponse(ErrorCodes.Conflict, "Cannot delete schedule with existing attendance records.");
+            throw new InvalidOperationException("Cannot delete schedule with existing attendance records.");
         }
 
         var nowUtc = DateTimeOffset.UtcNow;
@@ -410,7 +400,7 @@ public class SchedulesService : ISchedulesService
 
         if (hasBlockingQrSessions)
         {
-            return ApiResponse<bool>.ErrorResponse(ErrorCodes.Conflict, "Cannot delete schedule with active or checked-in QR attendance sessions.");
+            throw new InvalidOperationException("Cannot delete schedule with active or checked-in QR attendance sessions.");
         }
 
         // Remove stale QR sessions that are inactive/expired and have no check-ins so FK restrict does not block schedule deletion.
@@ -433,26 +423,26 @@ public class SchedulesService : ISchedulesService
         }
         catch (DbUpdateException exception) when (IsScheduleLinkedToQrSessions(exception))
         {
-            return ApiResponse<bool>.ErrorResponse(ErrorCodes.Conflict, "Cannot delete schedule with active or checked-in QR attendance sessions.");
+            throw new InvalidOperationException("Cannot delete schedule with active or checked-in QR attendance sessions.");
         }
 
-        return ApiResponse<bool>.SuccessResponse(true);
+        return;
     }
 
     // Get available time slots for a classroom on a specific day
-    public async Task<ApiResponse<List<AvailableSlotDto>>> GetAvailableSlotsAsync(int classroomId, int dayOfWeek)
+    public async Task<List<AvailableSlotDto>> GetAvailableSlotsAsync(int classroomId, int dayOfWeek)
     {
         // Validate classroom exists
         var classroom = await _context.Classrooms.FindAsync(classroomId);
         if (classroom == null)
         {
-            return ApiResponse<List<AvailableSlotDto>>.ErrorResponse(ErrorCodes.NotFound, "Classroom not found.");
+            throw new KeyNotFoundException("Classroom not found.");
         }
 
         // Validate day of week
         if (dayOfWeek < 0 || dayOfWeek > 6)
         {
-            return ApiResponse<List<AvailableSlotDto>>.ErrorResponse(ErrorCodes.ValidationError, "Day of week must be between 0 (Sunday) and 6 (Saturday).");
+            throw new InvalidOperationException("Day of week must be between 0 (Sunday) and 6 (Saturday).");
         }
 
         // Get all schedules for this classroom on this day, sorted by start time
@@ -475,7 +465,7 @@ public class SchedulesService : ISchedulesService
             AvailableSlots = availableSlots
         };
 
-        return ApiResponse<List<AvailableSlotDto>>.SuccessResponse(new List<AvailableSlotDto> { dto });
+        return new List<AvailableSlotDto> { dto };
     }
 
     // Helper: Calculate available time slots between schedules
@@ -631,3 +621,5 @@ public class SchedulesService : ISchedulesService
         return message.Contains("FK_AttendanceQrSessions_Schedules_ScheduleId", StringComparison.OrdinalIgnoreCase);
     }
 }
+
+

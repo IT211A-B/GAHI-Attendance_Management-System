@@ -28,7 +28,7 @@ public class SectionsService : ISectionsService
     }
 
     // Retrieves all sections with related entity names (academic year, course, subject, classroom)
-    public async Task<ApiResponse<List<SectionDto>>> GetAllSectionsAsync()
+    public async Task<List<SectionDto>> GetAllSectionsAsync()
     {
         var sections = await _context.Sections
             .Include(s => s.AcademicYear)
@@ -52,10 +52,10 @@ public class SectionsService : ISectionsService
             })
             .ToListAsync();
 
-        return ApiResponse<List<SectionDto>>.SuccessResponse(sections);
+        return sections;
     }
 
-    public async Task<ApiResponse<List<SectionDto>>> GetSectionsByTeacherUserIdAsync(int teacherUserId)
+    public async Task<List<SectionDto>> GetSectionsByTeacherUserIdAsync(int teacherUserId)
     {
         var teacherId = await _context.Teachers
             .Where(teacher => teacher.UserId == teacherUserId)
@@ -64,7 +64,7 @@ public class SectionsService : ISectionsService
 
         if (!teacherId.HasValue)
         {
-            return ApiResponse<List<SectionDto>>.ErrorResponse(ErrorCodes.NotFound, "Teacher profile not found.");
+            throw new KeyNotFoundException("Teacher profile not found.");
         }
 
         // Include both explicit section assignments and legacy/owned schedules.
@@ -102,11 +102,11 @@ public class SectionsService : ISectionsService
             })
             .ToListAsync();
 
-        return ApiResponse<List<SectionDto>>.SuccessResponse(sections);
+        return sections;
     }
 
     // Retrieves a single section by ID with related entity details
-    public async Task<ApiResponse<SectionDto>> GetSectionByIdAsync(int id)
+    public async Task<SectionDto> GetSectionByIdAsync(int id)
     {
         var section = await _context.Sections
             .Include(s => s.AcademicYear)
@@ -118,7 +118,7 @@ public class SectionsService : ISectionsService
         // Return error if section doesn't exist
         if (section == null)
         {
-            return ApiResponse<SectionDto>.ErrorResponse("NOT_FOUND", "Section not found.");
+            throw new KeyNotFoundException("Section not found.");
         }
 
         var dto = new SectionDto
@@ -136,17 +136,17 @@ public class SectionsService : ISectionsService
             CreatedAt = section.CreatedAt
         };
 
-        return ApiResponse<SectionDto>.SuccessResponse(dto);
+        return dto;
     }
 
     // Retrieves all sections for a specific academic year
-    public async Task<ApiResponse<List<SectionDto>>> GetSectionsByAcademicYearIdAsync(int academicYearId)
+    public async Task<List<SectionDto>> GetSectionsByAcademicYearIdAsync(int academicYearId)
     {
         // Validate academic year exists before querying sections
         var academicYearExists = await _context.AcademicYears.AnyAsync(ay => ay.Id == academicYearId);
         if (!academicYearExists)
         {
-            return ApiResponse<List<SectionDto>>.ErrorResponse("NOT_FOUND", "Academic year not found.");
+            throw new KeyNotFoundException("Academic year not found.");
         }
 
         var sections = await _context.Sections
@@ -172,16 +172,16 @@ public class SectionsService : ISectionsService
             })
             .ToListAsync();
 
-        return ApiResponse<List<SectionDto>>.SuccessResponse(sections);
+        return sections;
     }
 
-    public async Task<ApiResponse<SectionDto>> CreateSectionAsync(CreateSectionRequest request)
+    public async Task<SectionDto> CreateSectionAsync(CreateSectionRequest request)
     {
         // Validate academic year exists
         var academicYearExists = await _context.AcademicYears.AnyAsync(ay => ay.Id == request.AcademicYearId);
         if (!academicYearExists)
         {
-            return ApiResponse<SectionDto>.ErrorResponse("VALIDATION_ERROR", "Academic year not found.");
+            throw new InvalidOperationException("Academic year not found.");
         }
 
         // Validate course exists
@@ -190,15 +190,13 @@ public class SectionsService : ISectionsService
             .FirstOrDefaultAsync(selectedCourse => selectedCourse.Id == request.CourseId);
         if (course == null)
         {
-            return ApiResponse<SectionDto>.ErrorResponse("VALIDATION_ERROR", "Course not found.");
+            throw new InvalidOperationException("Course not found.");
         }
 
         if (!EducationLevelPolicy.IsYearLevelAllowed(course.EducationLevel, request.YearLevel))
         {
             var allowedRange = EducationLevelPolicy.GetAllowedYearRange(course.EducationLevel);
-            return ApiResponse<SectionDto>.ErrorResponse(
-                "VALIDATION_ERROR",
-                $"Year level {request.YearLevel} is not valid for {EducationLevelPolicy.ToDisplayLabel(course.EducationLevel)}. Allowed range is {allowedRange.MinYearLevel}-{allowedRange.MaxYearLevel}.");
+            throw new InvalidOperationException($"Year level {request.YearLevel} is not valid for {EducationLevelPolicy.ToDisplayLabel(course.EducationLevel)}. Allowed range is {allowedRange.MinYearLevel}-{allowedRange.MaxYearLevel}.");
         }
 
         // Validate subject exists and belongs to the selected course
@@ -209,21 +207,19 @@ public class SectionsService : ISectionsService
 
         if (!subjectCourseId.HasValue)
         {
-            return ApiResponse<SectionDto>.ErrorResponse("VALIDATION_ERROR", "Subject not found.");
+            throw new InvalidOperationException("Subject not found.");
         }
 
         if (subjectCourseId.Value != request.CourseId)
         {
-            return ApiResponse<SectionDto>.ErrorResponse(
-                "VALIDATION_ERROR",
-                "Selected subject does not belong to the selected course.");
+            throw new InvalidOperationException("Selected subject does not belong to the selected course.");
         }
 
         // Validate classroom exists
         var classroomExists = await _context.Classrooms.AnyAsync(c => c.Id == request.ClassroomId);
         if (!classroomExists)
         {
-            return ApiResponse<SectionDto>.ErrorResponse("VALIDATION_ERROR", "Classroom not found.");
+            throw new InvalidOperationException("Classroom not found.");
         }
 
         var section = new Section
@@ -241,16 +237,16 @@ public class SectionsService : ISectionsService
 
         var dto = await BuildSectionDtoAsync(section);
 
-        return ApiResponse<SectionDto>.SuccessResponse(dto);
+        return dto;
     }
 
-    public async Task<ApiResponse<SectionDto>> UpdateSectionAsync(int id, UpdateSectionRequest request)
+    public async Task<SectionDto> UpdateSectionAsync(int id, UpdateSectionRequest request)
     {
         var section = await _context.Sections.FindAsync(id);
 
         if (section == null)
         {
-            return ApiResponse<SectionDto>.ErrorResponse("NOT_FOUND", "Section not found.");
+            throw new KeyNotFoundException("Section not found.");
         }
 
         // Validate academic year exists if being changed
@@ -259,7 +255,7 @@ public class SectionsService : ISectionsService
             var academicYearExists = await _context.AcademicYears.AnyAsync(ay => ay.Id == request.AcademicYearId.Value);
             if (!academicYearExists)
             {
-                return ApiResponse<SectionDto>.ErrorResponse("VALIDATION_ERROR", "Academic year not found.");
+                throw new InvalidOperationException("Academic year not found.");
             }
         }
 
@@ -269,7 +265,7 @@ public class SectionsService : ISectionsService
             var courseExists = await _context.Courses.AnyAsync(c => c.Id == request.CourseId.Value);
             if (!courseExists)
             {
-                return ApiResponse<SectionDto>.ErrorResponse("VALIDATION_ERROR", "Course not found.");
+                throw new InvalidOperationException("Course not found.");
             }
         }
 
@@ -279,7 +275,7 @@ public class SectionsService : ISectionsService
             var subjectExists = await _context.Subjects.AnyAsync(s => s.Id == request.SubjectId.Value);
             if (!subjectExists)
             {
-                return ApiResponse<SectionDto>.ErrorResponse("VALIDATION_ERROR", "Subject not found.");
+                throw new InvalidOperationException("Subject not found.");
             }
         }
 
@@ -289,7 +285,7 @@ public class SectionsService : ISectionsService
             var classroomExists = await _context.Classrooms.AnyAsync(c => c.Id == request.ClassroomId.Value);
             if (!classroomExists)
             {
-                return ApiResponse<SectionDto>.ErrorResponse("VALIDATION_ERROR", "Classroom not found.");
+                throw new InvalidOperationException("Classroom not found.");
             }
         }
 
@@ -302,15 +298,13 @@ public class SectionsService : ISectionsService
 
         if (targetCourse == null)
         {
-            return ApiResponse<SectionDto>.ErrorResponse("VALIDATION_ERROR", "Course not found.");
+            throw new InvalidOperationException("Course not found.");
         }
 
         if (!EducationLevelPolicy.IsYearLevelAllowed(targetCourse.EducationLevel, targetYearLevel))
         {
             var allowedRange = EducationLevelPolicy.GetAllowedYearRange(targetCourse.EducationLevel);
-            return ApiResponse<SectionDto>.ErrorResponse(
-                "VALIDATION_ERROR",
-                $"Year level {targetYearLevel} is not valid for {EducationLevelPolicy.ToDisplayLabel(targetCourse.EducationLevel)}. Allowed range is {allowedRange.MinYearLevel}-{allowedRange.MaxYearLevel}.");
+            throw new InvalidOperationException($"Year level {targetYearLevel} is not valid for {EducationLevelPolicy.ToDisplayLabel(targetCourse.EducationLevel)}. Allowed range is {allowedRange.MinYearLevel}-{allowedRange.MaxYearLevel}.");
         }
 
         if (!string.IsNullOrEmpty(request.Name))
@@ -330,29 +324,29 @@ public class SectionsService : ISectionsService
 
         var dto = await BuildSectionDtoAsync(section);
 
-        return ApiResponse<SectionDto>.SuccessResponse(dto);
+        return dto;
     }
 
-    public async Task<ApiResponse<bool>> DeleteSectionAsync(int id)
+    public async Task DeleteSectionAsync(int id)
     {
         var section = await _context.Sections.FindAsync(id);
 
         if (section == null)
         {
-            return ApiResponse<bool>.ErrorResponse("NOT_FOUND", "Section not found.");
+            throw new KeyNotFoundException("Section not found.");
         }
 
         // Check if section has enrollments
         var hasEnrollments = await _context.Enrollments.AnyAsync(e => e.SectionId == id);
         if (hasEnrollments)
         {
-            return ApiResponse<bool>.ErrorResponse(ErrorCodes.InUse, "Cannot delete section that has enrollments.");
+            throw new InvalidOperationException("Cannot delete section that has enrollments.");
         }
 
         _context.Sections.Remove(section);
         await _context.SaveChangesAsync();
 
-        return ApiResponse<bool>.SuccessResponse(true);
+        return;
     }
 
     private async Task<SectionDto> BuildSectionDtoAsync(Section section)
@@ -389,7 +383,7 @@ public class SectionsService : ISectionsService
 
     private static readonly string[] DayNames = { "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat" };
 
-    public async Task<ApiResponse<TimetableResponse>> GetTimetableAsync(int sectionId, int? currentUserId = null)
+    public async Task<TimetableResponse> GetTimetableAsync(int sectionId, int? currentUserId = null)
     {
         // Check if section exists
         var section = await _context.Sections
@@ -398,7 +392,7 @@ public class SectionsService : ISectionsService
 
         if (section == null)
         {
-            return ApiResponse<TimetableResponse>.ErrorResponse(ErrorCodes.NotFound, "Section not found.");
+            throw new KeyNotFoundException("Section not found.");
         }
 
         // Determine current teacher ID if user is a teacher
@@ -466,16 +460,16 @@ public class SectionsService : ISectionsService
             Timetable = timetable
         };
 
-        return ApiResponse<TimetableResponse>.SuccessResponse(response);
+        return response;
     }
 
-    public async Task<ApiResponse<List<SectionTeacherDto>>> GetSectionTeachersAsync(int sectionId)
+    public async Task<List<SectionTeacherDto>> GetSectionTeachersAsync(int sectionId)
     {
         // Check if section exists
         var sectionExists = await _context.Sections.AnyAsync(s => s.Id == sectionId);
         if (!sectionExists)
         {
-            return ApiResponse<List<SectionTeacherDto>>.ErrorResponse(ErrorCodes.NotFound, "Section not found.");
+            throw new KeyNotFoundException("Section not found.");
         }
 
         var teachers = await _context.SectionTeachers
@@ -493,28 +487,28 @@ public class SectionsService : ISectionsService
             })
             .ToListAsync();
 
-        return ApiResponse<List<SectionTeacherDto>>.SuccessResponse(teachers);
+        return teachers;
     }
 
-    public async Task<ApiResponse<SectionTeacherDto>> AssignTeacherToSectionAsync(int sectionId, AssignTeacherRequest request)
+    public async Task<SectionTeacherDto> AssignTeacherToSectionAsync(int sectionId, AssignTeacherRequest request)
     {
         // Check if section exists
         var section = await _context.Sections.FindAsync(sectionId);
         if (section == null)
         {
-            return ApiResponse<SectionTeacherDto>.ErrorResponse(ErrorCodes.NotFound, "Section not found.");
+            throw new KeyNotFoundException("Section not found.");
         }
 
         // Check if teacher exists and is active
         var teacher = await _context.Teachers.FindAsync(request.TeacherId);
         if (teacher == null)
         {
-            return ApiResponse<SectionTeacherDto>.ErrorResponse(ErrorCodes.NotFound, "Teacher not found.");
+            throw new KeyNotFoundException("Teacher not found.");
         }
 
         if (!teacher.IsActive)
         {
-            return ApiResponse<SectionTeacherDto>.ErrorResponse(ErrorCodes.ValidationError, "Cannot assign an inactive teacher.");
+            throw new InvalidOperationException("Cannot assign an inactive teacher.");
         }
 
         // Check if assignment already exists
@@ -523,7 +517,7 @@ public class SectionsService : ISectionsService
 
         if (existingAssignment)
         {
-            return ApiResponse<SectionTeacherDto>.ErrorResponse(ErrorCodes.DuplicateAssignment, "Teacher is already assigned to this section.");
+            throw new InvalidOperationException("Teacher is already assigned to this section.");
         }
 
         var sectionTeacher = new SectionTeacher
@@ -547,17 +541,17 @@ public class SectionsService : ISectionsService
             AssignedAt = sectionTeacher.AssignedAt
         };
 
-        return ApiResponse<SectionTeacherDto>.SuccessResponse(dto);
+        return dto;
     }
 
-    public async Task<ApiResponse<bool>> RemoveTeacherFromSectionAsync(int sectionId, int teacherId, bool isAdmin = false, bool removeOwnedSchedules = false)
+    public async Task RemoveTeacherFromSectionAsync(int sectionId, int teacherId, bool isAdmin = false, bool removeOwnedSchedules = false)
     {
         var sectionTeacher = await _context.SectionTeachers
             .FirstOrDefaultAsync(st => st.SectionId == sectionId && st.TeacherId == teacherId);
 
         if (sectionTeacher == null)
         {
-            return ApiResponse<bool>.ErrorResponse(ErrorCodes.NotFound, "Teacher assignment not found.");
+            throw new KeyNotFoundException("Teacher assignment not found.");
         }
 
         var teacherSchedulesQuery = _context.Schedules
@@ -576,9 +570,7 @@ public class SectionsService : ISectionsService
 
                 if (hasAttendance)
                 {
-                    return ApiResponse<bool>.ErrorResponse(
-                        ErrorCodes.Conflict,
-                        "Cannot unassign because one or more of your schedules already have attendance records.");
+                    throw new InvalidOperationException("Cannot unassign because one or more of your schedules already have attendance records.");
                 }
 
                 var ownedSchedules = await teacherSchedulesQuery.ToListAsync();
@@ -592,18 +584,18 @@ public class SectionsService : ISectionsService
             var hasSchedules = await _context.Schedules.AnyAsync(s => s.SectionId == sectionId);
             if (hasSchedules)
             {
-                return ApiResponse<bool>.ErrorResponse(ErrorCodes.TeacherHasSchedules, "Cannot remove teacher from section with existing schedules.");
+                throw new InvalidOperationException("Cannot remove teacher from section with existing schedules.");
             }
         }
 
         _context.SectionTeachers.Remove(sectionTeacher);
         await _context.SaveChangesAsync();
 
-        return ApiResponse<bool>.SuccessResponse(true);
+        return;
     }
 
     // Retrieves sections filtered by course and year level for enrollment purposes
-    public async Task<ApiResponse<List<SectionDto>>> GetSectionsByCourseAndYearLevelAsync(int courseId, int yearLevel, int? academicYearId = null)
+    public async Task<List<SectionDto>> GetSectionsByCourseAndYearLevelAsync(int courseId, int yearLevel, int? academicYearId = null)
     {
         var course = await _context.Courses
             .AsNoTracking()
@@ -611,15 +603,13 @@ public class SectionsService : ISectionsService
 
         if (course == null)
         {
-            return ApiResponse<List<SectionDto>>.ErrorResponse("NOT_FOUND", "Course not found.");
+            throw new KeyNotFoundException("Course not found.");
         }
 
         if (!EducationLevelPolicy.IsYearLevelAllowed(course.EducationLevel, yearLevel))
         {
             var allowedRange = EducationLevelPolicy.GetAllowedYearRange(course.EducationLevel);
-            return ApiResponse<List<SectionDto>>.ErrorResponse(
-                "VALIDATION_ERROR",
-                $"Year level {yearLevel} is not valid for {EducationLevelPolicy.ToDisplayLabel(course.EducationLevel)}. Allowed range is {allowedRange.MinYearLevel}-{allowedRange.MaxYearLevel}.");
+            throw new InvalidOperationException($"Year level {yearLevel} is not valid for {EducationLevelPolicy.ToDisplayLabel(course.EducationLevel)}. Allowed range is {allowedRange.MinYearLevel}-{allowedRange.MaxYearLevel}.");
         }
 
         var query = _context.Sections
@@ -645,7 +635,7 @@ public class SectionsService : ISectionsService
             dtos.Add(dto);
         }
 
-        return ApiResponse<List<SectionDto>>.SuccessResponse(dtos);
+        return dtos;
     }
 
     // Calculates the capacity status based on enrollment count
@@ -662,3 +652,6 @@ public class SectionsService : ISectionsService
         return SectionCapacityStatus.Available;
     }
 }
+
+
+

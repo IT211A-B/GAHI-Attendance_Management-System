@@ -16,7 +16,7 @@ public class SubjectsService : ISubjectsService
         _context = context;
     }
 
-    public async Task<ApiResponse<List<SubjectDto>>> GetAllSubjectsAsync()
+    public async Task<List<SubjectDto>> GetAllSubjectsAsync()
     {
         var subjects = await _context.Subjects
             .Include(s => s.Course)
@@ -33,10 +33,10 @@ public class SubjectsService : ISubjectsService
             })
             .ToListAsync();
 
-        return ApiResponse<List<SubjectDto>>.SuccessResponse(subjects);
+        return subjects;
     }
 
-    public async Task<ApiResponse<SubjectDto>> GetSubjectByIdAsync(int id)
+    public async Task<SubjectDto> GetSubjectByIdAsync(int id)
     {
         var subject = await _context.Subjects
             .Include(s => s.Course)
@@ -44,7 +44,7 @@ public class SubjectsService : ISubjectsService
 
         if (subject == null)
         {
-            return ApiResponse<SubjectDto>.ErrorResponse("NOT_FOUND", "Subject not found.");
+            throw new KeyNotFoundException("Subject not found.");
         }
 
         var dto = new SubjectDto
@@ -58,15 +58,15 @@ public class SubjectsService : ISubjectsService
             CreatedAt = subject.CreatedAt
         };
 
-        return ApiResponse<SubjectDto>.SuccessResponse(dto);
+        return dto;
     }
 
-    public async Task<ApiResponse<List<SubjectDto>>> GetSubjectsByCourseIdAsync(int courseId)
+    public async Task<List<SubjectDto>> GetSubjectsByCourseIdAsync(int courseId)
     {
         var courseExists = await _context.Courses.AnyAsync(c => c.Id == courseId);
         if (!courseExists)
         {
-            return ApiResponse<List<SubjectDto>>.ErrorResponse("NOT_FOUND", "Course not found.");
+            throw new KeyNotFoundException("Course not found.");
         }
 
         var subjects = await _context.Subjects
@@ -85,23 +85,23 @@ public class SubjectsService : ISubjectsService
             })
             .ToListAsync();
 
-        return ApiResponse<List<SubjectDto>>.SuccessResponse(subjects);
+        return subjects;
     }
 
-    public async Task<ApiResponse<SubjectDto>> CreateSubjectAsync(CreateSubjectRequest request)
+    public async Task<SubjectDto> CreateSubjectAsync(CreateSubjectRequest request)
     {
         // Validate course exists
         var courseExists = await _context.Courses.AnyAsync(c => c.Id == request.CourseId);
         if (!courseExists)
         {
-            return ApiResponse<SubjectDto>.ErrorResponse("VALIDATION_ERROR", "Course not found.");
+            throw new InvalidOperationException("Course not found.");
         }
 
         // Check if code already exists
         var codeExists = await _context.Subjects.AnyAsync(s => s.Code == request.Code);
         if (codeExists)
         {
-            return ApiResponse<SubjectDto>.ErrorResponse("VALIDATION_ERROR", "A subject with this code already exists.");
+            throw new InvalidOperationException("A subject with this code already exists.");
         }
 
         var subject = new Subject
@@ -128,16 +128,16 @@ public class SubjectsService : ISubjectsService
             CreatedAt = subject.CreatedAt
         };
 
-        return ApiResponse<SubjectDto>.SuccessResponse(dto);
+        return dto;
     }
 
-    public async Task<ApiResponse<SubjectDto>> UpdateSubjectAsync(int id, UpdateSubjectRequest request)
+    public async Task<SubjectDto> UpdateSubjectAsync(int id, UpdateSubjectRequest request)
     {
         var subject = await _context.Subjects.FindAsync(id);
 
         if (subject == null)
         {
-            return ApiResponse<SubjectDto>.ErrorResponse("NOT_FOUND", "Subject not found.");
+            throw new KeyNotFoundException("Subject not found.");
         }
 
         // Validate course exists if being changed
@@ -146,7 +146,7 @@ public class SubjectsService : ISubjectsService
             var courseExists = await _context.Courses.AnyAsync(c => c.Id == request.CourseId.Value);
             if (!courseExists)
             {
-                return ApiResponse<SubjectDto>.ErrorResponse("VALIDATION_ERROR", "Course not found.");
+                throw new InvalidOperationException("Course not found.");
             }
         }
 
@@ -156,7 +156,7 @@ public class SubjectsService : ISubjectsService
             var codeExists = await _context.Subjects.AnyAsync(s => s.Code == request.Code && s.Id != id);
             if (codeExists)
             {
-                return ApiResponse<SubjectDto>.ErrorResponse("VALIDATION_ERROR", "A subject with this code already exists.");
+                throw new InvalidOperationException("A subject with this code already exists.");
             }
         }
 
@@ -184,16 +184,16 @@ public class SubjectsService : ISubjectsService
             CreatedAt = subject.CreatedAt
         };
 
-        return ApiResponse<SubjectDto>.SuccessResponse(dto);
+        return dto;
     }
 
-    public async Task<ApiResponse<bool>> DeleteSubjectAsync(int id, int? replacementSubjectId = null)
+    public async Task DeleteSubjectAsync(int id, int? replacementSubjectId = null)
     {
         var subject = await _context.Subjects.FindAsync(id);
 
         if (subject == null)
         {
-            return ApiResponse<bool>.ErrorResponse("NOT_FOUND", "Subject not found.");
+            throw new KeyNotFoundException("Subject not found.");
         }
 
         var sectionsInUseCount = await _context.Sections.CountAsync(s => s.SubjectId == id);
@@ -208,13 +208,13 @@ public class SubjectsService : ISubjectsService
             {
                 if (replacementSubjectId.Value == id)
                 {
-                    return ApiResponse<bool>.ErrorResponse("VALIDATION_ERROR", "Replacement subject must be different from the subject being deleted.");
+                    throw new InvalidOperationException("Replacement subject must be different from the subject being deleted.");
                 }
 
                 resolvedReplacementSubject = await _context.Subjects.FindAsync(replacementSubjectId.Value);
                 if (resolvedReplacementSubject == null)
                 {
-                    return ApiResponse<bool>.ErrorResponse("NOT_FOUND", "Replacement subject not found.");
+                    throw new KeyNotFoundException("Replacement subject not found.");
                 }
             }
             else
@@ -236,9 +236,7 @@ public class SubjectsService : ISubjectsService
 
                 if (resolvedReplacementSubject == null)
                 {
-                    return ApiResponse<bool>.ErrorResponse(
-                        "IN_USE",
-                        $"Cannot delete subject because it is used by {sectionsInUseCount} section(s) and {schedulesInUseCount} schedule slot(s), and no fallback subject is available. Create another subject first or select a replacement.");
+                    throw new InvalidOperationException($"Cannot delete subject because it is used by {sectionsInUseCount} section(s) and {schedulesInUseCount} schedule slot(s), and no fallback subject is available. Create another subject first or select a replacement.");
                 }
             }
 
@@ -264,6 +262,8 @@ public class SubjectsService : ISubjectsService
         _context.Subjects.Remove(subject);
         await _context.SaveChangesAsync();
 
-        return ApiResponse<bool>.SuccessResponse(true);
+        return;
     }
 }
+
+
