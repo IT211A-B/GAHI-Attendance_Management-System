@@ -22,12 +22,10 @@ public class SchedulesServiceDeleteTests
         await context.SaveChangesAsync();
 
         var service = CreateService(context);
-        var response = await service.DeleteScheduleAsync(seed.ScheduleId, seed.OwnerUserId, isAdmin: false);
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => service.DeleteScheduleAsync(seed.ScheduleId, seed.OwnerUserId, isAdmin: false));
 
-        Assert.False(response.Success);
-        Assert.NotNull(response.Error);
-        Assert.Equal(ErrorCodes.Conflict, response.Error!.Code);
-        Assert.Equal("Cannot delete schedule with existing attendance records.", response.Error.Message);
+        Assert.Equal("Cannot delete schedule with existing attendance records.", exception.Message);
         Assert.True(await context.Schedules.AnyAsync(schedule => schedule.Id == seed.ScheduleId));
     }
 
@@ -56,12 +54,10 @@ public class SchedulesServiceDeleteTests
         await context.SaveChangesAsync();
 
         var service = CreateService(context);
-        var response = await service.DeleteScheduleAsync(seed.ScheduleId, seed.OwnerUserId, isAdmin: false);
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => service.DeleteScheduleAsync(seed.ScheduleId, seed.OwnerUserId, isAdmin: false));
 
-        Assert.False(response.Success);
-        Assert.NotNull(response.Error);
-        Assert.Equal(ErrorCodes.Conflict, response.Error!.Code);
-        Assert.Equal("Cannot delete schedule with active or checked-in QR attendance sessions.", response.Error.Message);
+        Assert.Equal("Cannot delete schedule with active or checked-in QR attendance sessions.", exception.Message);
         Assert.True(await context.Schedules.AnyAsync(schedule => schedule.Id == seed.ScheduleId));
     }
 
@@ -99,12 +95,10 @@ public class SchedulesServiceDeleteTests
         await context.SaveChangesAsync();
 
         var service = CreateService(context);
-        var response = await service.DeleteScheduleAsync(seed.ScheduleId, seed.OwnerUserId, isAdmin: false);
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => service.DeleteScheduleAsync(seed.ScheduleId, seed.OwnerUserId, isAdmin: false));
 
-        Assert.False(response.Success);
-        Assert.NotNull(response.Error);
-        Assert.Equal(ErrorCodes.Conflict, response.Error!.Code);
-        Assert.Equal("Cannot delete schedule with active or checked-in QR attendance sessions.", response.Error.Message);
+        Assert.Equal("Cannot delete schedule with active or checked-in QR attendance sessions.", exception.Message);
         Assert.True(await context.Schedules.AnyAsync(schedule => schedule.Id == seed.ScheduleId));
     }
 
@@ -149,10 +143,8 @@ public class SchedulesServiceDeleteTests
         await context.SaveChangesAsync();
 
         var service = CreateService(context);
-        var response = await service.DeleteScheduleAsync(seed.ScheduleId, seed.OwnerUserId, isAdmin: false);
+        await service.DeleteScheduleAsync(seed.ScheduleId, seed.OwnerUserId, isAdmin: false);
 
-        Assert.True(response.Success);
-        Assert.True(response.Data);
         Assert.False(await context.Schedules.AnyAsync(schedule => schedule.Id == seed.ScheduleId));
         Assert.False(await context.AttendanceQrSessions.AnyAsync(session => session.ScheduleId == seed.ScheduleId));
     }
@@ -164,10 +156,8 @@ public class SchedulesServiceDeleteTests
         var seed = await SeedScheduleAsync(context);
 
         var service = CreateService(context);
-        var response = await service.DeleteScheduleAsync(seed.ScheduleId, seed.OwnerUserId, isAdmin: false);
+        await service.DeleteScheduleAsync(seed.ScheduleId, seed.OwnerUserId, isAdmin: false);
 
-        Assert.True(response.Success);
-        Assert.True(response.Data);
         Assert.False(await context.Schedules.AnyAsync(schedule => schedule.Id == seed.ScheduleId));
     }
 
@@ -178,12 +168,10 @@ public class SchedulesServiceDeleteTests
         var seed = await SeedScheduleAsync(context, includeNonOwnerTeacher: true);
 
         var service = CreateService(context);
-        var response = await service.DeleteScheduleAsync(seed.ScheduleId, seed.OtherTeacherUserId!.Value, isAdmin: false);
+        var exception = await Assert.ThrowsAsync<UnauthorizedAccessException>(
+            () => service.DeleteScheduleAsync(seed.ScheduleId, seed.OtherTeacherUserId!.Value, isAdmin: false));
 
-        Assert.False(response.Success);
-        Assert.NotNull(response.Error);
-        Assert.Equal(ErrorCodes.Forbidden, response.Error!.Code);
-        Assert.Equal("You can only delete your own schedule slots.", response.Error.Message);
+        Assert.Equal("You can only delete your own schedule slots.", exception.Message);
         Assert.True(await context.Schedules.AnyAsync(schedule => schedule.Id == seed.ScheduleId));
     }
 

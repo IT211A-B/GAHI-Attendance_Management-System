@@ -140,7 +140,8 @@ public class EnrollmentServiceApprovalTests
             new UpdateEnrollmentStatusRequest { Status = "approved" },
             admin.Id);
 
-        Assert.True(result.Success);
+        Assert.NotNull(result);
+        Assert.Equal("approved", result.Status);
 
         var updatedEnrollment = await context.Enrollments.AsNoTracking().SingleAsync(item => item.Id == enrollment.Id);
         var updatedStudent = await context.Students.AsNoTracking().SingleAsync(item => item.Id == student.Id);
@@ -294,7 +295,8 @@ public class EnrollmentServiceApprovalTests
             },
             admin.Id);
 
-        Assert.True(result.Success);
+        Assert.NotNull(result);
+        Assert.Equal("rejected", result.Status);
 
         var updatedEnrollment = await context.Enrollments.AsNoTracking().SingleAsync(item => item.Id == enrollment.Id);
         var updatedStudent = await context.Students.AsNoTracking().SingleAsync(item => item.Id == student.Id);
@@ -352,19 +354,16 @@ public class EnrollmentServiceApprovalTests
         context.Students.Add(student);
         await context.SaveChangesAsync();
 
-        var response = await service.CreateEnrollmentAsync(
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => service.CreateEnrollmentAsync(
             new CreateEnrollmentRequest
             {
                 CourseId = course.Id,
                 AcademicYearId = 777,
                 YearLevel = 4
             },
-            student.UserId);
+            student.UserId));
 
-        Assert.False(response.Success);
-        Assert.NotNull(response.Error);
-        Assert.Equal(ErrorCodes.BadRequest, response.Error!.Code);
-        Assert.Equal("Year level 4 is not valid for TVET. Allowed range is 1-2.", response.Error.Message);
+        Assert.Equal("Year level 4 is not valid for TVET. Allowed range is 1-2.", exception.Message);
     }
 
     private static AppDbContext CreateContext()

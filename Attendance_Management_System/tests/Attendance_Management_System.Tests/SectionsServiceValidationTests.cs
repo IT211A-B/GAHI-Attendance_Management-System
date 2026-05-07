@@ -47,7 +47,7 @@ public class SectionsServiceValidationTests
         context.Classrooms.Add(classroom);
         await context.SaveChangesAsync();
 
-        var response = await service.CreateSectionAsync(new CreateSectionRequest
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => service.CreateSectionAsync(new CreateSectionRequest
         {
             Name = "SHS-9A",
             YearLevel = 9,
@@ -55,12 +55,9 @@ public class SectionsServiceValidationTests
             CourseId = course.Id,
             SubjectId = subject.Id,
             ClassroomId = classroom.Id
-        });
+        }));
 
-        Assert.False(response.Success);
-        Assert.NotNull(response.Error);
-        Assert.Equal("VALIDATION_ERROR", response.Error!.Code);
-        Assert.Equal("Year level 9 is not valid for Senior High. Allowed range is 11-12.", response.Error.Message);
+        Assert.Equal("Year level 9 is not valid for Senior High. Allowed range is 11-12.", exception.Message);
     }
 
     private static AppDbContext CreateContext()

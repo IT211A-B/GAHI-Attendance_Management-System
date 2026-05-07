@@ -21,7 +21,7 @@ public class UsersService : IUsersService
     }
 
     // Retrieves all active users with their role-specific profiles using batch loading
-    public async Task<ApiResponse<List<UserDto>>> GetAllUsersAsync()
+    public async Task<List<UserDto>> GetAllUsersAsync()
     {
         // Load all active users first
         var users = await _userManager.Users
@@ -79,39 +79,39 @@ public class UsersService : IUsersService
             return userDto;
         }).ToList();
 
-        return ApiResponse<List<UserDto>>.SuccessResponse(userDtos);
+        return userDtos;
     }
 
     // Retrieves a single user by ID with role-specific profile
-    public async Task<ApiResponse<UserDto>> GetUserByIdAsync(int id)
+    public async Task<UserDto> GetUserByIdAsync(int id)
     {
         var user = await _userManager.FindByIdAsync(id.ToString());
 
         // Only return active users
         if (user == null || !user.IsActive)
         {
-            return ApiResponse<UserDto>.ErrorResponse("NOT_FOUND", "User not found.");
+            throw new KeyNotFoundException("User not found.");
         }
 
         var userDto = await BuildUserDtoAsync(user);
-        return ApiResponse<UserDto>.SuccessResponse(userDto);
+        return userDto;
     }
 
     // Creates a new user account with specified role (admin only)
-    public async Task<ApiResponse<UserDto>> CreateUserAsync(CreateUserRequest request)
+    public async Task<UserDto> CreateUserAsync(CreateUserRequest request)
     {
         // Prevent duplicate email registration
         var existingUser = await _userManager.FindByEmailAsync(request.Email);
         if (existingUser != null)
         {
-            return ApiResponse<UserDto>.ErrorResponse("VALIDATION_ERROR", "An account with this email already exists.");
+            throw new InvalidOperationException("An account with this email already exists.");
         }
 
         // Validate that role is one of the allowed values
         var validRoles = new[] { "admin", "teacher", "student" };
         if (!validRoles.Contains(request.Role.ToLower()))
         {
-            return ApiResponse<UserDto>.ErrorResponse("VALIDATION_ERROR", "Invalid role. Must be admin, teacher, or student.");
+            throw new InvalidOperationException("Invalid role. Must be admin, teacher, or student.");
         }
 
         // Create user with Identity for secure password hashing
@@ -129,21 +129,21 @@ public class UsersService : IUsersService
         if (!result.Succeeded)
         {
             var errors = string.Join(", ", result.Errors.Select(e => e.Description));
-            return ApiResponse<UserDto>.ErrorResponse("CREATE_FAILED", $"Failed to create user: {errors}");
+            throw new InvalidOperationException($"Failed to create user: {errors}");
         }
 
         var userDto = await BuildUserDtoAsync(user);
-        return ApiResponse<UserDto>.SuccessResponse(userDto);
+        return userDto;
     }
 
     // Updates user email, role, or active status
-    public async Task<ApiResponse<UserDto>> UpdateUserAsync(int id, UpdateUserRequest request)
+    public async Task<UserDto> UpdateUserAsync(int id, UpdateUserRequest request)
     {
         var user = await _userManager.FindByIdAsync(id.ToString());
 
         if (user == null)
         {
-            return ApiResponse<UserDto>.ErrorResponse("NOT_FOUND", "User not found.");
+            throw new KeyNotFoundException("User not found.");
         }
 
         // Update email if provided and not already in use
@@ -152,7 +152,7 @@ public class UsersService : IUsersService
             var existingUser = await _userManager.FindByEmailAsync(request.Email);
             if (existingUser != null && existingUser.Id != user.Id)
             {
-                return ApiResponse<UserDto>.ErrorResponse("VALIDATION_ERROR", "Email is already in use.");
+                throw new InvalidOperationException("Email is already in use.");
             }
             user.UserName = request.Email;
             user.Email = request.Email;
@@ -164,7 +164,7 @@ public class UsersService : IUsersService
             var validRoles = new[] { "admin", "teacher", "student" };
             if (!validRoles.Contains(request.Role.ToLower()))
             {
-                return ApiResponse<UserDto>.ErrorResponse("VALIDATION_ERROR", "Invalid role. Must be admin, teacher, or student.");
+                throw new InvalidOperationException("Invalid role. Must be admin, teacher, or student.");
             }
             user.Role = request.Role.ToLower();
         }
@@ -180,21 +180,21 @@ public class UsersService : IUsersService
         if (!result.Succeeded)
         {
             var errors = string.Join(", ", result.Errors.Select(e => e.Description));
-            return ApiResponse<UserDto>.ErrorResponse("UPDATE_FAILED", $"Failed to update user: {errors}");
+            throw new InvalidOperationException($"Failed to update user: {errors}");
         }
 
         var userDto = await BuildUserDtoAsync(user);
-        return ApiResponse<UserDto>.SuccessResponse(userDto);
+        return userDto;
     }
 
     // Performs soft delete by setting IsActive to false
-    public async Task<ApiResponse<bool>> DeleteUserAsync(int id)
+    public async Task DeleteUserAsync(int id)
     {
         var user = await _userManager.FindByIdAsync(id.ToString());
 
         if (user == null)
         {
-            return ApiResponse<bool>.ErrorResponse("NOT_FOUND", "User not found.");
+            throw new KeyNotFoundException("User not found.");
         }
 
         // Soft delete preserves data integrity for historical records
@@ -203,20 +203,20 @@ public class UsersService : IUsersService
 
         if (!result.Succeeded)
         {
-            return ApiResponse<bool>.ErrorResponse("DELETE_FAILED", "Failed to delete user.");
+            throw new InvalidOperationException("Failed to delete user.");
         }
 
-        return ApiResponse<bool>.SuccessResponse(true);
+        return;
     }
 
     // Updates user's own profile (password and personal info) - users can only update their own profile
-    public async Task<ApiResponse<UserDto>> UpdateProfileAsync(int userId, UpdateProfileRequest request)
+    public async Task<UserDto> UpdateProfileAsync(int userId, UpdateProfileRequest request)
     {
         var user = await _userManager.FindByIdAsync(userId.ToString());
 
         if (user == null || !user.IsActive)
         {
-            return ApiResponse<UserDto>.ErrorResponse("NOT_FOUND", "User not found.");
+            throw new KeyNotFoundException("User not found.");
         }
 
         // Handle password change with current password verification
@@ -225,21 +225,21 @@ public class UsersService : IUsersService
             // Require current password to prevent unauthorized password changes
             if (string.IsNullOrEmpty(request.CurrentPassword))
             {
-                return ApiResponse<UserDto>.ErrorResponse("VALIDATION_ERROR", "Current password is required to change password.");
+                throw new InvalidOperationException("Current password is required to change password.");
             }
 
             // Verify current password before allowing change
             var passwordValid = await _userManager.CheckPasswordAsync(user, request.CurrentPassword);
             if (!passwordValid)
             {
-                return ApiResponse<UserDto>.ErrorResponse("VALIDATION_ERROR", "Current password is incorrect.");
+                throw new InvalidOperationException("Current password is incorrect.");
             }
 
             var changeResult = await _userManager.ChangePasswordAsync(user, request.CurrentPassword, request.NewPassword);
             if (!changeResult.Succeeded)
             {
                 var errors = string.Join(", ", changeResult.Errors.Select(e => e.Description));
-                return ApiResponse<UserDto>.ErrorResponse("PASSWORD_CHANGE_FAILED", $"Failed to change password: {errors}");
+                throw new InvalidOperationException($"Failed to change password: {errors}");
             }
         }
 
@@ -274,7 +274,7 @@ public class UsersService : IUsersService
         await _context.SaveChangesAsync();
 
         var userDto = await BuildUserDtoAsync(user);
-        return ApiResponse<UserDto>.SuccessResponse(userDto);
+        return userDto;
     }
 
     // Builds user DTO with role-specific profile information
@@ -327,3 +327,5 @@ public class UsersService : IUsersService
         return userDto;
     }
 }
+
+

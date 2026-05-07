@@ -1,4 +1,3 @@
-using Attendance_Management_System.Backend.Constants;
 using Attendance_Management_System.Backend.DTOs.Requests;
 using Attendance_Management_System.Backend.DTOs.Responses;
 using Attendance_Management_System.Backend.Entities;
@@ -20,7 +19,7 @@ public class TeachersService : ITeachersService
     }
 
     // Retrieves all active teachers from the database
-    public async Task<ApiResponse<List<TeacherDto>>> GetAllTeachersAsync()
+    public async Task<List<TeacherDto>> GetAllTeachersAsync()
     {
         // Query only active teachers, include related user data for email
         var teachers = await _context.Teachers
@@ -43,10 +42,10 @@ public class TeachersService : ITeachersService
             })
             .ToListAsync();
 
-        return ApiResponse<List<TeacherDto>>.SuccessResponse(teachers);
+        return teachers;
     }
 
-    public async Task<ApiResponse<TeacherDto>> GetTeacherByUserIdAsync(int userId)
+    public async Task<TeacherDto> GetTeacherByUserIdAsync(int userId)
     {
         var teacher = await _context.Teachers
             .Include(t => t.User)
@@ -54,7 +53,7 @@ public class TeachersService : ITeachersService
 
         if (teacher == null)
         {
-            return ApiResponse<TeacherDto>.ErrorResponse(ErrorCodes.NotFound, "Teacher profile not found.");
+            throw new KeyNotFoundException("Teacher profile not found.");
         }
 
         var dto = new TeacherDto
@@ -72,11 +71,11 @@ public class TeachersService : ITeachersService
             CreatedAt = teacher.CreatedAt
         };
 
-        return ApiResponse<TeacherDto>.SuccessResponse(dto);
+        return dto;
     }
 
     // Retrieves a single teacher by their ID
-    public async Task<ApiResponse<TeacherDto>> GetTeacherByIdAsync(int id)
+    public async Task<TeacherDto> GetTeacherByIdAsync(int id)
     {
         var teacher = await _context.Teachers
             .Include(t => t.User)
@@ -85,7 +84,7 @@ public class TeachersService : ITeachersService
         // Return error if teacher doesn't exist
         if (teacher == null)
         {
-            return ApiResponse<TeacherDto>.ErrorResponse("NOT_FOUND", "Teacher not found.");
+            throw new KeyNotFoundException("Teacher not found.");
         }
 
         // Map entity to DTO for response
@@ -104,11 +103,11 @@ public class TeachersService : ITeachersService
             CreatedAt = teacher.CreatedAt
         };
 
-        return ApiResponse<TeacherDto>.SuccessResponse(dto);
+        return dto;
     }
 
     // Updates an existing teacher's information
-    public async Task<ApiResponse<TeacherDto>> UpdateTeacherAsync(int id, UpdateTeacherRequest request)
+    public async Task<TeacherDto> UpdateTeacherAsync(int id, UpdateTeacherRequest request)
     {
         var teacher = await _context.Teachers
             .Include(t => t.User)
@@ -116,7 +115,7 @@ public class TeachersService : ITeachersService
 
         if (teacher == null)
         {
-            return ApiResponse<TeacherDto>.ErrorResponse("NOT_FOUND", "Teacher not found.");
+            throw new KeyNotFoundException("Teacher not found.");
         }
 
         // Ensure employee number uniqueness if it's being changed
@@ -126,7 +125,7 @@ public class TeachersService : ITeachersService
                 .AnyAsync(t => t.EmployeeNumber == request.EmployeeNumber && t.Id != id);
             if (employeeNumberExists)
             {
-                return ApiResponse<TeacherDto>.ErrorResponse("VALIDATION_ERROR", "A teacher with this employee number already exists.");
+                throw new InvalidOperationException("A teacher with this employee number already exists.");
             }
         }
 
@@ -161,44 +160,44 @@ public class TeachersService : ITeachersService
             CreatedAt = teacher.CreatedAt
         };
 
-        return ApiResponse<TeacherDto>.SuccessResponse(dto);
+        return dto;
     }
 
     // Soft deletes a teacher by marking them as inactive
-    public async Task<ApiResponse<bool>> DeactivateTeacherAsync(int id)
+    public async Task DeactivateTeacherAsync(int id)
     {
         var teacher = await _context.Teachers.FindAsync(id);
 
         if (teacher == null)
         {
-            return ApiResponse<bool>.ErrorResponse("NOT_FOUND", "Teacher not found.");
+            throw new KeyNotFoundException("Teacher not found.");
         }
 
         // Mark as inactive instead of hard delete
         teacher.IsActive = false;
         await _context.SaveChangesAsync();
 
-        return ApiResponse<bool>.SuccessResponse(true);
+        return;
     }
 
     // Reactivates a previously deactivated teacher
-    public async Task<ApiResponse<bool>> ActivateTeacherAsync(int id)
+    public async Task ActivateTeacherAsync(int id)
     {
         var teacher = await _context.Teachers.FindAsync(id);
 
         if (teacher == null)
         {
-            return ApiResponse<bool>.ErrorResponse("NOT_FOUND", "Teacher not found.");
+            throw new KeyNotFoundException("Teacher not found.");
         }
 
         teacher.IsActive = true;
         await _context.SaveChangesAsync();
 
-        return ApiResponse<bool>.SuccessResponse(true);
+        return;
     }
 
     // Retrieves all teachers with their assigned sections
-    public async Task<ApiResponse<List<TeacherListDto>>> GetAllTeachersWithSectionsAsync()
+    public async Task<List<TeacherListDto>> GetAllTeachersWithSectionsAsync()
     {
         // Include section assignments through the bridge table
         var teachers = await _context.Teachers
@@ -226,37 +225,37 @@ public class TeachersService : ITeachersService
             })
             .ToListAsync();
 
-        return ApiResponse<List<TeacherListDto>>.SuccessResponse(teachers);
+        return teachers;
     }
 
     // Creates a new teacher profile for an existing user
-    public async Task<ApiResponse<TeacherDto>> CreateTeacherAsync(CreateTeacherRequest request)
+    public async Task<TeacherDto> CreateTeacherAsync(CreateTeacherRequest request)
     {
         // Validate that the user exists
         var user = await _context.Users.FindAsync(request.UserId);
         if (user == null)
         {
-            return ApiResponse<TeacherDto>.ErrorResponse(ErrorCodes.NotFound, "User not found.");
+            throw new KeyNotFoundException("User not found.");
         }
 
         // Ensure user has the teacher role
         if (user.Role != "teacher")
         {
-            return ApiResponse<TeacherDto>.ErrorResponse(ErrorCodes.ValidationError, "User does not have the teacher role.");
+            throw new InvalidOperationException("User does not have the teacher role.");
         }
 
         // Prevent duplicate teacher profiles for the same user
         var existingTeacher = await _context.Teachers.AnyAsync(t => t.UserId == request.UserId);
         if (existingTeacher)
         {
-            return ApiResponse<TeacherDto>.ErrorResponse(ErrorCodes.AlreadyExists, "Teacher profile already exists for this user.");
+            throw new InvalidOperationException("Teacher profile already exists for this user.");
         }
 
         // Ensure employee number is unique
         var employeeNumberExists = await _context.Teachers.AnyAsync(t => t.EmployeeNumber == request.EmployeeNumber);
         if (employeeNumberExists)
         {
-            return ApiResponse<TeacherDto>.ErrorResponse(ErrorCodes.Conflict, "A teacher with this employee number already exists.");
+            throw new InvalidOperationException("A teacher with this employee number already exists.");
         }
 
         // Create and persist the new teacher entity
@@ -290,6 +289,9 @@ public class TeachersService : ITeachersService
             CreatedAt = teacher.CreatedAt
         };
 
-        return ApiResponse<TeacherDto>.SuccessResponse(dto);
+        return dto;
     }
 }
+
+
+

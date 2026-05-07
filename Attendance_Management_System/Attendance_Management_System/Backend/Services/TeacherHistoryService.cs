@@ -25,7 +25,7 @@ public class TeacherHistoryService : ITeacherHistoryService
     }
 
     // Get all schedule slots for sections the teacher is assigned to
-    public async Task<ApiResponse<List<TeacherScheduleDto>>> GetTeacherSchedulesAsync(int userId)
+    public async Task<List<TeacherScheduleDto>> GetTeacherSchedulesAsync(int userId)
     {
         // Find the teacher record by UserId
         var teacher = await _context.Teachers
@@ -34,9 +34,7 @@ public class TeacherHistoryService : ITeacherHistoryService
 
         if (teacher == null)
         {
-            return ApiResponse<List<TeacherScheduleDto>>.ErrorResponse(
-                "NOT_FOUND",
-                "Teacher profile not found.");
+            throw new KeyNotFoundException("Teacher profile not found.");
         }
 
         // Get all schedules owned by this teacher with related data
@@ -65,11 +63,11 @@ public class TeacherHistoryService : ITeacherHistoryService
             EndTime = s.EndTime.ToString("HH:mm")
         }).ToList();
 
-        return ApiResponse<List<TeacherScheduleDto>>.SuccessResponse(scheduleDtos);
+        return scheduleDtos;
     }
 
     // Get attendance history for a specific schedule with optional date filter
-    public async Task<ApiResponse<ScheduleHistoryDto>> GetScheduleHistoryAsync(int scheduleId, int userId, DateOnly? date)
+    public async Task<ScheduleHistoryDto> GetScheduleHistoryAsync(int scheduleId, int userId, DateOnly? date)
     {
         // Find the teacher record by UserId
         var teacher = await _context.Teachers
@@ -78,9 +76,7 @@ public class TeacherHistoryService : ITeacherHistoryService
 
         if (teacher == null)
         {
-            return ApiResponse<ScheduleHistoryDto>.ErrorResponse(
-                "NOT_FOUND",
-                "Teacher profile not found.");
+            throw new KeyNotFoundException("Teacher profile not found.");
         }
 
         // Get the schedule with related data
@@ -93,17 +89,13 @@ public class TeacherHistoryService : ITeacherHistoryService
 
         if (schedule == null)
         {
-            return ApiResponse<ScheduleHistoryDto>.ErrorResponse(
-                "NOT_FOUND",
-                "Schedule not found.");
+            throw new KeyNotFoundException("Schedule not found.");
         }
 
         // Verify teacher owns the target schedule slot
         if (schedule.TeacherId != teacher.Id)
         {
-            return ApiResponse<ScheduleHistoryDto>.ErrorResponse(
-                "FORBIDDEN",
-                "You can only view history for your own schedule slots.");
+            throw new UnauthorizedAccessException("You can only view history for your own schedule slots.");
         }
 
         // Use provided date or default to today
@@ -232,7 +224,7 @@ public class TeacherHistoryService : ITeacherHistoryService
             Summary = summary
         };
 
-        return ApiResponse<ScheduleHistoryDto>.SuccessResponse(historyDto);
+        return historyDto;
     }
 
     // Helper method to convert DayOfWeek integer to day name
@@ -251,3 +243,5 @@ public class TeacherHistoryService : ITeacherHistoryService
         };
     }
 }
+
+
