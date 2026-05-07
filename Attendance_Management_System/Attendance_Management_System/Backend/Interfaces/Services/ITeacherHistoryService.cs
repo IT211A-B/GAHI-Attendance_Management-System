@@ -1,4 +1,4 @@
-using Attendance_Management_System.Backend.DTOs.Responses;
+﻿using Attendance_Management_System.Backend.DTOs.Responses;
 
 namespace Attendance_Management_System.Backend.Interfaces.Services;
 
@@ -7,8 +7,8 @@ namespace Attendance_Management_System.Backend.Interfaces.Services;
 public interface ITeacherHistoryService
 {
     // Get all schedule slots for sections the teacher is assigned to
-    Task<ApiResponse<List<TeacherScheduleDto>>> GetTeacherSchedulesAsync(int userId);
+    Task<List<TeacherScheduleDto>> GetTeacherSchedulesAsync(int userId);
 
     // Get attendance history for a specific schedule with optional date filter
-    Task<ApiResponse<ScheduleHistoryDto>> GetScheduleHistoryAsync(int scheduleId, int userId, DateOnly? date);
+    Task<ScheduleHistoryDto> GetScheduleHistoryAsync(int scheduleId, int userId, DateOnly? date);
 }

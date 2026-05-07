@@ -19,7 +19,7 @@ public class CoursesService : ICoursesService
     }
 
     // Retrieves all courses ordered alphabetically by name
-    public async Task<ApiResponse<List<CourseDto>>> GetAllCoursesAsync()
+    public async Task<List<CourseDto>> GetAllCoursesAsync()
     {
         // Project directly to DTO to avoid loading full entities into memory
         var courses = await _context.Courses
@@ -35,17 +35,17 @@ public class CoursesService : ICoursesService
             })
             .ToListAsync();
 
-        return ApiResponse<List<CourseDto>>.SuccessResponse(courses);
+        return courses;
     }
 
     // Retrieves a single course by its ID, returns error if not found
-    public async Task<ApiResponse<CourseDto>> GetCourseByIdAsync(int id)
+    public async Task<CourseDto> GetCourseByIdAsync(int id)
     {
         var course = await _context.Courses.FindAsync(id);
 
         if (course == null)
         {
-            return ApiResponse<CourseDto>.ErrorResponse("NOT_FOUND", "Course not found.");
+            throw new KeyNotFoundException("Course not found.");
         }
 
         // Map entity to response DTO
@@ -59,17 +59,17 @@ public class CoursesService : ICoursesService
             CreatedAt = course.CreatedAt
         };
 
-        return ApiResponse<CourseDto>.SuccessResponse(dto);
+        return dto;
     }
 
     // Creates a new course after validating that the course code is unique
-    public async Task<ApiResponse<CourseDto>> CreateCourseAsync(CreateCourseRequest request)
+    public async Task<CourseDto> CreateCourseAsync(CreateCourseRequest request)
     {
         // Enforce unique course code constraint
         var codeExists = await _context.Courses.AnyAsync(c => c.Code == request.Code);
         if (codeExists)
         {
-            return ApiResponse<CourseDto>.ErrorResponse("VALIDATION_ERROR", "A course with this code already exists.");
+            throw new InvalidOperationException("A course with this code already exists.");
         }
 
         var course = new Course
@@ -94,17 +94,17 @@ public class CoursesService : ICoursesService
             CreatedAt = course.CreatedAt
         };
 
-        return ApiResponse<CourseDto>.SuccessResponse(dto);
+        return dto;
     }
 
     // Updates an existing course, only modifying fields that are provided in the request
-    public async Task<ApiResponse<CourseDto>> UpdateCourseAsync(int id, UpdateCourseRequest request)
+    public async Task<CourseDto> UpdateCourseAsync(int id, UpdateCourseRequest request)
     {
         var course = await _context.Courses.FindAsync(id);
 
         if (course == null)
         {
-            return ApiResponse<CourseDto>.ErrorResponse("NOT_FOUND", "Course not found.");
+            throw new KeyNotFoundException("Course not found.");
         }
 
         // Validate uniqueness only when the code is actually being changed
@@ -113,7 +113,7 @@ public class CoursesService : ICoursesService
             var codeExists = await _context.Courses.AnyAsync(c => c.Code == request.Code && c.Id != id);
             if (codeExists)
             {
-                return ApiResponse<CourseDto>.ErrorResponse("VALIDATION_ERROR", "A course with this code already exists.");
+                throw new InvalidOperationException("A course with this code already exists.");
             }
         }
 
@@ -126,7 +126,7 @@ public class CoursesService : ICoursesService
         {
             if (!Enum.IsDefined(typeof(EducationLevel), request.EducationLevel.Value))
             {
-                return ApiResponse<CourseDto>.ErrorResponse("VALIDATION_ERROR", "Please select a valid education level.");
+                throw new InvalidOperationException("Please select a valid education level.");
             }
 
             course.EducationLevel = request.EducationLevel.Value;
@@ -148,36 +148,34 @@ public class CoursesService : ICoursesService
             CreatedAt = course.CreatedAt
         };
 
-        return ApiResponse<CourseDto>.SuccessResponse(dto);
+        return dto;
     }
 
     // Deletes a course only if it has no dependent subjects or students
-    public async Task<ApiResponse<bool>> DeleteCourseAsync(int id)
+    public async Task DeleteCourseAsync(int id)
     {
         var course = await _context.Courses.FindAsync(id);
 
         if (course == null)
         {
-            return ApiResponse<bool>.ErrorResponse("NOT_FOUND", "Course not found.");
+            throw new KeyNotFoundException("Course not found.");
         }
 
         // Enforce referential integrity - prevent deletion if subjects exist
         var hasSubjects = await _context.Subjects.AnyAsync(s => s.CourseId == id);
         if (hasSubjects)
         {
-            return ApiResponse<bool>.ErrorResponse("IN_USE", "Cannot delete course that has subjects assigned.");
+            throw new InvalidOperationException("Cannot delete course that has subjects assigned.");
         }
 
         // Enforce referential integrity - prevent deletion if students are enrolled
         var hasStudents = await _context.Students.AnyAsync(s => s.CourseId == id);
         if (hasStudents)
         {
-            return ApiResponse<bool>.ErrorResponse("IN_USE", "Cannot delete course that has students enrolled.");
+            throw new InvalidOperationException("Cannot delete course that has students enrolled.");
         }
 
         _context.Courses.Remove(course);
         await _context.SaveChangesAsync();
-
-        return ApiResponse<bool>.SuccessResponse(true);
     }
 }

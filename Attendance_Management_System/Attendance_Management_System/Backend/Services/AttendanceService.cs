@@ -1,4 +1,4 @@
-using Attendance_Management_System.Backend.DTOs.Requests;
+﻿using Attendance_Management_System.Backend.DTOs.Requests;
 using Attendance_Management_System.Backend.DTOs.Responses;
 using Attendance_Management_System.Backend.Configuration;
 using Attendance_Management_System.Backend.Entities;
@@ -27,7 +27,7 @@ public class AttendanceService : IAttendanceService
             : AttendanceSettings.Default;
     }
 
-    public async Task<ApiResponse<AttendanceDto>> MarkAttendanceAsync(MarkAttendanceRequest request, TeacherContext teacherContext)
+    public async Task<AttendanceDto> MarkAttendanceAsync(MarkAttendanceRequest request, TeacherContext teacherContext)
     {
         // Validate ownership, weekday, and allowed marking window before any mutation.
         var scheduleValidation = await ValidateScheduleForMarkingAsync(
@@ -37,7 +37,7 @@ public class AttendanceService : IAttendanceService
             teacherContext);
         if (!scheduleValidation.Success || scheduleValidation.Schedule is null)
         {
-            return ApiResponse<AttendanceDto>.ErrorResponse(
+            throw ServiceExceptionFactory.Create(
                 scheduleValidation.ErrorCode!,
                 scheduleValidation.ErrorMessage!);
         }
@@ -52,7 +52,7 @@ public class AttendanceService : IAttendanceService
 
         if (student == null)
         {
-            return ApiResponse<AttendanceDto>.ErrorResponse(
+            throw ServiceExceptionFactory.Create(
                 "NOT_FOUND",
                 "Active student not found in this section.");
         }
@@ -65,7 +65,7 @@ public class AttendanceService : IAttendanceService
         var academicYear = await GetActiveAcademicYearAsync();
         if (academicYear == null)
         {
-            return ApiResponse<AttendanceDto>.ErrorResponse(
+            throw ServiceExceptionFactory.Create(
                 "NOT_FOUND",
                 "No active academic year found.");
         }
@@ -152,10 +152,10 @@ public class AttendanceService : IAttendanceService
             afterStatus,
             isMarked: true);
 
-        return ApiResponse<AttendanceDto>.SuccessResponse(attendanceDto);
+        return attendanceDto;
     }
 
-    public async Task<ApiResponse<List<AttendanceDto>>> MarkBulkAttendanceAsync(BulkAttendanceRequest request, TeacherContext teacherContext)
+    public async Task<List<AttendanceDto>> MarkBulkAttendanceAsync(BulkAttendanceRequest request, TeacherContext teacherContext)
     {
         // Reuse single-mark validation so bulk and manual flows enforce identical rules.
         var scheduleValidation = await ValidateScheduleForMarkingAsync(
@@ -165,7 +165,7 @@ public class AttendanceService : IAttendanceService
             teacherContext);
         if (!scheduleValidation.Success || scheduleValidation.Schedule is null)
         {
-            return ApiResponse<List<AttendanceDto>>.ErrorResponse(
+            throw ServiceExceptionFactory.Create(
                 scheduleValidation.ErrorCode!,
                 scheduleValidation.ErrorMessage!);
         }
@@ -175,7 +175,7 @@ public class AttendanceService : IAttendanceService
         var academicYear = await GetActiveAcademicYearAsync();
         if (academicYear == null)
         {
-            return ApiResponse<List<AttendanceDto>>.ErrorResponse(
+            throw ServiceExceptionFactory.Create(
                 "NOT_FOUND",
                 "No active academic year found.");
         }
@@ -278,7 +278,7 @@ public class AttendanceService : IAttendanceService
                 ? string.Join(" ", errors)
                 : "No attendance entries were processed.";
 
-            return ApiResponse<List<AttendanceDto>>.ErrorResponse("BULK_FAILED", errorMessage);
+            throw ServiceExceptionFactory.Create("BULK_FAILED", errorMessage);
         }
 
         await _context.SaveChangesAsync();
@@ -313,10 +313,10 @@ public class AttendanceService : IAttendanceService
             .OrderBy(row => row.StudentName)
             .ToList();
 
-        return ApiResponse<List<AttendanceDto>>.SuccessResponse(attendanceDtos);
+        return attendanceDtos;
     }
 
-    public async Task<ApiResponse<AttendanceSummaryDto>> GetSectionAttendanceAsync(
+    public async Task<AttendanceSummaryDto> GetSectionAttendanceAsync(
         int sectionId,
         DateOnly date,
         int scheduleId,
@@ -330,7 +330,7 @@ public class AttendanceService : IAttendanceService
             requesterRole);
         if (!scheduleValidation.Success || scheduleValidation.Schedule is null)
         {
-            return ApiResponse<AttendanceSummaryDto>.ErrorResponse(
+            throw ServiceExceptionFactory.Create(
                 scheduleValidation.ErrorCode!,
                 scheduleValidation.ErrorMessage!);
         }
@@ -343,7 +343,7 @@ public class AttendanceService : IAttendanceService
 
         if (section == null)
         {
-            return ApiResponse<AttendanceSummaryDto>.ErrorResponse(
+            throw ServiceExceptionFactory.Create(
                 "NOT_FOUND",
                 "Section not found.");
         }
@@ -430,10 +430,10 @@ public class AttendanceService : IAttendanceService
             Records = records.OrderBy(record => record.StudentName).ToList()
         };
 
-        return ApiResponse<AttendanceSummaryDto>.SuccessResponse(summary);
+        return summary;
     }
 
-    public async Task<ApiResponse<List<AttendanceDto>>> GetStudentAttendanceAsync(int studentId, int? sectionId, DateOnly? from, DateOnly? to)
+    public async Task<List<AttendanceDto>> GetStudentAttendanceAsync(int studentId, int? sectionId, DateOnly? from, DateOnly? to)
     {
         var query = _context.Attendances
             .Include(attendance => attendance.Schedule)
@@ -501,7 +501,7 @@ public class AttendanceService : IAttendanceService
             };
         }).ToList();
 
-        return ApiResponse<List<AttendanceDto>>.SuccessResponse(records);
+        return records;
     }
 
     private async Task<ScheduleValidationResult> ValidateScheduleForMarkingAsync(
@@ -729,3 +729,5 @@ public class AttendanceService : IAttendanceService
             => new(false, null, errorCode, errorMessage);
     }
 }
+
+

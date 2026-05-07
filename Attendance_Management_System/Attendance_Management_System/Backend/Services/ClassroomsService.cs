@@ -18,7 +18,7 @@ public class ClassroomsService : IClassroomsService
     }
 
     // Retrieves all classrooms ordered by name
-    public async Task<ApiResponse<List<ClassroomDto>>> GetAllClassroomsAsync()
+    public async Task<List<ClassroomDto>> GetAllClassroomsAsync()
     {
         var classrooms = await _context.Classrooms
             .OrderBy(c => c.Name)
@@ -31,17 +31,17 @@ public class ClassroomsService : IClassroomsService
             })
             .ToListAsync();
 
-        return ApiResponse<List<ClassroomDto>>.SuccessResponse(classrooms);
+        return classrooms;
     }
 
     // Retrieves a single classroom by ID
-    public async Task<ApiResponse<ClassroomDto>> GetClassroomByIdAsync(int id)
+    public async Task<ClassroomDto> GetClassroomByIdAsync(int id)
     {
         var classroom = await _context.Classrooms.FindAsync(id);
 
         if (classroom == null)
         {
-            return ApiResponse<ClassroomDto>.ErrorResponse("NOT_FOUND", "Classroom not found.");
+            throw new KeyNotFoundException("Classroom not found.");
         }
 
         var dto = new ClassroomDto
@@ -52,11 +52,11 @@ public class ClassroomsService : IClassroomsService
             CreatedAt = classroom.CreatedAt
         };
 
-        return ApiResponse<ClassroomDto>.SuccessResponse(dto);
+        return dto;
     }
 
     // Creates a new classroom
-    public async Task<ApiResponse<ClassroomDto>> CreateClassroomAsync(CreateClassroomRequest request)
+    public async Task<ClassroomDto> CreateClassroomAsync(CreateClassroomRequest request)
     {
         var classroom = new Classroom
         {
@@ -75,17 +75,17 @@ public class ClassroomsService : IClassroomsService
             CreatedAt = classroom.CreatedAt
         };
 
-        return ApiResponse<ClassroomDto>.SuccessResponse(dto);
+        return dto;
     }
 
     // Updates an existing classroom
-    public async Task<ApiResponse<ClassroomDto>> UpdateClassroomAsync(int id, UpdateClassroomRequest request)
+    public async Task<ClassroomDto> UpdateClassroomAsync(int id, UpdateClassroomRequest request)
     {
         var classroom = await _context.Classrooms.FindAsync(id);
 
         if (classroom == null)
         {
-            return ApiResponse<ClassroomDto>.ErrorResponse("NOT_FOUND", "Classroom not found.");
+            throw new KeyNotFoundException("Classroom not found.");
         }
 
         if (!string.IsNullOrEmpty(request.Name))
@@ -103,29 +103,27 @@ public class ClassroomsService : IClassroomsService
             CreatedAt = classroom.CreatedAt
         };
 
-        return ApiResponse<ClassroomDto>.SuccessResponse(dto);
+        return dto;
     }
 
     // Deletes a classroom if not assigned to any sections
-    public async Task<ApiResponse<bool>> DeleteClassroomAsync(int id)
+    public async Task DeleteClassroomAsync(int id)
     {
         var classroom = await _context.Classrooms.FindAsync(id);
 
         if (classroom == null)
         {
-            return ApiResponse<bool>.ErrorResponse("NOT_FOUND", "Classroom not found.");
+            throw new KeyNotFoundException("Classroom not found.");
         }
 
         // Prevent deletion if classroom is in use by sections
         var isInUse = await _context.Sections.AnyAsync(s => s.ClassroomId == id);
         if (isInUse)
         {
-            return ApiResponse<bool>.ErrorResponse("IN_USE", "Cannot delete classroom that is assigned to sections.");
+            throw new InvalidOperationException("Cannot delete classroom that is assigned to sections.");
         }
 
         _context.Classrooms.Remove(classroom);
         await _context.SaveChangesAsync();
-
-        return ApiResponse<bool>.SuccessResponse(true);
     }
 }
