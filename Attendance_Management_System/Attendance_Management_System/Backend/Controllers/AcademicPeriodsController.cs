@@ -26,7 +26,7 @@ public class AcademicPeriodsController : Controller
 
     [HttpPost("create")]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> Create([Bind(Prefix = "CreateForm")] CreateAcademicPeriodFormViewModel form)
+    public async Task<IActionResult> Create(CreateAcademicPeriodFormViewModel form)
     {
         var viewModel = await BuildIndexViewModelAsync();
         viewModel.CreateForm = form;

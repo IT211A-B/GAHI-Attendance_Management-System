@@ -1,10 +1,3 @@
-using Attendance_Management_System.Frontend.TagHelpers;
-using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Mvc.Rendering;
-using Microsoft.AspNetCore.Mvc.Routing;
-using Microsoft.AspNetCore.Razor.TagHelpers;
-using Moq;
-
 namespace Attendance_Management_System.Tests;
 
 public class FrontendTagHelpersTests

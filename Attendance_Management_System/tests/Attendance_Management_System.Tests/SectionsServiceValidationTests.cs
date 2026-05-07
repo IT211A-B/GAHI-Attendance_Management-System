@@ -1,12 +1,3 @@
-using Attendance_Management_System.Backend.Configuration;
-using Attendance_Management_System.Backend.DTOs.Requests;
-using Attendance_Management_System.Backend.Entities;
-using Attendance_Management_System.Backend.Enums;
-using Attendance_Management_System.Backend.Persistence;
-using Attendance_Management_System.Backend.Services;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Options;
-
 namespace Attendance_Management_System.Tests;
 
 public class SectionsServiceValidationTests

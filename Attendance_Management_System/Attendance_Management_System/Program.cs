@@ -20,21 +20,9 @@ var builder = WebApplication.CreateBuilder(new WebApplicationOptions
 
 // Add MVC controllers with views for handling web and API requests
 builder.Services.AddControllersWithViews();
-
-// Generate a dedicated API-focused OpenAPI document for Scalar.
-builder.Services.AddOpenApi("api", options =>
+builder.Services.AddHttpClient("AttendanceAPI", client =>
 {
-    options.ShouldInclude = apiDescription =>
-    {
-        var relativePath = apiDescription.RelativePath?.TrimStart('/');
-        if (string.IsNullOrWhiteSpace(relativePath))
-        {
-            return false;
-        }
-
-        return relativePath.StartsWith("attendance/qr", StringComparison.OrdinalIgnoreCase)
-            || relativePath.StartsWith("notifications", StringComparison.OrdinalIgnoreCase);
-    };
+    client.BaseAddress = new Uri(builder.Configuration["AppSettings:BaseUrl"]);
 });
 
 // Tell Razor to resolve pages from Frontend/Views instead of root Views
@@ -47,6 +35,10 @@ builder.Services.Configure<RazorViewEngineOptions>(options =>
 
 // Register all backend services (database, auth, repositories, services)
 builder.Services.AddBackend(builder.Configuration);
+
+// Register API explorer and Swagger generation for MVC controller endpoints
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen();
 
 // Trust reverse proxy headers (Render) for HTTPS scheme and client IP.
 builder.Services.Configure<ForwardedHeadersOptions>(options =>
@@ -82,20 +74,21 @@ app.UseAuthentication();
 app.UseRateLimiter();
 app.UseAuthorization();
 
-if (app.Environment.IsDevelopment())
-{
-    // Expose OpenAPI JSON and Scalar UI only during development.
-    app.MapOpenApi("/openapi/{documentName}.json").AllowAnonymous();
-    app.MapScalarApiReference("/scalar", options =>
-    {
-        options.AddDocument("api", "Attendance API");
-    }).AllowAnonymous();
-}
-
 // Configure default MVC route pattern
+app.MapControllers();
+
 app.MapControllerRoute(
     name: "default",
     pattern: "{controller=Home}/{action=Index}/{id?}");
+
+if (app.Environment.IsDevelopment())
+{
+    app.UseSwagger();
+    app.MapScalarApiReference(options =>
+    {
+        options.WithOpenApiRoutePattern("/swagger/{documentName}/swagger.json");
+    });
+}
 
 app.MapHub<NotificationHub>("/hubs/notifications").DisableRateLimiting();
 

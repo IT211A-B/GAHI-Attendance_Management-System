@@ -8,7 +8,6 @@ Attendance Management System for Don Bosco Technical College, implemented as a p
 - Authentication: Cookie-based ASP.NET Identity
 - Data access: Entity Framework Core + PostgreSQL
 - Health endpoint: `/health`
-- API docs (Development): Scalar at `/scalar`, OpenAPI JSON at `/openapi/api.json`
 
 Cutover notes are documented in [Attendance_Management_System/Attendance_Management_System/PURE_MVC_CUTOVER.md](Attendance_Management_System/Attendance_Management_System/PURE_MVC_CUTOVER.md).
 
@@ -56,10 +55,6 @@ dotnet run --project Attendance_Management_System/Attendance_Management_System/A
 - Login: `http://localhost:5003/login`
 - Signup: `http://localhost:5003/signup`
 - Health: `http://localhost:5003/health`
-- Scalar API docs: `http://localhost:5003/scalar`
-- OpenAPI JSON: `http://localhost:5003/openapi/api.json`
-
-Scalar is the active API documentation UI for this project in Development.
 
 ## Seeded Accounts (Fresh Database Only)
 

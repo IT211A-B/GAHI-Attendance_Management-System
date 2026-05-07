@@ -11,15 +11,18 @@ namespace Attendance_Management_System.Backend.Services;
 public class AcademicYearsService : IAcademicYearsService
 {
     private readonly AppDbContext _context;
+    private readonly IHttpClientFactory _HttpClientFactory;
 
-    public AcademicYearsService(AppDbContext context)
+    public AcademicYearsService(AppDbContext context, IHttpClientFactory httpClientFactory)
     {
+        _HttpClientFactory = httpClientFactory;
         _context = context;
     }
 
     // Retrieves all academic years ordered by start date (newest first)
     public async Task<ApiResponse<List<AcademicYearDto>>> GetAllAcademicYearsAsync()
     {
+
         var academicYears = await _context.AcademicYears
             .OrderByDescending(ay => ay.StartDate)
             .Select(ay => new AcademicYearDto
@@ -61,7 +64,8 @@ public class AcademicYearsService : IAcademicYearsService
 
     // Creates a new academic year with date validation and overlap checking
     public async Task<ApiResponse<AcademicYearDto>> CreateAcademicYearAsync(CreateAcademicYearRequest request)
-    {
+    {   
+        var client = _HttpClientFactory.CreateClient("");
         // Validate that end date is after start date
         if (request.EndDate <= request.StartDate)
         {

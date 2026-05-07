@@ -1,12 +1,3 @@
-using Attendance_Management_System.Backend.Constants;
-using Attendance_Management_System.Backend.Entities;
-using Attendance_Management_System.Backend.Enums;
-using Attendance_Management_System.Backend.Interfaces.Services;
-using Attendance_Management_System.Backend.Persistence;
-using Attendance_Management_System.Backend.Services;
-using Microsoft.EntityFrameworkCore;
-using Moq;
-
 namespace Attendance_Management_System.Tests;
 
 public class SchedulesServiceDeleteTests
