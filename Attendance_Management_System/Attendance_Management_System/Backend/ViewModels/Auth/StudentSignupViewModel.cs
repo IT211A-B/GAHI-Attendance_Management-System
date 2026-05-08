@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using Attendance_Management_System.Backend.Enums;
 
 namespace Attendance_Management_System.Backend.ViewModels.Auth;
 
@@ -62,6 +63,10 @@ public class StudentSignupViewModel
     [Display(Name = "Course")]
     public int CourseId { get; set; }
 
+    [Range(1, 12, ErrorMessage = "Please select a valid year level")]
+    [Display(Name = "Year level")]
+    public int YearLevel { get; set; }
+
     [Range(1, int.MaxValue, ErrorMessage = "Please select a valid academic period")]
     [Display(Name = "Academic period")]
     public int AcademicYearId { get; set; }
@@ -76,6 +81,10 @@ public class SignupCourseOptionViewModel
 {
     public int Id { get; set; }
     public string Label { get; set; } = string.Empty;
+    public EducationLevel EducationLevel { get; set; }
+    public int MinYearLevel { get; set; }
+    public int MaxYearLevel { get; set; }
+    public string EducationLevelLabel { get; set; } = string.Empty;
 }
 
 public class SignupAcademicYearOptionViewModel

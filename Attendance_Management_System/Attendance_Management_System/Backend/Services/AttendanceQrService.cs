@@ -58,12 +58,12 @@ public class AttendanceQrService : IAttendanceQrService
         _logger = logger;
     }
 
-    public async Task<ApiResponse<List<AttendanceQrSectionSuggestionDto>>> SearchSectionsAsync(int userId, string role, string? query, int take)
+    public async Task<List<AttendanceQrSectionSuggestionDto>> SearchSectionsAsync(int userId, string role, string? query, int take)
     {
         var ownerContext = await ResolveOwnerContextAsync(userId, role);
         if (!ownerContext.Success)
         {
-            return ApiResponse<List<AttendanceQrSectionSuggestionDto>>.ErrorResponse(ownerContext.ErrorCode, ownerContext.ErrorMessage);
+            throw new UnauthorizedAccessException(ownerContext.ErrorMessage);
         }
 
         var normalizedQuery = NormalizeQuery(query);
@@ -99,22 +99,20 @@ public class AttendanceQrService : IAttendanceQrService
             .Take(limit)
             .ToListAsync();
 
-        return ApiResponse<List<AttendanceQrSectionSuggestionDto>>.SuccessResponse(sections);
+        return sections;
     }
 
-    public async Task<ApiResponse<List<AttendanceQrSubjectSuggestionDto>>> SearchSubjectsAsync(int userId, string role, int sectionId, string? query, int take)
+    public async Task<List<AttendanceQrSubjectSuggestionDto>> SearchSubjectsAsync(int userId, string role, int sectionId, string? query, int take)
     {
         if (sectionId <= 0)
         {
-            return ApiResponse<List<AttendanceQrSubjectSuggestionDto>>.ErrorResponse(
-                ErrorCodes.ValidationError,
-                "Section is required.");
+            throw new InvalidOperationException("Section is required.");
         }
 
         var ownerContext = await ResolveOwnerContextAsync(userId, role);
         if (!ownerContext.Success)
         {
-            return ApiResponse<List<AttendanceQrSubjectSuggestionDto>>.ErrorResponse(ownerContext.ErrorCode, ownerContext.ErrorMessage);
+            throw new UnauthorizedAccessException(ownerContext.ErrorMessage);
         }
 
         var normalizedQuery = NormalizeQuery(query);
@@ -154,22 +152,20 @@ public class AttendanceQrService : IAttendanceQrService
             })
             .ToList();
 
-        return ApiResponse<List<AttendanceQrSubjectSuggestionDto>>.SuccessResponse(result);
+        return result;
     }
 
-    public async Task<ApiResponse<List<AttendanceQrPeriodSuggestionDto>>> SearchPeriodsAsync(int userId, string role, int sectionId, int subjectId, string? query, int take)
+    public async Task<List<AttendanceQrPeriodSuggestionDto>> SearchPeriodsAsync(int userId, string role, int sectionId, int subjectId, string? query, int take)
     {
         if (sectionId <= 0 || subjectId <= 0)
         {
-            return ApiResponse<List<AttendanceQrPeriodSuggestionDto>>.ErrorResponse(
-                ErrorCodes.ValidationError,
-                "Section and subject are required.");
+            throw new InvalidOperationException("Section and subject are required.");
         }
 
         var ownerContext = await ResolveOwnerContextAsync(userId, role);
         if (!ownerContext.Success)
         {
-            return ApiResponse<List<AttendanceQrPeriodSuggestionDto>>.ErrorResponse(ownerContext.ErrorCode, ownerContext.ErrorMessage);
+            throw new UnauthorizedAccessException(ownerContext.ErrorMessage);
         }
 
         var normalizedQuery = NormalizeQuery(query);
@@ -214,22 +210,20 @@ public class AttendanceQrService : IAttendanceQrService
             .Take(limit)
             .ToList();
 
-        return ApiResponse<List<AttendanceQrPeriodSuggestionDto>>.SuccessResponse(periods);
+        return periods;
     }
 
-    public async Task<ApiResponse<AttendanceQrSessionDto>> CreateSessionAsync(int userId, string role, CreateAttendanceQrSessionRequest request)
+    public async Task<AttendanceQrSessionDto> CreateSessionAsync(int userId, string role, CreateAttendanceQrSessionRequest request)
     {
         if (request.SectionId <= 0 || request.SubjectId <= 0 || request.ScheduleId <= 0)
         {
-            return ApiResponse<AttendanceQrSessionDto>.ErrorResponse(
-                ErrorCodes.ValidationError,
-                "Section, subject, and period are required.");
+            throw new InvalidOperationException("Section, subject, and period are required.");
         }
 
         var ownerContext = await ResolveOwnerContextAsync(userId, role);
         if (!ownerContext.Success)
         {
-            return ApiResponse<AttendanceQrSessionDto>.ErrorResponse(ownerContext.ErrorCode, ownerContext.ErrorMessage);
+            throw new UnauthorizedAccessException(ownerContext.ErrorMessage);
         }
 
         var schoolDate = ownerContext.SchoolDate;
@@ -247,16 +241,12 @@ public class AttendanceQrService : IAttendanceQrService
 
         if (schedule == null)
         {
-            return ApiResponse<AttendanceQrSessionDto>.ErrorResponse(
-                ErrorCodes.Forbidden,
-                "Selected period is not owned by your account.");
+            throw new UnauthorizedAccessException("Selected period is not owned by your account.");
         }
 
         if (!AttendancePolicy.IsDateAlignedWithSchedule(schedule, schoolDate))
         {
-            return ApiResponse<AttendanceQrSessionDto>.ErrorResponse(
-                "OUTSIDE_ALLOWED_WINDOW",
-                "Selected period is not active for today.");
+            throw new InvalidOperationException("Selected period is not active for today.");
         }
 
         // Close any still-active session for the same owner+schedule before creating a fresh one.
@@ -306,22 +296,20 @@ public class AttendanceQrService : IAttendanceQrService
             periodLabel: BuildPeriodLabel(schedule.DayOfWeek, schedule.StartTime, schedule.EndTime),
             timeRangeLabel: $"{schedule.StartTime:HH\\:mm}-{schedule.EndTime:HH\\:mm}");
 
-        return ApiResponse<AttendanceQrSessionDto>.SuccessResponse(dto);
+        return dto;
     }
 
-    public async Task<ApiResponse<AttendanceQrSessionDto>> RefreshSessionAsync(int userId, string role, string sessionId)
+    public async Task<AttendanceQrSessionDto> RefreshSessionAsync(int userId, string role, string sessionId)
     {
         if (string.IsNullOrWhiteSpace(sessionId))
         {
-            return ApiResponse<AttendanceQrSessionDto>.ErrorResponse(
-                ErrorCodes.ValidationError,
-                "Session id is required.");
+            throw new InvalidOperationException("Session id is required.");
         }
 
         var ownerContext = await ResolveOwnerContextAsync(userId, role);
         if (!ownerContext.Success)
         {
-            return ApiResponse<AttendanceQrSessionDto>.ErrorResponse(ownerContext.ErrorCode, ownerContext.ErrorMessage);
+            throw new UnauthorizedAccessException(ownerContext.ErrorMessage);
         }
 
         var session = await _context.AttendanceQrSessions
@@ -332,12 +320,12 @@ public class AttendanceQrService : IAttendanceQrService
 
         if (session == null)
         {
-            return ApiResponse<AttendanceQrSessionDto>.ErrorResponse("SESSION_INACTIVE", "QR session not found.");
+            throw new InvalidOperationException("QR session not found.");
         }
 
         if (session.OwnerTeacherId != ownerContext.TeacherId)
         {
-            return ApiResponse<AttendanceQrSessionDto>.ErrorResponse(ErrorCodes.Forbidden, "You do not own this QR session.");
+            throw new UnauthorizedAccessException("You do not own this QR session.");
         }
 
         var nowUtc = DateTimeOffset.UtcNow;
@@ -348,9 +336,7 @@ public class AttendanceQrService : IAttendanceQrService
             session.ClosedAtUtc ??= nowUtc;
             await _context.SaveChangesAsync();
 
-            return ApiResponse<AttendanceQrSessionDto>.ErrorResponse(
-                "SESSION_INACTIVE",
-                "QR session is no longer active.");
+            throw new InvalidOperationException("QR session is no longer active.");
         }
 
         var schedule = session.Schedule;
@@ -365,9 +351,7 @@ public class AttendanceQrService : IAttendanceQrService
             session.ClosedAtUtc = nowUtc;
             await _context.SaveChangesAsync();
 
-            return ApiResponse<AttendanceQrSessionDto>.ErrorResponse(
-                ErrorCodes.NotFound,
-                "Associated schedule not found.");
+            throw new KeyNotFoundException("Associated schedule not found.");
         }
 
         if (!AttendancePolicy.IsDateAlignedWithSchedule(schedule, ownerContext.SchoolDate))
@@ -376,9 +360,7 @@ public class AttendanceQrService : IAttendanceQrService
             session.ClosedAtUtc = nowUtc;
             await _context.SaveChangesAsync();
 
-            return ApiResponse<AttendanceQrSessionDto>.ErrorResponse(
-                "OUTSIDE_ALLOWED_WINDOW",
-                "Schedule is no longer active for today.");
+            throw new InvalidOperationException("Schedule is no longer active for today.");
         }
 
         session.IssuedAtUtc = nowUtc;
@@ -397,22 +379,20 @@ public class AttendanceQrService : IAttendanceQrService
             periodLabel: BuildPeriodLabel(schedule.DayOfWeek, schedule.StartTime, schedule.EndTime),
             timeRangeLabel: $"{schedule.StartTime:HH\\:mm}-{schedule.EndTime:HH\\:mm}");
 
-        return ApiResponse<AttendanceQrSessionDto>.SuccessResponse(dto);
+        return dto;
     }
 
-    public async Task<ApiResponse<bool>> CloseSessionAsync(int userId, string role, string sessionId)
+    public async Task CloseSessionAsync(int userId, string role, string sessionId)
     {
         if (string.IsNullOrWhiteSpace(sessionId))
         {
-            return ApiResponse<bool>.ErrorResponse(
-                ErrorCodes.ValidationError,
-                "Session id is required.");
+            throw new InvalidOperationException("Session id is required.");
         }
 
         var ownerContext = await ResolveOwnerContextAsync(userId, role);
         if (!ownerContext.Success)
         {
-            return ApiResponse<bool>.ErrorResponse(ownerContext.ErrorCode, ownerContext.ErrorMessage);
+            throw new UnauthorizedAccessException(ownerContext.ErrorMessage);
         }
 
         var session = await _context.AttendanceQrSessions
@@ -420,12 +400,12 @@ public class AttendanceQrService : IAttendanceQrService
 
         if (session == null)
         {
-            return ApiResponse<bool>.ErrorResponse("SESSION_INACTIVE", "QR session not found.");
+            throw new InvalidOperationException("QR session not found.");
         }
 
         if (session.OwnerTeacherId != ownerContext.TeacherId)
         {
-            return ApiResponse<bool>.ErrorResponse(ErrorCodes.Forbidden, "You do not own this QR session.");
+            throw new UnauthorizedAccessException("You do not own this QR session.");
         }
 
         var nowUtc = DateTimeOffset.UtcNow;
@@ -449,22 +429,20 @@ public class AttendanceQrService : IAttendanceQrService
             await _context.SaveChangesAsync();
         }
 
-        return ApiResponse<bool>.SuccessResponse(true);
+        return;
     }
 
-    public async Task<ApiResponse<AttendanceQrLiveFeedDto>> GetLiveFeedAsync(int userId, string role, string sessionId)
+    public async Task<AttendanceQrLiveFeedDto> GetLiveFeedAsync(int userId, string role, string sessionId)
     {
         if (string.IsNullOrWhiteSpace(sessionId))
         {
-            return ApiResponse<AttendanceQrLiveFeedDto>.ErrorResponse(
-                ErrorCodes.ValidationError,
-                "Session id is required.");
+            throw new InvalidOperationException("Session id is required.");
         }
 
         var ownerContext = await ResolveOwnerContextAsync(userId, role);
         if (!ownerContext.Success)
         {
-            return ApiResponse<AttendanceQrLiveFeedDto>.ErrorResponse(ownerContext.ErrorCode, ownerContext.ErrorMessage);
+            throw new UnauthorizedAccessException(ownerContext.ErrorMessage);
         }
 
         var session = await _context.AttendanceQrSessions
@@ -476,12 +454,12 @@ public class AttendanceQrService : IAttendanceQrService
 
         if (session == null)
         {
-            return ApiResponse<AttendanceQrLiveFeedDto>.ErrorResponse("SESSION_INACTIVE", "QR session not found.");
+            throw new InvalidOperationException("QR session not found.");
         }
 
         if (session.OwnerTeacherId != ownerContext.TeacherId)
         {
-            return ApiResponse<AttendanceQrLiveFeedDto>.ErrorResponse(ErrorCodes.Forbidden, "You do not own this QR session.");
+            throw new UnauthorizedAccessException("You do not own this QR session.");
         }
 
         var checkinRows = await _context.AttendanceQrCheckins
@@ -529,27 +507,25 @@ public class AttendanceQrService : IAttendanceQrService
             Checkins = checkins
         };
 
-        return ApiResponse<AttendanceQrLiveFeedDto>.SuccessResponse(dto);
+        return dto;
     }
 
-    public async Task<ApiResponse<AttendanceQrCheckinResultDto>> SubmitCheckinAsync(int userId, string role, SubmitAttendanceQrCheckinRequest request)
+    public async Task<AttendanceQrCheckinResultDto> SubmitCheckinAsync(int userId, string role, SubmitAttendanceQrCheckinRequest request)
     {
         if (!string.Equals(role, "student", StringComparison.OrdinalIgnoreCase))
         {
-            return ApiResponse<AttendanceQrCheckinResultDto>.ErrorResponse(
-                ErrorCodes.Forbidden,
-                "Only students can submit QR check-ins.");
+            throw new UnauthorizedAccessException("Only students can submit QR check-ins.");
         }
 
         if (request is null || string.IsNullOrWhiteSpace(request.Token))
         {
-            return ApiResponse<AttendanceQrCheckinResultDto>.ErrorResponse("TOKEN_INVALID", "QR token is required.");
+            throw new InvalidOperationException("QR token is required.");
         }
 
         // Reject tampered or expired tokens before querying any session data.
-        if (!TryParseAndValidateToken(request.Token.Trim(), out var payload, out var tokenErrorCode, out var tokenErrorMessage))
+        if (!TryParseAndValidateToken(request.Token.Trim(), out var payload, out var tokenErrorMessage))
         {
-            return ApiResponse<AttendanceQrCheckinResultDto>.ErrorResponse(tokenErrorCode, tokenErrorMessage);
+            throw new InvalidOperationException(tokenErrorMessage);
         }
 
         var session = await _context.AttendanceQrSessions
@@ -558,7 +534,7 @@ public class AttendanceQrService : IAttendanceQrService
 
         if (session == null)
         {
-            return ApiResponse<AttendanceQrCheckinResultDto>.ErrorResponse("SESSION_INACTIVE", "QR session not found.");
+            throw new InvalidOperationException("QR session not found.");
         }
 
         var nowUtc = DateTimeOffset.UtcNow;
@@ -568,16 +544,12 @@ public class AttendanceQrService : IAttendanceQrService
             session.ClosedAtUtc ??= nowUtc;
             await _context.SaveChangesAsync();
 
-            return ApiResponse<AttendanceQrCheckinResultDto>.ErrorResponse(
-                "SESSION_INACTIVE",
-                "QR session is no longer active.");
+            throw new InvalidOperationException("QR session is no longer active.");
         }
 
         if (!TokenPayloadMatchesSession(payload, session))
         {
-            return ApiResponse<AttendanceQrCheckinResultDto>.ErrorResponse(
-                "TOKEN_INVALID",
-                "QR token does not match the active session.");
+            throw new InvalidOperationException("QR token does not match the active session.");
         }
 
         var student = await _context.Students
@@ -586,9 +558,7 @@ public class AttendanceQrService : IAttendanceQrService
 
         if (student == null)
         {
-            return ApiResponse<AttendanceQrCheckinResultDto>.ErrorResponse(
-                ErrorCodes.Forbidden,
-                "Student profile not found for this account.");
+            throw new UnauthorizedAccessException("Student profile not found for this account.");
         }
 
         var activeAcademicYearId = await _context.AcademicYears
@@ -599,9 +569,7 @@ public class AttendanceQrService : IAttendanceQrService
 
         if (!activeAcademicYearId.HasValue)
         {
-            return ApiResponse<AttendanceQrCheckinResultDto>.ErrorResponse(
-                ErrorCodes.NotFound,
-                "No active academic year found.");
+            throw new KeyNotFoundException("No active academic year found.");
         }
 
         var hasApprovedEnrollment = await _context.Enrollments
@@ -615,9 +583,7 @@ public class AttendanceQrService : IAttendanceQrService
         // Require both approved enrollment and current section assignment.
         if (!hasApprovedEnrollment || student.SectionId != session.SectionId)
         {
-            return ApiResponse<AttendanceQrCheckinResultDto>.ErrorResponse(
-                "STUDENT_NOT_ENROLLED",
-                "You are not enrolled in this class section.");
+            throw new InvalidOperationException("You are not enrolled in this class section.");
         }
 
         var alreadyCheckedIn = await _context.AttendanceQrCheckins
@@ -626,9 +592,7 @@ public class AttendanceQrService : IAttendanceQrService
 
         if (alreadyCheckedIn)
         {
-            return ApiResponse<AttendanceQrCheckinResultDto>.ErrorResponse(
-                "ALREADY_CHECKED_IN",
-                "You are already marked present for this session.");
+            throw new InvalidOperationException("You are already marked present for this session.");
         }
 
         var schoolNow = TimeZoneInfo.ConvertTime(nowUtc, AttendancePolicy.ResolveSchoolTimeZone(_attendanceSettings));
@@ -650,15 +614,9 @@ public class AttendanceQrService : IAttendanceQrService
         };
 
         // Reuse the core attendance service so QR and manual marking stay in sync.
-        var attendanceResult = await _attendanceService.MarkAttendanceAsync(attendanceRequest, teacherContext);
-        if (!attendanceResult.Success || attendanceResult.Data is null)
-        {
-            return ApiResponse<AttendanceQrCheckinResultDto>.ErrorResponse(
-                attendanceResult.Error?.Code ?? ErrorCodes.BadRequest,
-                attendanceResult.Error?.Message ?? "Unable to submit attendance.");
-        }
+        var attendance = await _attendanceService.MarkAttendanceAsync(attendanceRequest, teacherContext);
 
-        var normalizedStatus = NormalizeStatus(attendanceResult.Data.StatusLabel);
+        var normalizedStatus = NormalizeStatus(attendance.StatusLabel);
         var studentName = BuildStudentName(student.FirstName, student.MiddleName, student.LastName);
 
         var checkin = new AttendanceQrCheckin
@@ -667,7 +625,7 @@ public class AttendanceQrService : IAttendanceQrService
             StudentId = student.Id,
             CheckedInAtUtc = nowUtc,
             Status = normalizedStatus,
-            AttendanceId = attendanceResult.Data.Id > 0 ? attendanceResult.Data.Id : null
+            AttendanceId = attendance.Id > 0 ? attendance.Id : null
         };
 
         _context.AttendanceQrCheckins.Add(checkin);
@@ -679,9 +637,7 @@ public class AttendanceQrService : IAttendanceQrService
         catch (DbUpdateException)
         {
             // Handles race conditions where duplicate scans land almost simultaneously.
-            return ApiResponse<AttendanceQrCheckinResultDto>.ErrorResponse(
-                "ALREADY_CHECKED_IN",
-                "You are already marked present for this session.");
+            throw new InvalidOperationException("You are already marked present for this session.");
         }
 
         await TryCreateCheckinNotificationAsync(session, student.Id, studentName, normalizedStatus);
@@ -696,10 +652,10 @@ public class AttendanceQrService : IAttendanceQrService
             RecordedAtUtc = checkin.CheckedInAtUtc
         };
 
-        return ApiResponse<AttendanceQrCheckinResultDto>.SuccessResponse(result);
+        return result;
     }
 
-    private async Task<(bool Success, int TeacherId, DateOnly SchoolDate, string ErrorCode, string ErrorMessage)> ResolveOwnerContextAsync(int userId, string role)
+    private async Task<(bool Success, int TeacherId, DateOnly SchoolDate, string ErrorMessage)> ResolveOwnerContextAsync(int userId, string role)
     {
         // Admin is accepted here only when the account is linked to a teacher profile.
         var isTeacherRole = string.Equals(role, "teacher", StringComparison.OrdinalIgnoreCase)
@@ -707,7 +663,7 @@ public class AttendanceQrService : IAttendanceQrService
 
         if (!isTeacherRole)
         {
-            return (false, 0, default, ErrorCodes.Forbidden, "Only teacher accounts can use QR teacher controls.");
+            return (false, 0, default, "Only teacher accounts can use QR teacher controls.");
         }
 
         var teacherId = await _context.Teachers
@@ -718,11 +674,11 @@ public class AttendanceQrService : IAttendanceQrService
 
         if (!teacherId.HasValue)
         {
-            return (false, 0, default, ErrorCodes.Forbidden, "QR attendance requires a teacher profile assigned to this account.");
+            return (false, 0, default, "QR attendance requires a teacher profile assigned to this account.");
         }
 
         var schoolDate = AttendancePolicy.GetSchoolDate(_attendanceSettings, DateTimeOffset.UtcNow);
-        return (true, teacherId.Value, schoolDate, string.Empty, string.Empty);
+        return (true, teacherId.Value, schoolDate, string.Empty);
     }
 
     private IQueryable<Schedule> BuildOwnedSchedulesForSchoolDateQuery(int teacherId, DateOnly schoolDate)
@@ -861,16 +817,13 @@ public class AttendanceQrService : IAttendanceQrService
     private bool TryParseAndValidateToken(
         string token,
         out AttendanceQrTokenPayload payload,
-        out string errorCode,
         out string errorMessage)
     {
         payload = new AttendanceQrTokenPayload();
-        errorCode = string.Empty;
         errorMessage = string.Empty;
 
         if (string.IsNullOrWhiteSpace(token) || token.Length > 4096)
         {
-            errorCode = "TOKEN_INVALID";
             errorMessage = "QR token format is invalid.";
             return false;
         }
@@ -878,7 +831,6 @@ public class AttendanceQrService : IAttendanceQrService
         if (token.StartsWith("qrs_", StringComparison.OrdinalIgnoreCase))
         {
             // Common UX mistake: session IDs are not usable as check-in tokens.
-            errorCode = "TOKEN_INVALID";
             errorMessage = "That value is a session ID, not a QR token. Scan the QR image or copy the full token from the QR Token panel.";
             return false;
         }
@@ -886,7 +838,6 @@ public class AttendanceQrService : IAttendanceQrService
         var parts = token.Split('.', StringSplitOptions.RemoveEmptyEntries);
         if (parts.Length != 2)
         {
-            errorCode = "TOKEN_INVALID";
             errorMessage = "QR token format is invalid.";
             return false;
         }
@@ -901,7 +852,6 @@ public class AttendanceQrService : IAttendanceQrService
         }
         catch (FormatException)
         {
-            errorCode = "TOKEN_INVALID";
             errorMessage = "QR token signature is invalid.";
             return false;
         }
@@ -910,7 +860,6 @@ public class AttendanceQrService : IAttendanceQrService
         var expectedSignature = ComputeSignature(payloadEncoded);
         if (!CryptographicOperations.FixedTimeEquals(expectedSignature, providedSignature))
         {
-            errorCode = "TOKEN_INVALID";
             errorMessage = "QR token signature check failed.";
             return false;
         }
@@ -925,7 +874,6 @@ public class AttendanceQrService : IAttendanceQrService
                 || string.IsNullOrWhiteSpace(parsedPayload.Nonce)
                 || parsedPayload.ExpiresAtUnixMs <= 0)
             {
-                errorCode = "TOKEN_INVALID";
                 errorMessage = "QR token payload is invalid.";
                 return false;
             }
@@ -933,7 +881,6 @@ public class AttendanceQrService : IAttendanceQrService
             var expiresAtUtc = DateTimeOffset.FromUnixTimeMilliseconds(parsedPayload.ExpiresAtUnixMs);
             if (DateTimeOffset.UtcNow >= expiresAtUtc)
             {
-                errorCode = "TOKEN_EXPIRED";
                 errorMessage = "QR token already expired.";
                 return false;
             }
@@ -943,7 +890,6 @@ public class AttendanceQrService : IAttendanceQrService
         }
         catch (Exception)
         {
-            errorCode = "TOKEN_INVALID";
             errorMessage = "QR token payload could not be parsed.";
             return false;
         }
@@ -1037,3 +983,6 @@ public class AttendanceQrService : IAttendanceQrService
         public string Status { get; set; } = string.Empty;
     }
 }
+
+
+

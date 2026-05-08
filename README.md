@@ -61,14 +61,14 @@ dotnet run --project Attendance_Management_System/Attendance_Management_System/A
 Seed runs only when there are no users yet.
 
 - Admin:
-	- Email: `admin@dbtc-cebu.edu.ph`
-	- Password: `Admin123!`
+  - Email: `admin@dbtc-cebu.edu.ph`
+  - Password: `Admin123!`
 - Teacher (seeded set):
-	- Example email: `it.faculty@dbtc-cebu.edu.ph`
-	- Password: `Teacher123!`
+  - Example email: `it.faculty@dbtc-cebu.edu.ph`
+  - Password: `Teacher123!`
 - Student pattern:
-	- Email: `student01@dbtc-cebu.edu.ph` (and more)
-	- Password: `Student123!`
+  - Email: `student01@dbtc-cebu.edu.ph` (and more)
+  - Password: `Student123!`
 
 Seed implementation is in [Attendance_Management_System/Attendance_Management_System/Backend/Data/SeedData.cs](Attendance_Management_System/Attendance_Management_System/Backend/Data/SeedData.cs).
 
@@ -89,8 +89,8 @@ dotnet test Attendance_Management_System/tests/Attendance_Management_System.Test
 ## Manual QA Notes
 
 - For QR flows, test both routes:
-	- Student scan page: `/attendance/scan`
-	- Teacher/admin QR page: `/attendance/qr`
+  - Student scan page: `/attendance/scan`
+  - Teacher/admin QR page: `/attendance/qr`
 - If browser shows `chrome-error://chromewebdata`, open a new tab and load `http://localhost:5003/login` directly.
 - Keep the app run terminal active while testing.
 

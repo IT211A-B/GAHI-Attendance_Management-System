@@ -5,6 +5,7 @@ using Attendance_Management_System.Backend.DTOs.Requests;
 using Attendance_Management_System.Backend.DTOs.Responses;
 using Attendance_Management_System.Backend.Entities;
 using Attendance_Management_System.Backend.Enums;
+using Attendance_Management_System.Backend.Helpers;
 using Attendance_Management_System.Backend.Interfaces.Services;
 using Attendance_Management_System.Backend.Persistence;
 using Attendance_Management_System.Backend.ValueObjects;
@@ -158,7 +159,7 @@ public class EnrollmentService : IEnrollmentService
 
     // Updates the status of an enrollment (approve or reject) - admin only operation
     // Validates business rules before updating and assigns student to section if approved
-    public async Task<ApiResponse<EnrollmentDto>> UpdateEnrollmentStatusAsync(int enrollmentId, UpdateEnrollmentStatusRequest request, int adminId)
+    public async Task<EnrollmentDto> UpdateEnrollmentStatusAsync(int enrollmentId, UpdateEnrollmentStatusRequest request, int adminId)
     {
         // Get enrollment with all related data
         var enrollment = await _context.Enrollments
@@ -171,17 +172,13 @@ public class EnrollmentService : IEnrollmentService
 
         if (enrollment == null)
         {
-            return ApiResponse<EnrollmentDto>.ErrorResponse(
-                "NOT_FOUND",
-                "Enrollment not found.");
+            throw new KeyNotFoundException("Enrollment not found.");
         }
 
         // Only pending enrollments can be processed
         if (enrollment.Status != "pending")
         {
-            return ApiResponse<EnrollmentDto>.ErrorResponse(
-                "ALREADY_PROCESSED",
-                "This enrollment has already been processed.");
+            throw new InvalidOperationException("This enrollment has already been processed.");
         }
 
         // Normalize status to lowercase for consistency
@@ -190,17 +187,13 @@ public class EnrollmentService : IEnrollmentService
         // Validate status value
         if (status != EnrollmentApprovedStatus && status != EnrollmentRejectedStatus)
         {
-            return ApiResponse<EnrollmentDto>.ErrorResponse(
-                "INVALID_STATUS",
-                "Status must be 'approved' or 'rejected'.");
+            throw new InvalidOperationException("Status must be 'approved' or 'rejected'.");
         }
 
         // Require rejection reason when rejecting
         if (status == EnrollmentRejectedStatus && string.IsNullOrWhiteSpace(request.RejectionReason))
         {
-            return ApiResponse<EnrollmentDto>.ErrorResponse(
-                "REJECTION_REASON_REQUIRED",
-                "Rejection reason is required when rejecting an enrollment.");
+            throw new InvalidOperationException("Rejection reason is required when rejecting an enrollment.");
         }
 
         // Check for duplicate approved enrollment for same student/section/year
@@ -215,9 +208,7 @@ public class EnrollmentService : IEnrollmentService
 
             if (existingApproved)
             {
-                return ApiResponse<EnrollmentDto>.ErrorResponse(
-                    "DUPLICATE_ENROLLMENT",
-                    "Student already has an approved enrollment for this section and academic year.");
+                throw new InvalidOperationException("Student already has an approved enrollment for this section and academic year.");
             }
         }
 
@@ -230,9 +221,7 @@ public class EnrollmentService : IEnrollmentService
 
             if (currentCount >= _enrollmentSettings.OverCapacityLimit)
             {
-                return ApiResponse<EnrollmentDto>.ErrorResponse(
-                    ErrorCodes.SectionOverCapacity,
-                    $"Section has reached the over-capacity limit of {_enrollmentSettings.OverCapacityLimit} students.");
+                throw new InvalidOperationException($"Section has reached the over-capacity limit of {_enrollmentSettings.OverCapacityLimit} students.");
             }
 
             // Generate warning if at or above warning threshold
@@ -288,7 +277,7 @@ public class EnrollmentService : IEnrollmentService
         var dto = MapToDto(enrollment, new Dictionary<int, string>());
         dto.ProcessorName = processorName;
 
-        return ApiResponse<EnrollmentDto>.SuccessResponse(dto);
+        return dto;
     }
 
     // Gets detailed information about a specific enrollment by its ID
@@ -326,7 +315,7 @@ public class EnrollmentService : IEnrollmentService
     }
 
     // Student self-enrollment - finds matching sections by course and year level and auto-assigns
-    public async Task<ApiResponse<EnrollmentResultDto>> CreateEnrollmentAsync(CreateEnrollmentRequest request, int studentUserId)
+    public async Task<EnrollmentResultDto> CreateEnrollmentAsync(CreateEnrollmentRequest request, int studentUserId)
     {
         // Get the student record for the user
         var student = await _context.Students
@@ -334,27 +323,27 @@ public class EnrollmentService : IEnrollmentService
 
         if (student == null)
         {
-            return ApiResponse<EnrollmentResultDto>.ErrorResponse(
-                ErrorCodes.NotFound,
-                "Student record not found for the current user.");
+            throw new KeyNotFoundException("Student record not found for the current user.");
         }
 
         // Validate course exists
         var course = await _context.Courses.FindAsync(request.CourseId);
         if (course == null)
         {
-            return ApiResponse<EnrollmentResultDto>.ErrorResponse(
-                ErrorCodes.NotFound,
-                "Course not found.");
+            throw new KeyNotFoundException("Course not found.");
+        }
+
+        if (!EducationLevelPolicy.IsYearLevelAllowed(course.EducationLevel, request.YearLevel))
+        {
+            var allowedRange = EducationLevelPolicy.GetAllowedYearRange(course.EducationLevel);
+            throw new InvalidOperationException($"Year level {request.YearLevel} is not valid for {EducationLevelPolicy.ToDisplayLabel(course.EducationLevel)}. Allowed range is {allowedRange.MinYearLevel}-{allowedRange.MaxYearLevel}.");
         }
 
         // Validate academic year exists
         var academicYear = await _context.AcademicYears.FindAsync(request.AcademicYearId);
         if (academicYear == null)
         {
-            return ApiResponse<EnrollmentResultDto>.ErrorResponse(
-                ErrorCodes.NotFound,
-                "Academic year not found.");
+            throw new KeyNotFoundException("Academic year not found.");
         }
 
         // Check for existing enrollment for this course and academic year
@@ -367,24 +356,22 @@ public class EnrollmentService : IEnrollmentService
 
         if (existingEnrollment)
         {
-            return ApiResponse<EnrollmentResultDto>.ErrorResponse(
-                ErrorCodes.EnrollmentExists,
-                "You already have an enrollment for this course and academic year.");
+            throw new InvalidOperationException("You already have an enrollment for this course and academic year.");
         }
-
-        // Get student's year level (default to 1 if not set)
-        var yearLevel = student.YearLevel > 0 ? student.YearLevel : 1;
 
         // Resolve section through centralized allocation policy.
         var section = await _sectionAllocationService
-            .AllocateSectionAsync(request.CourseId, request.AcademicYearId, yearLevel);
+            .AllocateSectionAsync(request.CourseId, request.AcademicYearId, request.YearLevel);
 
         // If still no section available, return error
         if (section == null)
         {
-            return ApiResponse<EnrollmentResultDto>.ErrorResponse(
-                ErrorCodes.NoAvailableSections,
-                "No available sections found for your course and year level. Please contact an administrator.");
+            throw new InvalidOperationException("No available sections found for your course and year level. Please contact an administrator.");
+        }
+
+        if (section.YearLevel != request.YearLevel)
+        {
+            throw new InvalidOperationException("No available section matches the selected year level for this program.");
         }
 
         // Get current enrollment count for the selected section
@@ -415,22 +402,25 @@ public class EnrollmentService : IEnrollmentService
         }
 
         _context.Enrollments.Add(enrollment);
+
+        // Persist chosen level so the next enrollment cycle starts from latest profile level.
+        student.YearLevel = request.YearLevel;
         await _context.SaveChangesAsync();
 
         // Build response
         var enrollmentDto = await GetEnrollmentByIdAsync(enrollment.Id);
 
-        return ApiResponse<EnrollmentResultDto>.SuccessResponse(new EnrollmentResultDto
+        return new EnrollmentResultDto
         {
             Success = true,
             Enrollment = enrollmentDto ?? throw new InvalidOperationException("Failed to retrieve created enrollment."),
             Warnings = warnings,
             Message = "Enrollment request submitted successfully. Waiting for admin approval."
-        });
+        };
     }
 
     // Admin reassigns student to different section with capacity checks
-    public async Task<ApiResponse<EnrollmentDto>> ReassignSectionAsync(int enrollmentId, ReassignSectionRequest request, int adminId)
+    public async Task<EnrollmentDto> ReassignSectionAsync(int enrollmentId, ReassignSectionRequest request, int adminId)
     {
         // Get the enrollment
         var enrollment = await _context.Enrollments
@@ -440,9 +430,7 @@ public class EnrollmentService : IEnrollmentService
 
         if (enrollment == null)
         {
-            return ApiResponse<EnrollmentDto>.ErrorResponse(
-                ErrorCodes.NotFound,
-                "Enrollment not found.");
+            throw new KeyNotFoundException("Enrollment not found.");
         }
 
         // Validate the new section exists
@@ -451,32 +439,24 @@ public class EnrollmentService : IEnrollmentService
 
         if (newSection == null)
         {
-            return ApiResponse<EnrollmentDto>.ErrorResponse(
-                ErrorCodes.NotFound,
-                "Target section not found.");
+            throw new KeyNotFoundException("Target section not found.");
         }
 
         // Ensure reassignment stays within the student's assigned course.
         if (enrollment.Student == null || enrollment.Student.CourseId <= 0)
         {
-            return ApiResponse<EnrollmentDto>.ErrorResponse(
-                ErrorCodes.BadRequest,
-                "Student course is not set. Unable to validate reassignment.");
+            throw new InvalidOperationException("Student course is not set. Unable to validate reassignment.");
         }
 
         if (newSection.CourseId != enrollment.Student.CourseId)
         {
-            return ApiResponse<EnrollmentDto>.ErrorResponse(
-                ErrorCodes.BadRequest,
-                "Target section must match the student's course.");
+            throw new InvalidOperationException("Target section must match the student's course.");
         }
 
         // Check if this is the same section
         if (newSection.Id == enrollment.SectionId)
         {
-            return ApiResponse<EnrollmentDto>.ErrorResponse(
-                ErrorCodes.BadRequest,
-                "Student is already assigned to this section. Please choose a different target section.");
+            throw new InvalidOperationException("Student is already assigned to this section. Please choose a different target section.");
         }
 
         // Check capacity on new section
@@ -485,9 +465,7 @@ public class EnrollmentService : IEnrollmentService
 
         if (currentCount >= _enrollmentSettings.OverCapacityLimit)
         {
-            return ApiResponse<EnrollmentDto>.ErrorResponse(
-                ErrorCodes.SectionOverCapacity,
-                $"Target section has reached the over-capacity limit of {_enrollmentSettings.OverCapacityLimit} students.");
+            throw new InvalidOperationException($"Target section has reached the over-capacity limit of {_enrollmentSettings.OverCapacityLimit} students.");
         }
 
         // Update the enrollment
@@ -516,7 +494,7 @@ public class EnrollmentService : IEnrollmentService
 
         // Return updated enrollment
         var updatedDto = await GetEnrollmentByIdAsync(enrollment.Id);
-        return ApiResponse<EnrollmentDto>.SuccessResponse(updatedDto ?? throw new InvalidOperationException("Failed to retrieve updated enrollment."));
+        return updatedDto ?? throw new InvalidOperationException("Failed to retrieve updated enrollment.");
     }
 
     // Returns current enrollment count and capacity status for a section
@@ -554,6 +532,15 @@ public class EnrollmentService : IEnrollmentService
     // Gets sections matching student's course and year level with capacity info
     public async Task<List<SectionCapacityDto>> GetAvailableSectionsForStudentAsync(int courseId, int yearLevel, int academicYearId)
     {
+        var course = await _context.Courses
+            .AsNoTracking()
+            .FirstOrDefaultAsync(selectedCourse => selectedCourse.Id == courseId);
+
+        if (course == null || !EducationLevelPolicy.IsYearLevelAllowed(course.EducationLevel, yearLevel))
+        {
+            return [];
+        }
+
         var sections = await _context.Sections
             .Include(s => s.Course)
             .Include(s => s.AcademicYear)
@@ -704,3 +691,5 @@ public class EnrollmentService : IEnrollmentService
         }
     }
 }
+
+

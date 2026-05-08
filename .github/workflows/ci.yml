@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [ "main" ]
+    branches: ["main"]
   pull_request:
-    branches: [ "main" ]
+    branches: ["main"]
 
 jobs:
   build-test-publish:
@@ -20,13 +20,15 @@ jobs:
           dotnet-version: "9.0.x"
 
       - name: Restore
-        run: dotnet restore Attendance_Management_System/Attendance_Management_System.slnx
+        run: |
+          dotnet restore Attendance_Management_System/Attendance_Management_System.slnx
+          dotnet restore Attendance_Management_System/tests/Attendance_Management_System.Tests/Attendance_Management_System.Tests.csproj
 
       - name: Build (Release)
         run: dotnet build Attendance_Management_System/Attendance_Management_System.slnx --configuration Release --no-restore
 
       - name: Test
-        run: dotnet test Attendance_Management_System/tests/Attendance_Management_System.Tests/Attendance_Management_System.Tests.csproj --configuration Release --no-build --logger "trx;LogFileName=test-results.trx"
+        run: dotnet test Attendance_Management_System/tests/Attendance_Management_System.Tests/Attendance_Management_System.Tests.csproj --configuration Release --no-restore --logger "trx;LogFileName=test-results.trx"
 
       - name: Publish Web App
         run: dotnet publish Attendance_Management_System/Attendance_Management_System/Attendance_Management_System.csproj --configuration Release --no-build --output ./publish
@@ -42,7 +44,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: test-results
-          path: '**/TestResults/*.trx'
+          path: "**/TestResults/*.trx"
 
       - name: Trigger Render Deploy
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'

@@ -27,7 +27,7 @@ public class AttendanceService : IAttendanceService
             : AttendanceSettings.Default;
     }
 
-    public async Task<ApiResponse<AttendanceDto>> MarkAttendanceAsync(MarkAttendanceRequest request, TeacherContext teacherContext)
+    public async Task<AttendanceDto> MarkAttendanceAsync(MarkAttendanceRequest request, TeacherContext teacherContext)
     {
         // Validate ownership, weekday, and allowed marking window before any mutation.
         var scheduleValidation = await ValidateScheduleForMarkingAsync(
@@ -37,9 +37,7 @@ public class AttendanceService : IAttendanceService
             teacherContext);
         if (!scheduleValidation.Success || scheduleValidation.Schedule is null)
         {
-            return ApiResponse<AttendanceDto>.ErrorResponse(
-                scheduleValidation.ErrorCode!,
-                scheduleValidation.ErrorMessage!);
+            throw scheduleValidation.Exception!;
         }
 
         var schedule = scheduleValidation.Schedule;
@@ -52,9 +50,7 @@ public class AttendanceService : IAttendanceService
 
         if (student == null)
         {
-            return ApiResponse<AttendanceDto>.ErrorResponse(
-                "NOT_FOUND",
-                "Active student not found in this section.");
+            throw new KeyNotFoundException("Active student not found in this section.");
         }
 
         var existingAttendance = await _context.Attendances
@@ -65,9 +61,7 @@ public class AttendanceService : IAttendanceService
         var academicYear = await GetActiveAcademicYearAsync();
         if (academicYear == null)
         {
-            return ApiResponse<AttendanceDto>.ErrorResponse(
-                "NOT_FOUND",
-                "No active academic year found.");
+            throw new KeyNotFoundException("No active academic year found.");
         }
 
         var section = await _context.Sections.FindAsync(request.SectionId);
@@ -152,10 +146,10 @@ public class AttendanceService : IAttendanceService
             afterStatus,
             isMarked: true);
 
-        return ApiResponse<AttendanceDto>.SuccessResponse(attendanceDto);
+        return attendanceDto;
     }
 
-    public async Task<ApiResponse<List<AttendanceDto>>> MarkBulkAttendanceAsync(BulkAttendanceRequest request, TeacherContext teacherContext)
+    public async Task<List<AttendanceDto>> MarkBulkAttendanceAsync(BulkAttendanceRequest request, TeacherContext teacherContext)
     {
         // Reuse single-mark validation so bulk and manual flows enforce identical rules.
         var scheduleValidation = await ValidateScheduleForMarkingAsync(
@@ -165,9 +159,7 @@ public class AttendanceService : IAttendanceService
             teacherContext);
         if (!scheduleValidation.Success || scheduleValidation.Schedule is null)
         {
-            return ApiResponse<List<AttendanceDto>>.ErrorResponse(
-                scheduleValidation.ErrorCode!,
-                scheduleValidation.ErrorMessage!);
+            throw scheduleValidation.Exception!;
         }
 
         var schedule = scheduleValidation.Schedule;
@@ -175,9 +167,7 @@ public class AttendanceService : IAttendanceService
         var academicYear = await GetActiveAcademicYearAsync();
         if (academicYear == null)
         {
-            return ApiResponse<List<AttendanceDto>>.ErrorResponse(
-                "NOT_FOUND",
-                "No active academic year found.");
+            throw new KeyNotFoundException("No active academic year found.");
         }
 
         var section = await _context.Sections.FindAsync(request.SectionId);
@@ -278,7 +268,7 @@ public class AttendanceService : IAttendanceService
                 ? string.Join(" ", errors)
                 : "No attendance entries were processed.";
 
-            return ApiResponse<List<AttendanceDto>>.ErrorResponse("BULK_FAILED", errorMessage);
+            throw new InvalidOperationException(errorMessage);
         }
 
         await _context.SaveChangesAsync();
@@ -313,10 +303,10 @@ public class AttendanceService : IAttendanceService
             .OrderBy(row => row.StudentName)
             .ToList();
 
-        return ApiResponse<List<AttendanceDto>>.SuccessResponse(attendanceDtos);
+        return attendanceDtos;
     }
 
-    public async Task<ApiResponse<AttendanceSummaryDto>> GetSectionAttendanceAsync(
+    public async Task<AttendanceSummaryDto> GetSectionAttendanceAsync(
         int sectionId,
         DateOnly date,
         int scheduleId,
@@ -330,9 +320,7 @@ public class AttendanceService : IAttendanceService
             requesterRole);
         if (!scheduleValidation.Success || scheduleValidation.Schedule is null)
         {
-            return ApiResponse<AttendanceSummaryDto>.ErrorResponse(
-                scheduleValidation.ErrorCode!,
-                scheduleValidation.ErrorMessage!);
+            throw scheduleValidation.Exception!;
         }
 
         var schedule = scheduleValidation.Schedule;
@@ -343,9 +331,7 @@ public class AttendanceService : IAttendanceService
 
         if (section == null)
         {
-            return ApiResponse<AttendanceSummaryDto>.ErrorResponse(
-                "NOT_FOUND",
-                "Section not found.");
+            throw new KeyNotFoundException("Section not found.");
         }
 
         var students = await _context.Students
@@ -430,10 +416,10 @@ public class AttendanceService : IAttendanceService
             Records = records.OrderBy(record => record.StudentName).ToList()
         };
 
-        return ApiResponse<AttendanceSummaryDto>.SuccessResponse(summary);
+        return summary;
     }
 
-    public async Task<ApiResponse<List<AttendanceDto>>> GetStudentAttendanceAsync(int studentId, int? sectionId, DateOnly? from, DateOnly? to)
+    public async Task<List<AttendanceDto>> GetStudentAttendanceAsync(int studentId, int? sectionId, DateOnly? from, DateOnly? to)
     {
         var query = _context.Attendances
             .Include(attendance => attendance.Schedule)
@@ -501,7 +487,7 @@ public class AttendanceService : IAttendanceService
             };
         }).ToList();
 
-        return ApiResponse<List<AttendanceDto>>.SuccessResponse(records);
+        return records;
     }
 
     private async Task<ScheduleValidationResult> ValidateScheduleForMarkingAsync(
@@ -517,19 +503,18 @@ public class AttendanceService : IAttendanceService
 
         if (schedule == null)
         {
-            return ScheduleValidationResult.Fail("NOT_FOUND", "Schedule not found for this section.");
+            return ScheduleValidationResult.Fail(new KeyNotFoundException("Schedule not found for this section."));
         }
 
         if ((int)date.DayOfWeek != schedule.DayOfWeek)
         {
-            return ScheduleValidationResult.Fail("VALIDATION_ERROR", "Attendance date must match the schedule weekday.");
+            return ScheduleValidationResult.Fail(new InvalidOperationException("Attendance date must match the schedule weekday."));
         }
 
         if (date < schedule.EffectiveFrom || (schedule.EffectiveTo.HasValue && date > schedule.EffectiveTo.Value))
         {
             return ScheduleValidationResult.Fail(
-                "VALIDATION_ERROR",
-                "Attendance date is outside the schedule effective date range.");
+                new InvalidOperationException("Attendance date is outside the schedule effective date range."));
         }
 
         if (teacherContext.IsAdmin)
@@ -541,29 +526,26 @@ public class AttendanceService : IAttendanceService
         var teacherId = teacherContext.GetSectionValidationId();
         if (!teacherId.HasValue)
         {
-            return ScheduleValidationResult.Fail("FORBIDDEN", "Teacher profile not found.");
+            return ScheduleValidationResult.Fail(new UnauthorizedAccessException("Teacher profile not found."));
         }
 
         if (!schedule.TeacherId.HasValue || schedule.TeacherId.Value != teacherId.Value)
         {
             return ScheduleValidationResult.Fail(
-                "FORBIDDEN",
-                "Only the schedule owner teacher can mark or correct attendance for this schedule.");
+                new UnauthorizedAccessException("Only the schedule owner teacher can mark or correct attendance for this schedule."));
         }
 
         var schoolToday = AttendancePolicy.GetSchoolDate(_attendanceSettings, DateTimeOffset.UtcNow);
         if (date > schoolToday)
         {
             return ScheduleValidationResult.Fail(
-                "VALIDATION_ERROR",
-                "Teachers cannot mark attendance for future dates.");
+                new InvalidOperationException("Teachers cannot mark attendance for future dates."));
         }
 
         if (!AttendancePolicy.IsWithinTeacherWindow(_attendanceSettings, date, schoolToday))
         {
             return ScheduleValidationResult.Fail(
-                "VALIDATION_ERROR",
-                $"Teachers can only mark attendance from today back to {_attendanceSettings.TeacherBackfillDays} days.");
+                new InvalidOperationException($"Teachers can only mark attendance from today back to {_attendanceSettings.TeacherBackfillDays} days."));
         }
 
         return ScheduleValidationResult.Pass(schedule);
@@ -582,7 +564,7 @@ public class AttendanceService : IAttendanceService
 
         if (schedule == null)
         {
-            return ScheduleValidationResult.Fail("NOT_FOUND", "Schedule not found for this section.");
+            return ScheduleValidationResult.Fail(new KeyNotFoundException("Schedule not found for this section."));
         }
 
         var normalizedRole = requesterRole.Trim().ToLowerInvariant();
@@ -593,7 +575,7 @@ public class AttendanceService : IAttendanceService
 
         if (normalizedRole != "teacher")
         {
-            return ScheduleValidationResult.Fail("FORBIDDEN", "Access denied.");
+            return ScheduleValidationResult.Fail(new UnauthorizedAccessException("Access denied."));
         }
 
         var teacherId = await _context.Teachers
@@ -604,14 +586,13 @@ public class AttendanceService : IAttendanceService
 
         if (!teacherId.HasValue)
         {
-            return ScheduleValidationResult.Fail("FORBIDDEN", "Teacher profile not found.");
+            return ScheduleValidationResult.Fail(new UnauthorizedAccessException("Teacher profile not found."));
         }
 
         if (!schedule.TeacherId.HasValue || schedule.TeacherId.Value != teacherId.Value)
         {
             return ScheduleValidationResult.Fail(
-                "FORBIDDEN",
-                "You can only view attendance for your own schedule slots.");
+                new UnauthorizedAccessException("You can only view attendance for your own schedule slots."));
         }
 
         return ScheduleValidationResult.Pass(schedule);
@@ -719,13 +700,15 @@ public class AttendanceService : IAttendanceService
     private readonly record struct ScheduleValidationResult(
         bool Success,
         Schedule? Schedule,
-        string? ErrorCode,
-        string? ErrorMessage)
+        Exception? Exception)
     {
         // Small helper factory methods keep call sites terse and consistent.
-        public static ScheduleValidationResult Pass(Schedule schedule) => new(true, schedule, null, null);
+        public static ScheduleValidationResult Pass(Schedule schedule) => new(true, schedule, null);
 
-        public static ScheduleValidationResult Fail(string errorCode, string errorMessage)
-            => new(false, null, errorCode, errorMessage);
+        public static ScheduleValidationResult Fail(Exception exception)
+            => new(false, null, exception);
     }
 }
+
+
+

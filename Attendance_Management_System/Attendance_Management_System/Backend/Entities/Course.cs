@@ -1,3 +1,5 @@
+using Attendance_Management_System.Backend.Enums;
+
 namespace Attendance_Management_System.Backend.Entities;
 
 // Represents an academic course or program (e.g., "Bachelor of Science in Computer Science")
@@ -11,4 +13,7 @@ public class Course : EntityBase
 
     // Optional description of the course program
     public string? Description { get; set; }
+
+    // Academic stage (Elementary, JHS, SHS, College, TVET).
+    public EducationLevel EducationLevel { get; set; }
 }

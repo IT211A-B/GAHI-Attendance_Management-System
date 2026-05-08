@@ -1,5 +1,6 @@
 using Attendance_Management_System.Backend.Configuration;
 using Attendance_Management_System.Backend.Entities;
+using Attendance_Management_System.Backend.Helpers;
 using Attendance_Management_System.Backend.Interfaces.Services;
 using Attendance_Management_System.Backend.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -23,6 +24,15 @@ public class SectionAllocationService : ISectionAllocationService
 
     public async Task<Section?> AllocateSectionAsync(int courseId, int academicYearId, int yearLevel)
     {
+        var course = await _context.Courses
+            .AsNoTracking()
+            .FirstOrDefaultAsync(selectedCourse => selectedCourse.Id == courseId);
+
+        if (course == null || !EducationLevelPolicy.IsYearLevelAllowed(course.EducationLevel, yearLevel))
+        {
+            return null;
+        }
+
         var sections = await _context.Sections
             .Where(s => s.CourseId == courseId && s.AcademicYearId == academicYearId && s.YearLevel == yearLevel)
             .ToListAsync();

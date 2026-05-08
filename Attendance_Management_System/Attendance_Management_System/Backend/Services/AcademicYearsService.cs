@@ -18,8 +18,9 @@ public class AcademicYearsService : IAcademicYearsService
     }
 
     // Retrieves all academic years ordered by start date (newest first)
-    public async Task<ApiResponse<List<AcademicYearDto>>> GetAllAcademicYearsAsync()
+    public async Task<List<AcademicYearDto>> GetAllAcademicYearsAsync()
     {
+
         var academicYears = await _context.AcademicYears
             .OrderByDescending(ay => ay.StartDate)
             .Select(ay => new AcademicYearDto
@@ -33,17 +34,17 @@ public class AcademicYearsService : IAcademicYearsService
             })
             .ToListAsync();
 
-        return ApiResponse<List<AcademicYearDto>>.SuccessResponse(academicYears);
+        return academicYears;
     }
 
     // Retrieves a single academic year by ID
-    public async Task<ApiResponse<AcademicYearDto>> GetAcademicYearByIdAsync(int id)
+    public async Task<AcademicYearDto> GetAcademicYearByIdAsync(int id)
     {
         var academicYear = await _context.AcademicYears.FindAsync(id);
 
         if (academicYear == null)
         {
-            return ApiResponse<AcademicYearDto>.ErrorResponse("NOT_FOUND", "Academic year not found.");
+            throw new KeyNotFoundException("Academic year not found.");
         }
 
         var dto = new AcademicYearDto
@@ -56,16 +57,16 @@ public class AcademicYearsService : IAcademicYearsService
             CreatedAt = academicYear.CreatedAt
         };
 
-        return ApiResponse<AcademicYearDto>.SuccessResponse(dto);
+        return dto;
     }
 
     // Creates a new academic year with date validation and overlap checking
-    public async Task<ApiResponse<AcademicYearDto>> CreateAcademicYearAsync(CreateAcademicYearRequest request)
+    public async Task<AcademicYearDto> CreateAcademicYearAsync(CreateAcademicYearRequest request)
     {
         // Validate that end date is after start date
         if (request.EndDate <= request.StartDate)
         {
-            return ApiResponse<AcademicYearDto>.ErrorResponse("VALIDATION_ERROR", "End date must be after start date.");
+            throw new InvalidOperationException("End date must be after start date.");
         }
 
         // Check for overlapping academic years
@@ -74,7 +75,7 @@ public class AcademicYearsService : IAcademicYearsService
 
         if (hasOverlap)
         {
-            return ApiResponse<AcademicYearDto>.ErrorResponse("VALIDATION_ERROR", "Academic year dates overlap with an existing academic year.");
+            throw new InvalidOperationException("Academic year dates overlap with an existing academic year.");
         }
 
         var academicYear = new AcademicYear
@@ -98,17 +99,17 @@ public class AcademicYearsService : IAcademicYearsService
             CreatedAt = academicYear.CreatedAt
         };
 
-        return ApiResponse<AcademicYearDto>.SuccessResponse(dto);
+        return dto;
     }
 
     // Updates an existing academic year with date validation
-    public async Task<ApiResponse<AcademicYearDto>> UpdateAcademicYearAsync(int id, UpdateAcademicYearRequest request)
+    public async Task<AcademicYearDto> UpdateAcademicYearAsync(int id, UpdateAcademicYearRequest request)
     {
         var academicYear = await _context.AcademicYears.FindAsync(id);
 
         if (academicYear == null)
         {
-            return ApiResponse<AcademicYearDto>.ErrorResponse("NOT_FOUND", "Academic year not found.");
+            throw new KeyNotFoundException("Academic year not found.");
         }
 
         var startDate = request.StartDate ?? academicYear.StartDate;
@@ -117,7 +118,7 @@ public class AcademicYearsService : IAcademicYearsService
         // Validate that end date is after start date
         if (endDate <= startDate)
         {
-            return ApiResponse<AcademicYearDto>.ErrorResponse("VALIDATION_ERROR", "End date must be after start date.");
+            throw new InvalidOperationException("End date must be after start date.");
         }
 
         // Check for overlapping academic years (excluding current)
@@ -126,7 +127,7 @@ public class AcademicYearsService : IAcademicYearsService
 
         if (hasOverlap)
         {
-            return ApiResponse<AcademicYearDto>.ErrorResponse("VALIDATION_ERROR", "Academic year dates overlap with an existing academic year.");
+            throw new InvalidOperationException("Academic year dates overlap with an existing academic year.");
         }
 
         if (!string.IsNullOrEmpty(request.YearLabel))
@@ -148,47 +149,45 @@ public class AcademicYearsService : IAcademicYearsService
             CreatedAt = academicYear.CreatedAt
         };
 
-        return ApiResponse<AcademicYearDto>.SuccessResponse(dto);
+        return dto;
     }
 
     // Deletes an academic year if not in use by sections or enrollments
-    public async Task<ApiResponse<bool>> DeleteAcademicYearAsync(int id)
+    public async Task DeleteAcademicYearAsync(int id)
     {
         var academicYear = await _context.AcademicYears.FindAsync(id);
 
         if (academicYear == null)
         {
-            return ApiResponse<bool>.ErrorResponse("NOT_FOUND", "Academic year not found.");
+            throw new KeyNotFoundException("Academic year not found.");
         }
 
         // Prevent deletion if academic year has sections assigned
         var isInUse = await _context.Sections.AnyAsync(s => s.AcademicYearId == id);
         if (isInUse)
         {
-            return ApiResponse<bool>.ErrorResponse("IN_USE", "Cannot delete academic year that has sections assigned.");
+            throw new InvalidOperationException("Cannot delete academic year that has sections assigned.");
         }
 
         // Prevent deletion if academic year has enrollments
         var hasEnrollments = await _context.Enrollments.AnyAsync(e => e.AcademicYearId == id);
         if (hasEnrollments)
         {
-            return ApiResponse<bool>.ErrorResponse("IN_USE", "Cannot delete academic year that has enrollments.");
+            throw new InvalidOperationException("Cannot delete academic year that has enrollments.");
         }
 
         _context.AcademicYears.Remove(academicYear);
         await _context.SaveChangesAsync();
-
-        return ApiResponse<bool>.SuccessResponse(true);
     }
 
     // Activates an academic year and deactivates all others (only one can be active)
-    public async Task<ApiResponse<AcademicYearDto>> ActivateAcademicYearAsync(int id)
+    public async Task<AcademicYearDto> ActivateAcademicYearAsync(int id)
     {
         var academicYear = await _context.AcademicYears.FindAsync(id);
 
         if (academicYear == null)
         {
-            return ApiResponse<AcademicYearDto>.ErrorResponse("NOT_FOUND", "Academic year not found.");
+            throw new KeyNotFoundException("Academic year not found.");
         }
 
         // Deactivate all other academic years first (only one active at a time)
@@ -210,6 +209,6 @@ public class AcademicYearsService : IAcademicYearsService
             CreatedAt = academicYear.CreatedAt
         };
 
-        return ApiResponse<AcademicYearDto>.SuccessResponse(dto);
+        return dto;
     }
 }

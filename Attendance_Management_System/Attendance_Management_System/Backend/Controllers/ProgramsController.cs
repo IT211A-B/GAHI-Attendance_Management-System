@@ -1,4 +1,6 @@
 using Attendance_Management_System.Backend.DTOs.Requests;
+using Attendance_Management_System.Backend.Enums;
+using Attendance_Management_System.Backend.Helpers;
 using Attendance_Management_System.Backend.Interfaces.Services;
 using Attendance_Management_System.Backend.ViewModels.Programs;
 using Microsoft.AspNetCore.Authorization;
@@ -36,16 +38,19 @@ public class ProgramsController : Controller
             return View(nameof(Index), viewModel);
         }
 
-        var result = await _coursesService.CreateCourseAsync(new CreateCourseRequest
+        try
         {
-            Code = form.Code.Trim(),
-            Name = form.Name.Trim(),
-            Description = NormalizeOptional(form.Description)
-        });
-
-        if (!result.Success)
+            await _coursesService.CreateCourseAsync(new CreateCourseRequest
+            {
+                Code = form.Code.Trim(),
+                Name = form.Name.Trim(),
+                EducationLevel = form.EducationLevel,
+                Description = NormalizeOptional(form.Description)
+            });
+        }
+        catch (Exception ex)
         {
-            ModelState.AddModelError("CreateForm.Code", result.Error?.Message ?? "Unable to create program right now.");
+            ModelState.AddModelError("CreateForm.Code", string.IsNullOrWhiteSpace(ex.Message) ? "Unable to create program right now." : ex.Message);
             return View(nameof(Index), viewModel);
         }
 
@@ -63,16 +68,19 @@ public class ProgramsController : Controller
             return RedirectToAction(nameof(Index));
         }
 
-        var result = await _coursesService.UpdateCourseAsync(id, new UpdateCourseRequest
+        try
         {
-            Code = form.Code.Trim(),
-            Name = form.Name.Trim(),
-            Description = NormalizeOptional(form.Description)
-        });
-
-        if (!result.Success)
+            await _coursesService.UpdateCourseAsync(id, new UpdateCourseRequest
+            {
+                Code = form.Code.Trim(),
+                Name = form.Name.Trim(),
+                EducationLevel = form.EducationLevel,
+                Description = NormalizeOptional(form.Description)
+            });
+        }
+        catch (Exception ex)
         {
-            TempData["ProgramsError"] = result.Error?.Message ?? "Unable to update program right now.";
+            TempData["ProgramsError"] = string.IsNullOrWhiteSpace(ex.Message) ? "Unable to update program right now." : ex.Message;
             return RedirectToAction(nameof(Index));
         }
 
@@ -84,11 +92,13 @@ public class ProgramsController : Controller
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Delete(int id)
     {
-        var result = await _coursesService.DeleteCourseAsync(id);
-
-        if (!result.Success)
+        try
         {
-            TempData["ProgramsError"] = result.Error?.Message ?? "Unable to delete program right now.";
+            await _coursesService.DeleteCourseAsync(id);
+        }
+        catch (Exception ex)
+        {
+            TempData["ProgramsError"] = string.IsNullOrWhiteSpace(ex.Message) ? "Unable to delete program right now." : ex.Message;
             return RedirectToAction(nameof(Index));
         }
 
@@ -98,24 +108,47 @@ public class ProgramsController : Controller
 
     private async Task<ProgramsIndexViewModel> BuildIndexViewModelAsync()
     {
-        var result = await _coursesService.GetAllCoursesAsync();
         var viewModel = new ProgramsIndexViewModel();
 
-        if (!result.Success || result.Data is null)
+        try
         {
-            viewModel.ErrorMessage = result.Error?.Message ?? "Unable to load programs right now.";
+            var programs = await _coursesService.GetAllCoursesAsync();
+
+            viewModel.Programs = programs
+                .OrderBy(p => p.Code)
+                .Select(program => new ProgramListItemViewModel
+                {
+                    Id = program.Id,
+                    Code = program.Code,
+                    Name = program.Name,
+                    EducationLevel = program.EducationLevel,
+                    EducationLevelLabel = EducationLevelPolicy.ToDisplayLabel(program.EducationLevel),
+                    Description = string.IsNullOrWhiteSpace(program.Description) ? "-" : program.Description,
+                    CreatedAt = program.CreatedAt.ToString("yyyy-MM-dd")
+                })
+                .ToList();
+        }
+        catch (Exception ex)
+        {
+            viewModel.ErrorMessage = string.IsNullOrWhiteSpace(ex.Message) ? "Unable to load programs right now." : ex.Message;
+            viewModel.EducationLevels = Enum
+                .GetValues<EducationLevel>()
+                .Select(level => new ProgramEducationLevelOptionViewModel
+                {
+                    Value = level,
+                    Label = EducationLevelPolicy.ToDisplayLabel(level)
+                })
+                .ToList();
+
             return viewModel;
         }
 
-        viewModel.Programs = result.Data
-            .OrderBy(p => p.Code)
-            .Select(program => new ProgramListItemViewModel
+        viewModel.EducationLevels = Enum
+            .GetValues<EducationLevel>()
+            .Select(level => new ProgramEducationLevelOptionViewModel
             {
-                Id = program.Id,
-                Code = program.Code,
-                Name = program.Name,
-                Description = string.IsNullOrWhiteSpace(program.Description) ? "-" : program.Description,
-                CreatedAt = program.CreatedAt.ToString("yyyy-MM-dd")
+                Value = level,
+                Label = EducationLevelPolicy.ToDisplayLabel(level)
             })
             .ToList();
 

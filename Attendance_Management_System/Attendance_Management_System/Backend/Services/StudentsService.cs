@@ -19,7 +19,7 @@ public class StudentsService : IStudentsService
     }
 
     // Retrieves full profile for the authenticated student based on their user ID
-    public async Task<ApiResponse<StudentProfileDto>> GetMyProfileAsync(int userId)
+    public async Task<StudentProfileDto> GetMyProfileAsync(int userId)
     {
         var student = await _context.Students
             .Include(s => s.Course)
@@ -28,17 +28,15 @@ public class StudentsService : IStudentsService
 
         if (student == null)
         {
-            return ApiResponse<StudentProfileDto>.ErrorResponse(
-                ErrorCodes.NotFound,
-                "Student profile not found. Only students can access this endpoint.");
+            throw new KeyNotFoundException("Student profile not found. Only students can access this endpoint.");
         }
 
         var profile = MapToFullProfile(student);
-        return ApiResponse<StudentProfileDto>.SuccessResponse(profile);
+        return profile;
     }
 
     // Returns appropriate profile based on requester's role
-    public async Task<ApiResponse<object>> GetStudentProfileAsync(int studentId, int requesterUserId, string requesterRole)
+    public async Task<object> GetStudentProfileAsync(int studentId, int requesterUserId, string requesterRole)
     {
         // Fetch the student with related entities
         var student = await _context.Students
@@ -48,14 +46,14 @@ public class StudentsService : IStudentsService
 
         if (student == null)
         {
-            return ApiResponse<object>.ErrorResponse(ErrorCodes.NotFound, "Student not found.");
+            throw new KeyNotFoundException("Student not found.");
         }
 
         // Admin: Return full profile for any student
         if (requesterRole == "admin")
         {
             var fullProfile = MapToFullProfile(student);
-            return ApiResponse<object>.SuccessResponse(fullProfile);
+            return fullProfile;
         }
 
         // Student: Return full profile if viewing self, basic profile otherwise
@@ -64,12 +62,12 @@ public class StudentsService : IStudentsService
             if (student.UserId == requesterUserId)
             {
                 var selfProfile = MapToFullProfile(student);
-                return ApiResponse<object>.SuccessResponse(selfProfile);
+                return selfProfile;
             }
 
             // Students can only view basic profiles of other students
             var basicProfile = MapToBasicProfile(student);
-            return ApiResponse<object>.SuccessResponse(basicProfile);
+            return basicProfile;
         }
 
         // Teacher: Return basic profile only if student is in their section
@@ -77,16 +75,14 @@ public class StudentsService : IStudentsService
         {
             if (student.SectionId == null)
             {
-                return ApiResponse<object>.ErrorResponse(
-                    ErrorCodes.Forbidden,
-                    "You do not have access to this student's profile.");
+                throw new UnauthorizedAccessException("You do not have access to this student's profile.");
             }
 
             // Check if teacher is assigned to the student's section
             var teacher = await _context.Teachers.FirstOrDefaultAsync(t => t.UserId == requesterUserId);
             if (teacher == null)
             {
-                return ApiResponse<object>.ErrorResponse(ErrorCodes.NotFound, "Teacher profile not found.");
+                throw new KeyNotFoundException("Teacher profile not found.");
             }
 
             var isTeacherInSection = await _context.SectionTeachers
@@ -94,20 +90,18 @@ public class StudentsService : IStudentsService
 
             if (!isTeacherInSection)
             {
-                return ApiResponse<object>.ErrorResponse(
-                    ErrorCodes.Forbidden,
-                    "You do not have access to this student's profile.");
+                throw new UnauthorizedAccessException("You do not have access to this student's profile.");
             }
 
             var teacherViewProfile = MapToBasicProfile(student);
-            return ApiResponse<object>.SuccessResponse(teacherViewProfile);
+            return teacherViewProfile;
         }
 
-        return ApiResponse<object>.ErrorResponse(ErrorCodes.Forbidden, "Access denied.");
+        throw new UnauthorizedAccessException("Access denied.");
     }
 
     // Returns list of basic profiles for students in a section
-    public async Task<ApiResponse<List<StudentBasicProfileDto>>> GetStudentsBySectionAsync(
+    public async Task<List<StudentBasicProfileDto>> GetStudentsBySectionAsync(
         int sectionId,
         int requesterUserId,
         string requesterRole)
@@ -116,16 +110,14 @@ public class StudentsService : IStudentsService
         var sectionExists = await _context.Sections.AnyAsync(s => s.Id == sectionId);
         if (!sectionExists)
         {
-            return ApiResponse<List<StudentBasicProfileDto>>.ErrorResponse(
-                ErrorCodes.NotFound,
-                "Section not found.");
+            throw new KeyNotFoundException("Section not found.");
         }
 
         // Admin: Can view all students in any section
         if (requesterRole == "admin")
         {
             var students = await GetStudentsBySectionId(sectionId);
-            return ApiResponse<List<StudentBasicProfileDto>>.SuccessResponse(students);
+            return students;
         }
 
         // Teacher: Can only view students in their assigned sections
@@ -134,9 +126,7 @@ public class StudentsService : IStudentsService
             var teacher = await _context.Teachers.FirstOrDefaultAsync(t => t.UserId == requesterUserId);
             if (teacher == null)
             {
-                return ApiResponse<List<StudentBasicProfileDto>>.ErrorResponse(
-                    ErrorCodes.NotFound,
-                    "Teacher profile not found.");
+                throw new KeyNotFoundException("Teacher profile not found.");
             }
 
             var isTeacherInSection = await _context.SectionTeachers
@@ -144,16 +134,14 @@ public class StudentsService : IStudentsService
 
             if (!isTeacherInSection)
             {
-                return ApiResponse<List<StudentBasicProfileDto>>.ErrorResponse(
-                    ErrorCodes.Forbidden,
-                    "You do not have access to this section's students.");
+                throw new UnauthorizedAccessException("You do not have access to this section's students.");
             }
 
             var students = await GetStudentsBySectionId(sectionId);
-            return ApiResponse<List<StudentBasicProfileDto>>.SuccessResponse(students);
+            return students;
         }
 
-        return ApiResponse<List<StudentBasicProfileDto>>.ErrorResponse(ErrorCodes.Forbidden, "Access denied.");
+        throw new UnauthorizedAccessException("Access denied.");
     }
 
     // Helper method to fetch students by section ID
@@ -227,3 +215,5 @@ public class StudentsService : IStudentsService
         };
     }
 }
+
+

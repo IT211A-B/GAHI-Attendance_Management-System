@@ -1,4 +1,5 @@
 using Attendance_Management_System.Backend.Entities;
+using Attendance_Management_System.Backend.Enums;
 using Attendance_Management_System.Backend.Persistence;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -56,6 +57,7 @@ public static class SeedData
             (Email: "tvet.mech.faculty@dbtc-cebu.edu.ph", EmployeeNumber: "DBTC-T009", FirstName: "Roberto", LastName: "Sarmiento", MiddleName: null, Department: "TVET", Specialization: "Mechanical and Machining"),
             (Email: "tvet.elec.faculty@dbtc-cebu.edu.ph", EmployeeNumber: "DBTC-T010", FirstName: "Elena", LastName: "Cabrera", MiddleName: null, Department: "TVET", Specialization: "Electrical Installation"),
             (Email: "tvet.furniture.faculty@dbtc-cebu.edu.ph", EmployeeNumber: "DBTC-T011", FirstName: "Ricardo", LastName: "Dela Cruz", MiddleName: null, Department: "TVET", Specialization: "Furniture Making"),
+            (Email: "elem.faculty@dbtc-cebu.edu.ph", EmployeeNumber: "DBTC-T012", FirstName: "Maricel", LastName: "Bautista", MiddleName: null, Department: "Basic Education - Elementary", Specialization: "Elementary Mathematics"),
         };
 
         var teacherUsersByEmployeeNumber = new Dictionary<string, User>();
@@ -92,6 +94,7 @@ public static class SeedData
             new Classroom { Name = "Senior High Room ABM", Description = "Senior High classroom for ABM track" },
             new Classroom { Name = "Senior High Room HUMSS", Description = "Senior High classroom for HUMSS track" },
             new Classroom { Name = "Senior High STEM Laboratory", Description = "Senior High STEM integrated laboratory" },
+            new Classroom { Name = "Elementary Room 6-A", Description = "Elementary classroom for Grade 6" },
             new Classroom { Name = "TVET Mechanical Shop", Description = "Hands-on mechanical and machining training area" },
             new Classroom { Name = "TVET Electrical Lab", Description = "Electrical technology and installation training lab" },
             new Classroom { Name = "TVET Furniture Workshop", Description = "Furniture production and finishing workshop" },
@@ -115,25 +118,27 @@ public static class SeedData
         // Programs sourced from DBTC-Cebu academics page (College, K-12, TVET)
         var courseSeeds = new[]
         {
-            (Name: "Bachelor of Science in Information Technology", Code: "BSIT", Description: "College program"),
-            (Name: "Bachelor of Science in Mechanical Engineering", Code: "BSME", Description: "College program"),
-            (Name: "Bachelor of Technical-Vocational Teacher Education", Code: "BTVTED", Description: "College program"),
-            (Name: "Bachelor of Arts in Religious Education and Pastoral Communication", Code: "ABREPC", Description: "College program"),
+            (Name: "Bachelor of Science in Information Technology", Code: "BSIT", Description: "College program", EducationLevel: EducationLevel.College),
+            (Name: "Bachelor of Science in Mechanical Engineering", Code: "BSME", Description: "College program", EducationLevel: EducationLevel.College),
+            (Name: "Bachelor of Technical-Vocational Teacher Education", Code: "BTVTED", Description: "College program", EducationLevel: EducationLevel.College),
+            (Name: "Bachelor of Arts in Religious Education and Pastoral Communication", Code: "ABREPC", Description: "College program", EducationLevel: EducationLevel.College),
 
-            (Name: "Junior High School (Grade 7 to Grade 10)", Code: "JHS", Description: "K-12 basic education program"),
-            (Name: "Senior High School - ABM", Code: "SHSABM", Description: "K-12 senior high strand"),
-            (Name: "Senior High School - HUMSS", Code: "SHSHUMSS", Description: "K-12 senior high strand"),
-            (Name: "Senior High School - STEM (Pre-Medical)", Code: "SHSSTPM", Description: "K-12 senior high strand"),
-            (Name: "Senior High School - STEM (Engineering)", Code: "SHSSTENG", Description: "K-12 senior high strand"),
-            (Name: "Senior High School - STEM (Information, Communication and Technology)", Code: "SHSSTICT", Description: "K-12 senior high strand"),
+            (Name: "Elementary School (Grade 1 to Grade 6)", Code: "ES", Description: "K-12 basic education program", EducationLevel: EducationLevel.Elementary),
 
-            (Name: "Diploma in Mechanical Technology", Code: "DMT", Description: "TVET diploma program"),
-            (Name: "Diploma in Electrical Technology", Code: "DET", Description: "TVET diploma program"),
-            (Name: "Diploma in Furniture Making Technology", Code: "DFMT", Description: "TVET diploma program"),
-            (Name: "Certificate in Furniture Making", Code: "CFM", Description: "TVET national certificate program"),
-            (Name: "Certificate in Machining", Code: "CMACH", Description: "TVET national certificate program"),
-            (Name: "Certificate in Motorcycle Servicing", Code: "CMS", Description: "TVET national certificate program"),
-            (Name: "Certificate in Pharmacy Services", Code: "CPS", Description: "TVET national certificate program")
+            (Name: "Junior High School (Grade 7 to Grade 10)", Code: "JHS", Description: "K-12 basic education program", EducationLevel: EducationLevel.JuniorHigh),
+            (Name: "Senior High School - ABM", Code: "SHSABM", Description: "K-12 senior high strand", EducationLevel: EducationLevel.SeniorHigh),
+            (Name: "Senior High School - HUMSS", Code: "SHSHUMSS", Description: "K-12 senior high strand", EducationLevel: EducationLevel.SeniorHigh),
+            (Name: "Senior High School - STEM (Pre-Medical)", Code: "SHSSTPM", Description: "K-12 senior high strand", EducationLevel: EducationLevel.SeniorHigh),
+            (Name: "Senior High School - STEM (Engineering)", Code: "SHSSTENG", Description: "K-12 senior high strand", EducationLevel: EducationLevel.SeniorHigh),
+            (Name: "Senior High School - STEM (Information, Communication and Technology)", Code: "SHSSTICT", Description: "K-12 senior high strand", EducationLevel: EducationLevel.SeniorHigh),
+
+            (Name: "Diploma in Mechanical Technology", Code: "DMT", Description: "TVET diploma program", EducationLevel: EducationLevel.Tvet),
+            (Name: "Diploma in Electrical Technology", Code: "DET", Description: "TVET diploma program", EducationLevel: EducationLevel.Tvet),
+            (Name: "Diploma in Furniture Making Technology", Code: "DFMT", Description: "TVET diploma program", EducationLevel: EducationLevel.Tvet),
+            (Name: "Certificate in Furniture Making", Code: "CFM", Description: "TVET national certificate program", EducationLevel: EducationLevel.Tvet),
+            (Name: "Certificate in Machining", Code: "CMACH", Description: "TVET national certificate program", EducationLevel: EducationLevel.Tvet),
+            (Name: "Certificate in Motorcycle Servicing", Code: "CMS", Description: "TVET national certificate program", EducationLevel: EducationLevel.Tvet),
+            (Name: "Certificate in Pharmacy Services", Code: "CPS", Description: "TVET national certificate program", EducationLevel: EducationLevel.Tvet)
         };
 
         var courses = courseSeeds
@@ -141,7 +146,8 @@ public static class SeedData
             {
                 Name = courseSeed.Name,
                 Code = courseSeed.Code,
-                Description = courseSeed.Description
+                Description = courseSeed.Description,
+                EducationLevel = courseSeed.EducationLevel
             })
             .ToList();
         context.Courses.AddRange(courses);
@@ -154,6 +160,8 @@ public static class SeedData
             (Name: "Engineering Drawing and CAD", Code: "ME101", CourseCode: "BSME", Units: 3),
             (Name: "Foundations of Technical-Vocational Education", Code: "TVTED101", CourseCode: "BTVTED", Units: 3),
             (Name: "Religious Education and Pastoral Communication Basics", Code: "REPC101", CourseCode: "ABREPC", Units: 3),
+
+            (Name: "Elementary Mathematics 6", Code: "ELMATH6", CourseCode: "ES", Units: 3),
 
             (Name: "Mathematics 9", Code: "JHSMATH9", CourseCode: "JHS", Units: 3),
             (Name: "Fundamentals of Accountancy, Business and Management 1", Code: "ABM101", CourseCode: "SHSABM", Units: 3),
@@ -194,6 +202,9 @@ public static class SeedData
             (Name: "COL-BTVTED-1B", YearLevel: 1, CourseCode: "BTVTED", SubjectCode: "TVTED101", Classroom: "College Lecture Hall A", AdviserEmployeeNumber: "DBTC-T003"),
             (Name: "COL-ABREPC-1A", YearLevel: 1, CourseCode: "ABREPC", SubjectCode: "REPC101", Classroom: "College Lecture Hall A", AdviserEmployeeNumber: "DBTC-T004"),
             (Name: "COL-ABREPC-1B", YearLevel: 1, CourseCode: "ABREPC", SubjectCode: "REPC101", Classroom: "College Lecture Hall A", AdviserEmployeeNumber: "DBTC-T004"),
+
+            (Name: "ES-G6-A", YearLevel: 6, CourseCode: "ES", SubjectCode: "ELMATH6", Classroom: "Elementary Room 6-A", AdviserEmployeeNumber: "DBTC-T012"),
+            (Name: "ES-G6-B", YearLevel: 6, CourseCode: "ES", SubjectCode: "ELMATH6", Classroom: "Elementary Room 6-A", AdviserEmployeeNumber: "DBTC-T012"),
 
             (Name: "JHS-G9-A", YearLevel: 9, CourseCode: "JHS", SubjectCode: "JHSMATH9", Classroom: "Junior High Room 9-A", AdviserEmployeeNumber: "DBTC-T005"),
             (Name: "JHS-G9-B", YearLevel: 9, CourseCode: "JHS", SubjectCode: "JHSMATH9", Classroom: "Junior High Room 9-A", AdviserEmployeeNumber: "DBTC-T005"),
@@ -315,6 +326,8 @@ public static class SeedData
             "TVET-DMT-B2",
             "TVET-DET-B1",
             "TVET-DET-B2",
+            "ES-G6-A",
+            "ES-G6-B",
             "JHS-G9-A",
             "JHS-G9-B"
         });

@@ -46,6 +46,10 @@ public class RegisterRequest
     [Required(ErrorMessage = "Course ID is required")]
     public int CourseId { get; set; }
 
+    [Required(ErrorMessage = "Year level is required")]
+    [Range(1, 12, ErrorMessage = "Year level must be between 1 and 12")]
+    public int YearLevel { get; set; }
+
     // Optional for compatibility. If omitted, enrollment flow auto-assigns a section.
     public int? SectionId { get; set; }
 

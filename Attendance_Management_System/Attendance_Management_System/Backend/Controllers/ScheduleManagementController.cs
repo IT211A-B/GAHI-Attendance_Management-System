@@ -1,4 +1,4 @@
-using System.Security.Claims;
+﻿using System.Security.Claims;
 using Attendance_Management_System.Backend.DTOs.Requests;
 using Attendance_Management_System.Backend.Interfaces.Services;
 using Attendance_Management_System.Backend.ViewModels.Schedules;
@@ -9,7 +9,7 @@ namespace Attendance_Management_System.Backend.Controllers;
 
 [Authorize(Policy = "AdminOrTeacher")]
 [Route("schedules")]
-public class ScheduleManagementController : Controller
+public class ScheduleManagementController : AppControllerBase
 {
     private readonly ISchedulesService _schedulesService;
 
@@ -50,7 +50,7 @@ public class ScheduleManagementController : Controller
             return View(nameof(Index), viewModel);
         }
 
-        var result = await _schedulesService.CreateScheduleAsync(new CreateScheduleRequest
+        var result = await ExecuteServiceCallAsync(() => _schedulesService.CreateScheduleAsync(new CreateScheduleRequest
         {
             SectionId = form.SectionId,
             SubjectId = form.SubjectId,
@@ -59,7 +59,7 @@ public class ScheduleManagementController : Controller
             EndTime = form.EndTime,
             EffectiveFrom = form.EffectiveFrom,
             EffectiveTo = form.EffectiveTo
-        }, context.UserId);
+        }, context.UserId));
 
         if (!result.Success)
         {
@@ -88,7 +88,7 @@ public class ScheduleManagementController : Controller
             return RedirectToAction(nameof(Index));
         }
 
-        var result = await _schedulesService.UpdateScheduleAsync(id, new UpdateScheduleRequest
+        var result = await ExecuteServiceCallAsync(() => _schedulesService.UpdateScheduleAsync(id, new UpdateScheduleRequest
         {
             SubjectId = form.SubjectId,
             DayOfWeek = form.DayOfWeek,
@@ -96,7 +96,7 @@ public class ScheduleManagementController : Controller
             EndTime = form.EndTime,
             EffectiveFrom = form.EffectiveFrom,
             EffectiveTo = form.EffectiveTo
-        }, context.UserId);
+        }, context.UserId));
 
         if (!result.Success)
         {
@@ -119,7 +119,7 @@ public class ScheduleManagementController : Controller
             return Challenge();
         }
 
-        var result = await _schedulesService.DeleteScheduleAsync(id, context.UserId, context.IsAdmin);
+        var result = await ExecuteServiceCallAsync(() => _schedulesService.DeleteScheduleAsync(id, context.UserId, context.IsAdmin));
 
         if (!result.Success)
         {
@@ -133,7 +133,7 @@ public class ScheduleManagementController : Controller
 
     private async Task<SchedulesIndexViewModel> BuildIndexViewModelAsync(int userId, string role)
     {
-        var result = await _schedulesService.GetSchedulesAsync(userId, role);
+        var result = await ExecuteServiceCallAsync(() => _schedulesService.GetSchedulesAsync(userId, role));
         var viewModel = new SchedulesIndexViewModel();
 
         if (!result.Success || result.Data is null)

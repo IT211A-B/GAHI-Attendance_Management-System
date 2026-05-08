@@ -37,15 +37,17 @@ public class ClassroomManagementController : Controller
             return View(nameof(Index), viewModel);
         }
 
-        var result = await _classroomsService.CreateClassroomAsync(new CreateClassroomRequest
+        try
         {
-            Name = form.Name.Trim(),
-            Description = NormalizeOptional(form.Description)
-        });
-
-        if (!result.Success)
+            await _classroomsService.CreateClassroomAsync(new CreateClassroomRequest
+            {
+                Name = form.Name.Trim(),
+                Description = NormalizeOptional(form.Description)
+            });
+        }
+        catch (Exception ex)
         {
-            ModelState.AddModelError("CreateForm.Name", result.Error?.Message ?? "Unable to create classroom right now.");
+            ModelState.AddModelError("CreateForm.Name", string.IsNullOrWhiteSpace(ex.Message) ? "Unable to create classroom right now." : ex.Message);
             return View(nameof(Index), viewModel);
         }
 
@@ -63,15 +65,17 @@ public class ClassroomManagementController : Controller
             return RedirectToAction(nameof(Index));
         }
 
-        var result = await _classroomsService.UpdateClassroomAsync(id, new UpdateClassroomRequest
+        try
         {
-            Name = form.Name.Trim(),
-            Description = NormalizeOptional(form.Description)
-        });
-
-        if (!result.Success)
+            await _classroomsService.UpdateClassroomAsync(id, new UpdateClassroomRequest
+            {
+                Name = form.Name.Trim(),
+                Description = NormalizeOptional(form.Description)
+            });
+        }
+        catch (Exception ex)
         {
-            TempData["ClassroomsError"] = result.Error?.Message ?? "Unable to update classroom right now.";
+            TempData["ClassroomsError"] = string.IsNullOrWhiteSpace(ex.Message) ? "Unable to update classroom right now." : ex.Message;
             return RedirectToAction(nameof(Index));
         }
 
@@ -83,11 +87,13 @@ public class ClassroomManagementController : Controller
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Delete(int id)
     {
-        var result = await _classroomsService.DeleteClassroomAsync(id);
-
-        if (!result.Success)
+        try
         {
-            TempData["ClassroomsError"] = result.Error?.Message ?? "Unable to delete classroom right now.";
+            await _classroomsService.DeleteClassroomAsync(id);
+        }
+        catch (Exception ex)
+        {
+            TempData["ClassroomsError"] = string.IsNullOrWhiteSpace(ex.Message) ? "Unable to delete classroom right now." : ex.Message;
             return RedirectToAction(nameof(Index));
         }
 
@@ -97,25 +103,26 @@ public class ClassroomManagementController : Controller
 
     private async Task<ClassroomsIndexViewModel> BuildIndexViewModelAsync()
     {
-        var result = await _classroomsService.GetAllClassroomsAsync();
-
         var viewModel = new ClassroomsIndexViewModel();
 
-        if (!result.Success || result.Data is null)
+        try
         {
-            viewModel.ErrorMessage = result.Error?.Message ?? "Unable to load classrooms right now.";
-            return viewModel;
-        }
+            var classrooms = await _classroomsService.GetAllClassroomsAsync();
 
-        viewModel.Classrooms = result.Data
-            .OrderBy(c => c.Name)
-            .Select(classroom => new ClassroomListItemViewModel
-            {
-                Id = classroom.Id,
-                Name = classroom.Name,
-                Description = string.IsNullOrWhiteSpace(classroom.Description) ? "-" : classroom.Description
-            })
-            .ToList();
+            viewModel.Classrooms = classrooms
+                .OrderBy(c => c.Name)
+                .Select(classroom => new ClassroomListItemViewModel
+                {
+                    Id = classroom.Id,
+                    Name = classroom.Name,
+                    Description = string.IsNullOrWhiteSpace(classroom.Description) ? "-" : classroom.Description
+                })
+                .ToList();
+        }
+        catch (Exception ex)
+        {
+            viewModel.ErrorMessage = string.IsNullOrWhiteSpace(ex.Message) ? "Unable to load classrooms right now." : ex.Message;
+        }
 
         return viewModel;
     }

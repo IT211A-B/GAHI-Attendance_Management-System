@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using Attendance_Management_System.Backend.Enums;
 
 namespace Attendance_Management_System.Backend.ViewModels.Sections;
 
@@ -48,6 +49,10 @@ public class SectionReferenceOptionViewModel
 {
     public int Id { get; set; }
     public string Label { get; set; } = string.Empty;
+    public EducationLevel? EducationLevel { get; set; }
+    public string? EducationLevelLabel { get; set; }
+    public int? MinYearLevel { get; set; }
+    public int? MaxYearLevel { get; set; }
 }
 
 public class SectionTeacherOptionViewModel : SectionReferenceOptionViewModel

@@ -1,25 +1,10 @@
-using Attendance_Management_System.Backend.Configuration;
-using Attendance_Management_System.Backend.Constants;
-using Attendance_Management_System.Backend.DTOs.Responses;
-using Attendance_Management_System.Backend.Entities;
-using Attendance_Management_System.Backend.Interfaces.Services;
-using Attendance_Management_System.Backend.Persistence;
-using Attendance_Management_System.Backend.Services;
-using Microsoft.AspNetCore.Authentication;
-using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.Mvc.Testing;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Logging.Abstractions;
-using Microsoft.Extensions.Options;
-using Moq;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Security.Claims;
 using System.Text.Encodings.Web;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
 
 namespace Attendance_Management_System.Tests;
 
@@ -71,10 +56,8 @@ public class AttendanceQrServiceTests
         var service = CreateService(context);
         var response = await service.SearchSectionsAsync(teacher.UserId, "teacher", query: null, take: 8);
 
-        Assert.True(response.Success);
-        Assert.NotNull(response.Data);
-        Assert.Equal(3, response.Data!.Count);
-        Assert.Collection(response.Data,
+        Assert.Equal(3, response.Count);
+        Assert.Collection(response,
             item => Assert.Equal("Section Alpha", item.SectionName),
             item => Assert.Equal("Section Beta", item.SectionName),
             item => Assert.Equal("Section Gamma", item.SectionName));
@@ -112,10 +95,8 @@ public class AttendanceQrServiceTests
         var service = CreateService(context);
         var response = await service.SearchSectionsAsync(teacher.UserId, "teacher", query: "Al", take: 1);
 
-        Assert.True(response.Success);
-        Assert.NotNull(response.Data);
-        Assert.Single(response.Data!);
-        Assert.Equal("Alpha Section", response.Data![0].SectionName);
+        Assert.Single(response);
+        Assert.Equal("Alpha Section", response[0].SectionName);
     }
 
     [Fact]
@@ -124,11 +105,10 @@ public class AttendanceQrServiceTests
         await using var context = CreateContext();
         var service = CreateService(context);
 
-        var response = await service.SearchSectionsAsync(999, "student", query: null, take: 8);
+        var exception = await Assert.ThrowsAsync<UnauthorizedAccessException>(
+            () => service.SearchSectionsAsync(999, "student", query: null, take: 8));
 
-        Assert.False(response.Success);
-        Assert.NotNull(response.Error);
-        Assert.Equal(ErrorCodes.Forbidden, response.Error!.Code);
+        Assert.Equal("Only teacher accounts can use QR teacher controls.", exception.Message);
     }
 
     [Fact]
@@ -137,11 +117,10 @@ public class AttendanceQrServiceTests
         await using var context = CreateContext();
         var service = CreateService(context);
 
-        var response = await service.SearchSectionsAsync(404, "teacher", query: null, take: 8);
+        var exception = await Assert.ThrowsAsync<UnauthorizedAccessException>(
+            () => service.SearchSectionsAsync(404, "teacher", query: null, take: 8));
 
-        Assert.False(response.Success);
-        Assert.NotNull(response.Error);
-        Assert.Equal(ErrorCodes.Forbidden, response.Error!.Code);
+        Assert.Equal("QR attendance requires a teacher profile assigned to this account.", exception.Message);
     }
 
     [Fact]
@@ -180,10 +159,7 @@ public class AttendanceQrServiceTests
         await context.SaveChangesAsync();
 
         var service = CreateService(context);
-        var response = await service.CloseSessionAsync(teacher.UserId, "teacher", session.SessionId);
-
-        Assert.True(response.Success);
-        Assert.True(response.Data);
+        await service.CloseSessionAsync(teacher.UserId, "teacher", session.SessionId);
 
         var updatedSession = await context.AttendanceQrSessions
             .AsNoTracking()
@@ -230,10 +206,7 @@ public class AttendanceQrServiceTests
         await context.SaveChangesAsync();
 
         var service = CreateService(context);
-        var response = await service.CloseSessionAsync(teacher.UserId, "teacher", session.SessionId);
-
-        Assert.True(response.Success);
-        Assert.True(response.Data);
+        await service.CloseSessionAsync(teacher.UserId, "teacher", session.SessionId);
 
         var updatedSession = await context.AttendanceQrSessions
             .AsNoTracking()
@@ -289,11 +262,10 @@ public class AttendanceQrServiceTests
         await context.SaveChangesAsync();
 
         var service = CreateService(context);
-        var response = await service.CloseSessionAsync(otherTeacher.UserId, "teacher", session.SessionId);
+        var exception = await Assert.ThrowsAsync<UnauthorizedAccessException>(
+            () => service.CloseSessionAsync(otherTeacher.UserId, "teacher", session.SessionId));
 
-        Assert.False(response.Success);
-        Assert.NotNull(response.Error);
-        Assert.Equal(ErrorCodes.Forbidden, response.Error!.Code);
+        Assert.Equal("You do not own this QR session.", exception.Message);
     }
 
     private static AttendanceQrService CreateService(AppDbContext context)
@@ -334,7 +306,8 @@ public class AttendanceQrServiceTests
         {
             Id = 1,
             Name = "Computer Science",
-            Code = "BSCS"
+            Code = "BSCS",
+            EducationLevel = EducationLevel.College
         });
 
         context.Subjects.Add(new Subject
@@ -406,7 +379,7 @@ public class RateLimitingIntegrationTests
     }
 
     [Fact]
-    public async Task ThrottledQrApiRoute_ReturnsApiResponsePayload_AndRetryAfter()
+    public async Task ThrottledQrApiRoute_ReturnsProblemDetailsPayload_AndRetryAfter()
     {
         await using var factory = new RateLimitingWebApplicationFactory();
         using var client = CreateClient(factory);
@@ -423,12 +396,11 @@ public class RateLimitingIntegrationTests
         Assert.True(int.TryParse(retryAfterValues.Single(), out var retryAfterSeconds));
         Assert.True(retryAfterSeconds > 0);
 
-        var payload = await throttledResponse.Content.ReadFromJsonAsync<ApiResponse<object>>();
+        var payload = await throttledResponse.Content.ReadFromJsonAsync<ProblemDetails>();
 
         Assert.NotNull(payload);
-        Assert.False(payload!.Success);
-        Assert.NotNull(payload.Error);
-        Assert.Equal(ErrorCodes.TooManyRequests, payload.Error!.Code);
+        Assert.Equal(StatusCodes.Status429TooManyRequests, payload!.Status);
+        Assert.Equal("Too many requests", payload.Title);
     }
 
     [Fact]

@@ -80,6 +80,7 @@ PublishProfiles/
 
 # Local publish check output
 publish-check/
+publish/
 
 # Visual Studio temporary files
 *.tmp

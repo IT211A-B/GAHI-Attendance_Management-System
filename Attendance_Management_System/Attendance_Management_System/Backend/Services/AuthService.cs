@@ -5,6 +5,7 @@ using Attendance_Management_System.Backend.Constants;
 using Attendance_Management_System.Backend.DTOs.Requests;
 using Attendance_Management_System.Backend.DTOs.Responses;
 using Attendance_Management_System.Backend.Entities;
+using Attendance_Management_System.Backend.Helpers;
 using Attendance_Management_System.Backend.Interfaces.Services;
 using Attendance_Management_System.Backend.Persistence;
 using Microsoft.AspNetCore.Identity;
@@ -253,11 +254,20 @@ public class AuthService : IAuthService
             return CreateFailureResponse("This student number is already registered.");
         }
 
-        // Validate CourseId exists
-        var courseExists = await _context.Courses.AnyAsync(course => course.Id == request.CourseId);
-        if (!courseExists)
+        // Validate CourseId exists and year level is valid for selected stage.
+        var course = await _context.Courses
+            .AsNoTracking()
+            .FirstOrDefaultAsync(selectedCourse => selectedCourse.Id == request.CourseId);
+        if (course == null)
         {
             return CreateFailureResponse("Invalid course selected.");
+        }
+
+        if (!EducationLevelPolicy.IsYearLevelAllowed(course.EducationLevel, request.YearLevel))
+        {
+            var allowedRange = EducationLevelPolicy.GetAllowedYearRange(course.EducationLevel);
+            return CreateFailureResponse(
+                $"Year level {request.YearLevel} is not valid for {EducationLevelPolicy.ToDisplayLabel(course.EducationLevel)}. Allowed range is {allowedRange.MinYearLevel}-{allowedRange.MaxYearLevel}.");
         }
 
         // Validate AcademicYearId exists
@@ -272,7 +282,7 @@ public class AuthService : IAuthService
 
     private async Task<(Section? AssignedSection, int ResolvedYearLevel, AuthResponse? Error)> ResolveStudentRegistrationSectionAsync(RegisterRequest request)
     {
-        var resolvedYearLevel = 1;
+        var resolvedYearLevel = request.YearLevel;
 
         // Optional explicit section still supported for backward compatibility.
         if (request.SectionId.HasValue && request.SectionId.Value > 0)
@@ -296,7 +306,11 @@ public class AuthService : IAuthService
                 return (null, resolvedYearLevel, CreateFailureResponse("Selected section does not belong to the selected academic period."));
             }
 
-            resolvedYearLevel = assignedSection.YearLevel > 0 ? assignedSection.YearLevel : 1;
+            if (assignedSection.YearLevel != resolvedYearLevel)
+            {
+                return (null, resolvedYearLevel, CreateFailureResponse("Selected section year level does not match your chosen year level."));
+            }
+
             return (assignedSection, resolvedYearLevel, null);
         }
 
@@ -308,7 +322,11 @@ public class AuthService : IAuthService
             return (null, resolvedYearLevel, CreateFailureResponse("No available sections for the selected course and academic period. Please contact an administrator."));
         }
 
-        resolvedYearLevel = autoAssignedSection.YearLevel > 0 ? autoAssignedSection.YearLevel : resolvedYearLevel;
+        if (autoAssignedSection.YearLevel != resolvedYearLevel)
+        {
+            return (null, resolvedYearLevel, CreateFailureResponse("No available section matches the selected year level for this program."));
+        }
+
         return (autoAssignedSection, resolvedYearLevel, null);
     }
 

@@ -1,14 +1,3 @@
-using Attendance_Management_System.Backend.Configuration;
-using Attendance_Management_System.Backend.DTOs.Requests;
-using Attendance_Management_System.Backend.Entities;
-using Attendance_Management_System.Backend.Interfaces.Services;
-using Attendance_Management_System.Backend.Persistence;
-using Attendance_Management_System.Backend.Services;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Logging.Abstractions;
-using Microsoft.Extensions.Options;
-using Moq;
-
 namespace Attendance_Management_System.Tests;
 
 public class EnrollmentServiceApprovalTests
@@ -79,7 +68,8 @@ public class EnrollmentServiceApprovalTests
         {
             Id = 1,
             Name = "BSIT",
-            Code = "BSIT"
+            Code = "BSIT",
+            EducationLevel = EducationLevel.College
         };
 
         var subject = new Subject
@@ -150,7 +140,8 @@ public class EnrollmentServiceApprovalTests
             new UpdateEnrollmentStatusRequest { Status = "approved" },
             admin.Id);
 
-        Assert.True(result.Success);
+        Assert.NotNull(result);
+        Assert.Equal("approved", result.Status);
 
         var updatedEnrollment = await context.Enrollments.AsNoTracking().SingleAsync(item => item.Id == enrollment.Id);
         var updatedStudent = await context.Students.AsNoTracking().SingleAsync(item => item.Id == student.Id);
@@ -228,7 +219,8 @@ public class EnrollmentServiceApprovalTests
         {
             Id = 2,
             Name = "BSCS",
-            Code = "BSCS"
+            Code = "BSCS",
+            EducationLevel = EducationLevel.College
         };
 
         var subject = new Subject
@@ -303,7 +295,8 @@ public class EnrollmentServiceApprovalTests
             },
             admin.Id);
 
-        Assert.True(result.Success);
+        Assert.NotNull(result);
+        Assert.Equal("rejected", result.Status);
 
         var updatedEnrollment = await context.Enrollments.AsNoTracking().SingleAsync(item => item.Id == enrollment.Id);
         var updatedStudent = await context.Students.AsNoTracking().SingleAsync(item => item.Id == student.Id);
@@ -314,6 +307,63 @@ public class EnrollmentServiceApprovalTests
         Assert.Null(updatedStudent.SectionId);
         Assert.True(updatedUser.IsActive);
         Assert.True(updatedUser.EmailConfirmed);
+    }
+
+    [Fact]
+    public async Task CreateEnrollmentAsync_ReturnsBadRequest_WhenYearLevelOutsideCourseRange()
+    {
+        await using var context = CreateContext();
+        var notificationServiceMock = new Mock<INotificationService>(MockBehavior.Strict);
+        var accountEmailServiceMock = new Mock<IAccountEmailService>(MockBehavior.Strict);
+        var sectionAllocationServiceMock = new Mock<ISectionAllocationService>(MockBehavior.Strict);
+
+        var service = new EnrollmentService(
+            context,
+            Options.Create(EnrollmentSettings.Default),
+            sectionAllocationServiceMock.Object,
+            notificationServiceMock.Object,
+            accountEmailServiceMock.Object,
+            NullLogger<EnrollmentService>.Instance);
+
+        var course = new Course
+        {
+            Id = 500,
+            Name = "Diploma in Electrical Technology",
+            Code = "DET",
+            EducationLevel = EducationLevel.Tvet
+        };
+
+        var student = new Student
+        {
+            Id = 900,
+            UserId = 901,
+            StudentNumber = "2026-9001",
+            FirstName = "Maria",
+            LastName = "Santos",
+            Birthdate = new DateOnly(2009, 2, 2),
+            Gender = "F",
+            Address = "Cebu",
+            GuardianName = "Parent",
+            GuardianContact = "09123456789",
+            YearLevel = 1,
+            CourseId = course.Id,
+            IsActive = true
+        };
+
+        context.Courses.Add(course);
+        context.Students.Add(student);
+        await context.SaveChangesAsync();
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => service.CreateEnrollmentAsync(
+            new CreateEnrollmentRequest
+            {
+                CourseId = course.Id,
+                AcademicYearId = 777,
+                YearLevel = 4
+            },
+            student.UserId));
+
+        Assert.Equal("Year level 4 is not valid for TVET. Allowed range is 1-2.", exception.Message);
     }
 
     private static AppDbContext CreateContext()

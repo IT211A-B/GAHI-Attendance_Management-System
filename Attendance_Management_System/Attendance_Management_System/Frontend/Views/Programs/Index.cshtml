@@ -38,6 +38,17 @@
                 <input asp-for="CreateForm.Description" class="input-select" />
                 <span asp-validation-for="CreateForm.Description" class="field-validation"></span>
             </div>
+            <div>
+                <label asp-for="CreateForm.EducationLevel"></label>
+                <select asp-for="CreateForm.EducationLevel" class="input-select">
+                    <option value="">Choose education level</option>
+                    @foreach (var levelOption in Model.EducationLevels)
+                    {
+                        <option value="@levelOption.Value">@levelOption.Label</option>
+                    }
+                </select>
+                <span asp-validation-for="CreateForm.EducationLevel" class="field-validation"></span>
+            </div>
 
             <button type="submit" class="btn-primary btn-inline">Create Program</button>
         </form>
@@ -59,6 +70,7 @@
                     <tr>
                         <th>Code</th>
                         <th>Name</th>
+                        <th>Level</th>
                         <th>Description</th>
                         <th>Created</th>
                         <th>Actions</th>
@@ -70,31 +82,46 @@
                         <tr>
                             <td><span class="role-pill">@item.Code</span></td>
                             <td>@item.Name</td>
+                            <td>@item.EducationLevelLabel</td>
                             <td>@item.Description</td>
                             <td>@item.CreatedAt</td>
                             <td>
                                 <div class="action-stack">
-                                    <form asp-controller="Programs" asp-action="Update" asp-route-id="@item.Id" method="post" class="stack-form">
+                                    <form asp-controller="Programs" asp-action="Update" asp-route-id="@item.Id" method="post"
+                                          class="stack-form">
                                         @Html.AntiForgeryToken()
-                                        <input type="text" name="UpdateForm.Code" value="@item.Code" class="input-select compact-input" placeholder="Code" />
-                                        <input type="text" name="UpdateForm.Name" value="@item.Name" class="input-select compact-input" placeholder="Name" />
-                                        <input type="text" name="UpdateForm.Description" value="@(item.Description == "-" ? string.Empty : item.Description)" class="input-select compact-input" placeholder="Description" />
-                                        <button type="submit" class="btn-secondary">Save</button>
-                                    </form>
-                                    <form asp-controller="Programs" asp-action="Delete" asp-route-id="@item.Id" method="post" class="inline-form">
-                                        @Html.AntiForgeryToken()
-                                        <button type="submit" class="btn-danger">Delete</button>
-                                    </form>
-                                </div>
-                            </td>
-                        </tr>
-                    }
-                </tbody>
-            </table>
-        </div>
-    }
-</section>
+                                        <input type="text" name="UpdateForm.Code" value="@item.Code"
+                                               class="input-select compact-input" placeholder="Code" />
+                                        <input type="text" name="UpdateForm.Name" value="@item.Name"
+                                               class="input-select compact-input" placeholder="Name" />
+                                        <select name="UpdateForm.EducationLevel" class="input-select compact-input">
+                                            @foreach (var levelOption in Model.EducationLevels)
+                                            {
+                                                <option value="@levelOption.Value"
+                                                        selected="@(levelOption.Value == item.EducationLevel ? "selected" : null)">
+                                                    @levelOption.Label</option>
+                                                }
+                                            </select>
+                                            <input type="text" name="UpdateForm.Description"
+                                                   value="@(item.Description == "-" ? string.Empty : item.Description)"
+                                                   class="input-select compact-input" placeholder="Description" />
+                                            <button type="submit" class="btn-secondary">Save</button>
+                                        </form>
+                                        <form asp-controller="Programs" asp-action="Delete" asp-route-id="@item.Id" method="post"
+                                              class="inline-form">
+                                            @Html.AntiForgeryToken()
+                                            <button type="submit" class="btn-danger">Delete</button>
+                                        </form>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </section>
 
-@section Scripts {
-    <partial name="_ValidationScriptsPartial" />
-}
+    @section Scripts {
+        <partial name="_ValidationScriptsPartial" />
+    }

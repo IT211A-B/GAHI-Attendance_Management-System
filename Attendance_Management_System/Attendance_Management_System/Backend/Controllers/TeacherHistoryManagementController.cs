@@ -1,4 +1,4 @@
-using System.Security.Claims;
+﻿using System.Security.Claims;
 using Attendance_Management_System.Backend.Interfaces.Services;
 using Attendance_Management_System.Backend.ViewModels.TeacherHistory;
 using Microsoft.AspNetCore.Authorization;
@@ -8,7 +8,7 @@ namespace Attendance_Management_System.Backend.Controllers;
 
 [Authorize(Policy = "TeacherOnly")]
 [Route("teacher-history")]
-public class TeacherHistoryManagementController : Controller
+public class TeacherHistoryManagementController : AppControllerBase
 {
     private readonly ITeacherHistoryService _teacherHistoryService;
 
@@ -33,7 +33,7 @@ public class TeacherHistoryManagementController : Controller
             SelectedDate = selectedDate
         };
 
-        var schedulesResult = await _teacherHistoryService.GetTeacherSchedulesAsync(userId.Value);
+        var schedulesResult = await ExecuteServiceCallAsync(() => _teacherHistoryService.GetTeacherSchedulesAsync(userId.Value));
 
         if (!schedulesResult.Success || schedulesResult.Data is null)
         {
@@ -56,7 +56,7 @@ public class TeacherHistoryManagementController : Controller
             return View(viewModel);
         }
 
-        var historyResult = await _teacherHistoryService.GetScheduleHistoryAsync(scheduleId.Value, userId.Value, selectedDate);
+        var historyResult = await ExecuteServiceCallAsync(() => _teacherHistoryService.GetScheduleHistoryAsync(scheduleId.Value, userId.Value, selectedDate));
         if (!historyResult.Success || historyResult.Data is null)
         {
             viewModel.ErrorMessage = historyResult.Error?.Message ?? "Unable to load schedule history right now.";
@@ -100,3 +100,4 @@ public class TeacherHistoryManagementController : Controller
         return int.TryParse(userIdClaim, out var userId) ? userId : null;
     }
 }
+

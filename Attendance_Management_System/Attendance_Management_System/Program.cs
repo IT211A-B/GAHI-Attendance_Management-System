@@ -5,6 +5,7 @@ using Attendance_Management_System.Backend.Persistence;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Mvc.Razor;
 using Microsoft.EntityFrameworkCore;
+using Scalar.AspNetCore;
 
 // Create the web application builder with frontend web root configured up-front
 var webRootPath = Directory.Exists(Path.Combine(Directory.GetCurrentDirectory(), "Frontend", "wwwroot"))
@@ -19,6 +20,15 @@ var builder = WebApplication.CreateBuilder(new WebApplicationOptions
 
 // Add MVC controllers with views for handling web and API requests
 builder.Services.AddControllersWithViews();
+builder.Services.AddProblemDetails();
+builder.Services.AddHttpClient("AttendanceAPI", client =>
+{
+    var baseUrl = builder.Configuration["ApiSettings:BaseUrl"];
+    if (Uri.TryCreate(baseUrl, UriKind.Absolute, out var parsedBaseUrl))
+    {
+        client.BaseAddress = parsedBaseUrl;
+    }
+});
 
 // Tell Razor to resolve pages from Frontend/Views instead of root Views
 builder.Services.Configure<RazorViewEngineOptions>(options =>
@@ -30,6 +40,10 @@ builder.Services.Configure<RazorViewEngineOptions>(options =>
 
 // Register all backend services (database, auth, repositories, services)
 builder.Services.AddBackend(builder.Configuration);
+
+// Register API explorer and Swagger generation for MVC controller endpoints
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen();
 
 // Trust reverse proxy headers (Render) for HTTPS scheme and client IP.
 builder.Services.Configure<ForwardedHeadersOptions>(options =>
@@ -47,11 +61,11 @@ builder.Services.AddHealthChecks()
 var app = builder.Build();
 
 app.UseForwardedHeaders();
+app.UseExceptionHandler();
 
 // Configure production-specific error handling and security
 if (!app.Environment.IsDevelopment())
 {
-    app.UseExceptionHandler("/Home/Error");
     app.UseHsts();
 }
 
@@ -66,9 +80,20 @@ app.UseRateLimiter();
 app.UseAuthorization();
 
 // Configure default MVC route pattern
+app.MapControllers();
+
 app.MapControllerRoute(
     name: "default",
     pattern: "{controller=Home}/{action=Index}/{id?}");
+
+if (app.Environment.IsDevelopment())
+{
+    app.UseSwagger();
+    app.MapScalarApiReference(options =>
+    {
+        options.WithOpenApiRoutePattern("/swagger/{documentName}/swagger.json");
+    });
+}
 
 app.MapHub<NotificationHub>("/hubs/notifications").DisableRateLimiting();
 

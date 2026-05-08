@@ -133,41 +133,156 @@
                             <option value="">Choose a course</option>
                             @foreach (var course in Model.AvailableCourses)
                             {
-                                <option value="@course.Id">@course.Label</option>
+                                <option value="@course.Id" data-min-year-level="@course.MinYearLevel"
+                                        data-max-year-level="@course.MaxYearLevel"
+                                        data-education-level-label="@course.EducationLevelLabel">
+                                    @course.Label
+                                </option>
                             }
                         </select>
                         <span asp-validation-for="CourseId" class="field-validation"></span>
                     </div>
 
                     <div class="auth-field">
-                        <label asp-for="AcademicYearId"></label>
-                        <select asp-for="AcademicYearId">
-                            <option value="">Choose an academic period</option>
-                            @foreach (var period in Model.AvailableAcademicYears)
-                            {
-                                <option value="@period.Id">@period.Label</option>
-                            }
+                        <label asp-for="YearLevel"></label>
+                        <select asp-for="YearLevel" id="signup-year-level" data-selected-year-level="@Model.YearLevel">
+                            <option value="">Choose a course first</option>
                         </select>
-                        <span asp-validation-for="AcademicYearId" class="field-validation"></span>
-                    </div>
+                        <p id="signup-year-level-hint" class="field-helper compact">Choose a course to load valid year
+                            levels.</p>
+                            <span asp-validation-for="YearLevel" class="field-validation"></span>
+                        </div>
 
-                    <button type="submit" class="btn-primary">Create account and request enrollment</button>
+                        <div class="auth-field">
+                            <label asp-for="AcademicYearId"></label>
+                            <select asp-for="AcademicYearId">
+                                <option value="">Choose an academic period</option>
+                                @foreach (var period in Model.AvailableAcademicYears)
+                                {
+                                    <option value="@period.Id">@period.Label</option>
+                                }
+                            </select>
+                            <span asp-validation-for="AcademicYearId" class="field-validation"></span>
+                        </div>
 
-                    <p class="auth-helper">Your request will be submitted as pending and reviewed by administration. A
-                        section will be assigned automatically.</p>
+                        <button type="submit" class="btn-primary">Create account and request enrollment</button>
 
-                        <p class="auth-alt-action">
-                            Already have an account?
-                            <a asp-action="Login">Sign in</a>
-                        </p>
-                    </form>
-                </section>
-            </main>
+                        <p class="auth-helper">Your request will be submitted as pending and reviewed by administration. A
+                            section will be assigned automatically.</p>
 
-            <script src="~/lib/jquery/dist/jquery.min.js"></script>
-            <script src="https://cdn.jsdelivr.net/npm/animejs@3.2.2/lib/anime.min.js"></script>
-            <script src="~/js/site.js" asp-append-version="true"></script>
-            <partial name="_ValidationScriptsPartial" />
-        </body>
+                            <p class="auth-alt-action">
+                                Already have an account?
+                                <a asp-action="Login">Sign in</a>
+                            </p>
+                        </form>
+                    </section>
+                </main>
 
-    </html>
+                <script src="~/lib/jquery/dist/jquery.min.js"></script>
+                <script src="https://cdn.jsdelivr.net/npm/animejs@3.2.2/lib/anime.min.js"></script>
+                <script src="~/js/site.js" asp-append-version="true"></script>
+                <script>
+                    (() => {
+                    const courseSelect = document.getElementById("signup-course-id");
+                    const yearLevelSelect = document.getElementById("signup-year-level");
+                    const hint = document.getElementById("signup-year-level-hint");
+
+                    if (!courseSelect || !yearLevelSelect) {
+                    return;
+                    }
+
+                    const resetYearLevelOptions = (placeholder) => {
+                    yearLevelSelect.innerHTML = "";
+                    const option = document.createElement("option");
+                    option.value = "";
+                    option.textContent = placeholder;
+                    yearLevelSelect.appendChild(option);
+                    };
+
+                    const toOrdinal = (value) => {
+                    const remainderHundred = value % 100;
+                    if (remainderHundred >= 11 && remainderHundred <= 13) {
+                    return `${value}th`;
+                    }
+
+                    switch (value % 10) {
+                    case 1:
+                    return `${value}st`;
+                    case 2:
+                    return `${value}nd`;
+                    case 3:
+                    return `${value}rd`;
+                    default:
+                    return `${value}th`;
+                    }
+                    };
+
+                    const formatYearLevelOption = (yearLevel, levelLabel, courseLabel) => {
+                    if (String(levelLabel).toLowerCase() === "college") {
+                    const normalizedCourseLabel = String(courseLabel || "").replace(/\s+/g, " ").trim();
+                    const courseCode = normalizedCourseLabel.includes(" - ")
+                    ? normalizedCourseLabel.split(" - ")[0].trim()
+                    : normalizedCourseLabel;
+
+                    return courseCode
+                    ? `${toOrdinal(yearLevel)} Year ${courseCode}`
+                    : `${toOrdinal(yearLevel)} Year`;
+                    }
+
+                    return `Year Level ${yearLevel}`;
+                    };
+
+                    const formatRangeHint = (minYearLevel, maxYearLevel, levelLabel) => {
+                    if (String(levelLabel).toLowerCase() === "college") {
+                    return `${toOrdinal(minYearLevel)} Year to ${toOrdinal(maxYearLevel)} Year`;
+                    }
+
+                    return `year levels ${minYearLevel}-${maxYearLevel}`;
+                    };
+
+                    const refreshYearLevelOptions = () => {
+                    const selectedYearLevel = yearLevelSelect.value || yearLevelSelect.dataset.selectedYearLevel || "";
+                    const selectedCourseOption = courseSelect.options[courseSelect.selectedIndex];
+                    const minYearLevel = Number(selectedCourseOption?.dataset.minYearLevel ?? 0);
+                    const maxYearLevel = Number(selectedCourseOption?.dataset.maxYearLevel ?? 0);
+                    const levelLabel = selectedCourseOption?.dataset.educationLevelLabel ?? "selected course";
+                    const selectedCourseLabel = selectedCourseOption?.textContent ?? "";
+
+                    if (!courseSelect.value || minYearLevel <= 0 || maxYearLevel <= 0 || maxYearLevel < minYearLevel) {
+                    resetYearLevelOptions("Choose a course first");
+                    yearLevelSelect.disabled = true;
+                    if (hint) {
+                    hint.textContent = "Choose a course to load valid year levels.";
+                    }
+                    return;
+                    }
+
+                    resetYearLevelOptions("Choose year level");
+
+                    for (let yearLevel = minYearLevel; yearLevel <= maxYearLevel; yearLevel++) {
+                    const option = document.createElement("option");
+                    option.value = String(yearLevel);
+                    option.textContent = formatYearLevelOption(yearLevel, levelLabel, selectedCourseLabel);
+                    yearLevelSelect.appendChild(option);
+                    }
+
+                    if (selectedYearLevel !== "" && Number(selectedYearLevel) >= minYearLevel && Number(selectedYearLevel) <= maxYearLevel) {
+                    yearLevelSelect.value = selectedYearLevel;
+                    } else if (yearLevelSelect.value === "" || Number(yearLevelSelect.value) < minYearLevel || Number(yearLevelSelect.value) > maxYearLevel) {
+                    yearLevelSelect.value = String(minYearLevel);
+                    }
+
+                    yearLevelSelect.disabled = false;
+                    if (hint) {
+                    hint.textContent = `${levelLabel} allows ${formatRangeHint(minYearLevel, maxYearLevel, levelLabel)}.`;
+                    }
+                    };
+
+                    courseSelect.addEventListener("change", refreshYearLevelOptions);
+                    refreshYearLevelOptions();
+                    })();
+                </script>
+                <partial name="_ValidationScriptsPartial" />
+            </body>
+
+        </html>

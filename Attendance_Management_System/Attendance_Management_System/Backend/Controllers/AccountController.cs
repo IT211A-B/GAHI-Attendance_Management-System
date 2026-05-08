@@ -3,6 +3,7 @@ using Attendance_Management_System.Backend.Entities;
 using Attendance_Management_System.Backend.Interfaces.Services;
 using Attendance_Management_System.Backend.Persistence;
 using Attendance_Management_System.Backend.Constants;
+using Attendance_Management_System.Backend.Helpers;
 using Attendance_Management_System.Backend.ViewModels.Auth;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
@@ -164,6 +165,7 @@ public class AccountController : Controller
             GuardianName = model.GuardianName.Trim(),
             GuardianContact = model.GuardianContact.Trim(),
             CourseId = model.CourseId,
+            YearLevel = model.YearLevel,
             AcademicYearId = model.AcademicYearId
         };
 
@@ -221,23 +223,31 @@ public class AccountController : Controller
     {
         try
         {
-            var coursesResult = await _coursesService.GetAllCoursesAsync();
-            if (!coursesResult.Success || coursesResult.Data is null)
+            var courses = await _coursesService.GetAllCoursesAsync();
+            model.AvailableCourses = courses
+                .OrderBy(course => course.Name)
+                .Select(course => new SignupCourseOptionViewModel
+                {
+                    Id = course.Id,
+                    Label = string.IsNullOrWhiteSpace(course.Code)
+                        ? course.Name
+                        : $"{course.Code} - {course.Name}",
+                    EducationLevel = course.EducationLevel,
+                    EducationLevelLabel = EducationLevelPolicy.ToDisplayLabel(course.EducationLevel),
+                    MinYearLevel = EducationLevelPolicy.GetAllowedYearRange(course.EducationLevel).MinYearLevel,
+                    MaxYearLevel = EducationLevelPolicy.GetAllowedYearRange(course.EducationLevel).MaxYearLevel
+                })
+                .ToList();
+
+            if (model.YearLevel <= 0)
             {
-                model.ErrorMessage ??= coursesResult.Error?.Message ?? "Unable to load course options right now.";
-            }
-            else
-            {
-                model.AvailableCourses = coursesResult.Data
-                    .OrderBy(course => course.Name)
-                    .Select(course => new SignupCourseOptionViewModel
-                    {
-                        Id = course.Id,
-                        Label = string.IsNullOrWhiteSpace(course.Code)
-                            ? course.Name
-                            : $"{course.Code} - {course.Name}"
-                    })
-                    .ToList();
+                var selectedCourse = model.AvailableCourses.FirstOrDefault(course => course.Id == model.CourseId)
+                    ?? model.AvailableCourses.FirstOrDefault();
+
+                if (selectedCourse != null)
+                {
+                    model.YearLevel = selectedCourse.MinYearLevel;
+                }
             }
         }
         catch (PostgresException ex) when (ex.SqlState == PostgresErrorCodes.InvalidPassword)
@@ -250,25 +260,23 @@ public class AccountController : Controller
             _logger.LogError(ex, "PostgreSQL connection failure while loading signup course options.");
             model.ErrorMessage ??= "Unable to load signup options right now. Please try again later.";
         }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Unexpected error while loading signup course options.");
+            model.ErrorMessage ??= "Unable to load course options right now.";
+        }
 
         try
         {
-            var academicYearsResult = await _academicYearsService.GetAllAcademicYearsAsync();
-            if (!academicYearsResult.Success || academicYearsResult.Data is null)
-            {
-                model.ErrorMessage ??= academicYearsResult.Error?.Message ?? "Unable to load academic period options right now.";
-            }
-            else
-            {
-                model.AvailableAcademicYears = academicYearsResult.Data
-                    .OrderByDescending(year => year.StartDate)
-                    .Select(year => new SignupAcademicYearOptionViewModel
-                    {
-                        Id = year.Id,
-                        Label = year.YearLabel
-                    })
-                    .ToList();
-            }
+            var academicYears = await _academicYearsService.GetAllAcademicYearsAsync();
+            model.AvailableAcademicYears = academicYears
+                .OrderByDescending(year => year.StartDate)
+                .Select(year => new SignupAcademicYearOptionViewModel
+                {
+                    Id = year.Id,
+                    Label = year.YearLabel
+                })
+                .ToList();
         }
         catch (PostgresException ex) when (ex.SqlState == PostgresErrorCodes.InvalidPassword)
         {
@@ -279,6 +287,11 @@ public class AccountController : Controller
         {
             _logger.LogError(ex, "PostgreSQL connection failure while loading signup academic period options.");
             model.ErrorMessage ??= "Unable to load signup options right now. Please try again later.";
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Unexpected error while loading signup academic period options.");
+            model.ErrorMessage ??= "Unable to load academic period options right now.";
         }
 
     }
