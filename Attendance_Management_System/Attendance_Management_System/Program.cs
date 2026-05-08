@@ -23,7 +23,7 @@ builder.Services.AddControllersWithViews();
 builder.Services.AddProblemDetails();
 builder.Services.AddHttpClient("AttendanceAPI", client =>
 {
-    var baseUrl = builder.Configuration["AppSettings:BaseUrl"];
+    var baseUrl = builder.Configuration["ApiSettings:BaseUrl"];
     if (Uri.TryCreate(baseUrl, UriKind.Absolute, out var parsedBaseUrl))
     {
         client.BaseAddress = parsedBaseUrl;
