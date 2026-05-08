@@ -20,7 +20,9 @@ jobs:
           dotnet-version: "9.0.x"
 
       - name: Restore
-        run: dotnet restore Attendance_Management_System/Attendance_Management_System.slnx
+        run: |
+          dotnet restore Attendance_Management_System/Attendance_Management_System.slnx
+          dotnet restore Attendance_Management_System/tests/Attendance_Management_System.Tests/Attendance_Management_System.Tests.csproj
 
       - name: Build (Release)
         run: dotnet build Attendance_Management_System/Attendance_Management_System.slnx --configuration Release --no-restore
