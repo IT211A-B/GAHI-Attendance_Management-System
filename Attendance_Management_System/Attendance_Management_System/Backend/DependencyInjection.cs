@@ -117,6 +117,7 @@ public static class DependencyInjection
         // Register application services for business logic
         services.AddScoped<IAuthService, AuthService>();
         services.AddScoped<IDashboardService, DashboardService>();
+        services.AddScoped<ISectionPageService, SectionPageService>();
         services.AddScoped<IAttendanceService, AttendanceService>();
         services.AddScoped<IAttendanceQrService, AttendanceQrService>();
         services.AddScoped<IEnrollmentService, EnrollmentService>();
