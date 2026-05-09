@@ -17,6 +17,8 @@ namespace Attendance_Management_System.Backend.Controllers;
 [Route("")]
 public class AccountController : Controller
 {
+    private const string GenericForgotPasswordNotice = "If an account exists for that email, password reset instructions have been sent. Please check your inbox.";
+
     private readonly SignInManager<User> _signInManager;
     private readonly UserManager<User> _userManager;
     private readonly IAuthService _authService;
@@ -163,11 +165,10 @@ public class AccountController : Controller
         var result = await _authService.ForgotPasswordAsync(request);
         if (!result.Success)
         {
-            ModelState.AddModelError(string.Empty, result.Message ?? "Unable to process password reset right now.");
-            return View(model);
+            _logger.LogWarning("ForgotPasswordAsync returned non-success for forgot-password request.");
         }
 
-        TempData["AuthSuccess"] = result.Message ?? "Password reset instructions have been sent to your email address.";
+        TempData["AuthSuccess"] = GenericForgotPasswordNotice;
         return RedirectToAction(nameof(ForgotPassword));
     }
 
@@ -238,7 +239,7 @@ public class AccountController : Controller
 
     [HttpGet("reset-password")]
     [AllowAnonymous]
-    public IActionResult ResetPassword(int userId, string token)
+    public IActionResult ResetPassword(int userId, [FromQuery] string? token)
     {
         if (User.Identity?.IsAuthenticated == true)
         {
