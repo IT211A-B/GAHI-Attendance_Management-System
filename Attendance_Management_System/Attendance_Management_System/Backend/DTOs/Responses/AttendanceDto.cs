@@ -1,3 +1,5 @@
+using Attendance_Management_System.Backend.Enums;
+
 namespace Attendance_Management_System.Backend.DTOs.Responses;
 
 public class AttendanceDto
@@ -18,6 +20,6 @@ public class AttendanceDto
     public string? MarkerName { get; set; }
     public bool IsMarked { get; set; }
     public bool IsLate { get; set; }
-    public string StatusLabel { get; set; } = "Unmarked";
+    public string StatusLabel { get; set; } = AttendanceStatusKind.Unmarked.ToString();
     public string StatusClass { get; set; } = "inactive";
 }

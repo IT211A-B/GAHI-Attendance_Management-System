@@ -390,7 +390,7 @@ public class AttendanceService : IAttendanceService
                 Date = date,
                 TimeIn = null,
                 TimeOut = null,
-                Remarks = "Unmarked",
+                Remarks = AttendancePolicy.ToLabel(AttendanceStatusKind.Unmarked),
                 MarkedAt = DateTimeOffset.MinValue,
                 MarkedBy = 0,
                 MarkerName = null,
@@ -609,7 +609,9 @@ public class AttendanceService : IAttendanceService
         // Missing time-in is treated as absent; auto-fill that remark when caller leaves it blank.
         if (!timeIn.HasValue)
         {
-            return string.IsNullOrWhiteSpace(trimmed) ? "Absent" : trimmed;
+            return string.IsNullOrWhiteSpace(trimmed)
+                ? AttendancePolicy.ToLabel(AttendanceStatusKind.Absent)
+                : trimmed;
         }
 
         return string.IsNullOrWhiteSpace(trimmed) ? null : trimmed;

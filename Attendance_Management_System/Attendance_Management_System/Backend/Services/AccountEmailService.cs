@@ -7,19 +7,19 @@ namespace Attendance_Management_System.Backend.Services;
 
 public class AccountEmailService : IAccountEmailService
 {
-    private readonly IEmailSender _emailSender;
+  private readonly IEmailSender _emailSender;
 
-    public AccountEmailService(IEmailSender emailSender)
-    {
-        _emailSender = emailSender;
-    }
+  public AccountEmailService(IEmailSender emailSender)
+  {
+    _emailSender = emailSender;
+  }
 
-    public Task SendSignupAcknowledgmentAsync(string toAddress, string studentName)
-    {
-        var safeName = WebUtility.HtmlEncode(studentName);
+  public Task SendSignupAcknowledgmentAsync(string toAddress, string studentName)
+  {
+    var safeName = WebUtility.HtmlEncode(studentName);
 
-        var subject = "Welcome to DonBosco AMS";
-        var htmlBody = $"""
+    var subject = "Welcome to DonBosco AMS";
+    var htmlBody = $"""
             <div style=\"font-family:Arial,sans-serif;line-height:1.6;color:#1f2937;\">
               <h2 style=\"margin-bottom:8px;\">Welcome, {safeName}!</h2>
               <p>Your DonBosco AMS signup was received successfully.</p>
@@ -28,16 +28,16 @@ public class AccountEmailService : IAccountEmailService
             </div>
             """;
 
-        return _emailSender.SendAsync(toAddress, subject, htmlBody);
-    }
+    return _emailSender.SendAsync(toAddress, subject, htmlBody);
+  }
 
-    public Task SendVerificationEmailAsync(string toAddress, string studentName, string confirmationLink)
-    {
-        var safeName = WebUtility.HtmlEncode(studentName);
-        var safeLink = WebUtility.HtmlEncode(confirmationLink);
+  public Task SendVerificationEmailAsync(string toAddress, string studentName, string confirmationLink)
+  {
+    var safeName = WebUtility.HtmlEncode(studentName);
+    var safeLink = WebUtility.HtmlEncode(confirmationLink);
 
-        var subject = "Verify your DonBosco AMS email";
-        var htmlBody = $"""
+    var subject = "Verify your DonBosco AMS email";
+    var htmlBody = $"""
             <div style=\"font-family:Arial,sans-serif;line-height:1.6;color:#1f2937;\">
               <h2 style=\"margin-bottom:8px;\">Confirm your email address</h2>
               <p>Hello {safeName},</p>
@@ -53,16 +53,16 @@ public class AccountEmailService : IAccountEmailService
             </div>
             """;
 
-        return _emailSender.SendAsync(toAddress, subject, htmlBody);
-    }
+    return _emailSender.SendAsync(toAddress, subject, htmlBody);
+  }
 
-    public Task SendPasswordResetEmailAsync(string toAddress, string accountName, string resetLink)
-    {
-        var safeName = WebUtility.HtmlEncode(accountName);
-        var safeLink = WebUtility.HtmlEncode(resetLink);
+  public Task SendPasswordResetEmailAsync(string toAddress, string accountName, string resetLink)
+  {
+    var safeName = WebUtility.HtmlEncode(accountName);
+    var safeLink = WebUtility.HtmlEncode(resetLink);
 
-        var subject = "Reset your DonBosco AMS password";
-        var htmlBody = $"""
+    var subject = "Reset your DonBosco AMS password";
+    var htmlBody = $"""
             <div style=\"font-family:Arial,sans-serif;line-height:1.6;color:#1f2937;\">
               <h2 style=\"margin-bottom:8px;\">Reset your password</h2>
               <p>Hello {safeName},</p>
@@ -79,20 +79,20 @@ public class AccountEmailService : IAccountEmailService
             </div>
             """;
 
-        return _emailSender.SendAsync(toAddress, subject, htmlBody);
-    }
+    return _emailSender.SendAsync(toAddress, subject, htmlBody);
+  }
 
-    public Task SendEnrollmentStatusUpdateAsync(string toAddress, string studentName, string status, string? rejectionReason = null)
+  public Task SendEnrollmentStatusUpdateAsync(string toAddress, string studentName, string status, string? rejectionReason = null)
+  {
+    var normalizedStatus = EnumStorage.TryParseEnrollmentStatus(status, out var parsedStatus)
+        ? parsedStatus.ToStorageValue()
+        : EnrollmentStatus.Rejected.ToStorageValue();
+    var safeName = WebUtility.HtmlEncode(studentName);
+
+    if (normalizedStatus == EnrollmentStatus.Approved.ToStorageValue())
     {
-        var normalizedStatus = EnumStorage.TryParseEnrollmentStatus(status, out var parsedStatus)
-            ? parsedStatus.ToStorageValue()
-            : EnrollmentStatus.Rejected.ToStorageValue();
-        var safeName = WebUtility.HtmlEncode(studentName);
-
-        if (normalizedStatus == EnrollmentStatus.Approved.ToStorageValue())
-        {
-            var subjectApproved = "Your DonBosco AMS enrollment was approved";
-            var htmlBodyApproved = $"""
+      var subjectApproved = "Your DonBosco AMS enrollment was approved";
+      var htmlBodyApproved = $"""
                 <div style=\"font-family:Arial,sans-serif;line-height:1.6;color:#1f2937;\">
                   <h2 style=\"margin-bottom:8px;\">Enrollment Approved</h2>
                   <p>Hello {safeName},</p>
@@ -101,15 +101,15 @@ public class AccountEmailService : IAccountEmailService
                 </div>
                 """;
 
-            return _emailSender.SendAsync(toAddress, subjectApproved, htmlBodyApproved);
-        }
+      return _emailSender.SendAsync(toAddress, subjectApproved, htmlBodyApproved);
+    }
 
-        var safeReason = string.IsNullOrWhiteSpace(rejectionReason)
-            ? "No specific reason was provided."
-            : WebUtility.HtmlEncode(rejectionReason.Trim());
+    var safeReason = string.IsNullOrWhiteSpace(rejectionReason)
+        ? "No specific reason was provided."
+        : WebUtility.HtmlEncode(rejectionReason.Trim());
 
-        var subjectRejected = "Your DonBosco AMS enrollment was rejected";
-        var htmlBodyRejected = $"""
+    var subjectRejected = "Your DonBosco AMS enrollment was rejected";
+    var htmlBodyRejected = $"""
             <div style=\"font-family:Arial,sans-serif;line-height:1.6;color:#1f2937;\">
               <h2 style=\"margin-bottom:8px;\">Enrollment Rejected</h2>
               <p>Hello {safeName},</p>
@@ -120,6 +120,6 @@ public class AccountEmailService : IAccountEmailService
             </div>
             """;
 
-        return _emailSender.SendAsync(toAddress, subjectRejected, htmlBodyRejected);
-    }
+    return _emailSender.SendAsync(toAddress, subjectRejected, htmlBodyRejected);
+  }
 }

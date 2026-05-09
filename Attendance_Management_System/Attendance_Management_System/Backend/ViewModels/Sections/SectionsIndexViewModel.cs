@@ -117,7 +117,7 @@ public class SectionAttendanceStudentRowViewModel
     public int YearLevel { get; set; }
     public string CourseText { get; set; } = "-";
     public bool IsMarked { get; set; }
-    public string StatusLabel { get; set; } = "Unmarked";
+    public string StatusLabel { get; set; } = AttendanceStatusKind.Unmarked.ToString();
     public string StatusClass { get; set; } = "inactive";
     public string ExistingTimeIn { get; set; } = "-";
     public string ExistingTimeInValue { get; set; } = string.Empty;

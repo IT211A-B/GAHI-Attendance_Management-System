@@ -745,7 +745,7 @@ public class SectionManagementController : AppControllerBase
 
         var hasRecord = record is not null;
         var isMarked = hasRecord && record!.IsMarked;
-        var statusLabel = hasRecord ? record!.StatusLabel : "Unmarked";
+        var statusLabel = hasRecord ? record!.StatusLabel : AttendancePolicy.ToLabel(AttendanceStatusKind.Unmarked);
         var statusClass = hasRecord ? record!.StatusClass : "inactive";
 
         return new SectionAttendanceStudentRowViewModel
