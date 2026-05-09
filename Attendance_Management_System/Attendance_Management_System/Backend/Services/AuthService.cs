@@ -20,9 +20,8 @@ public class AuthService : IAuthService
 {
     private const string GenericInvalidCredentialsMessage = "Invalid email or password.";
     private const string GenericResendVerificationMessage = "If an account exists for that email, a verification link has been sent. Please check your inbox.";
+    private const string GenericForgotPasswordMessage = "If an account exists for that email, password reset instructions have been sent. Please check your inbox.";
     private const string InvalidEmailConfirmationMessage = "Invalid or expired email confirmation link.";
-    private const string PasswordResetEmailSentMessage = "Password reset instructions have been sent to your email address.";
-    private const string PasswordResetAccountNotFoundMessage = "No account was found for that email address.";
     private const string PasswordResetInactiveAccountMessage = "This account is inactive. Please contact administrator.";
     private const string PasswordResetInvalidLinkMessage = "Invalid or expired password reset link.";
     private const string PasswordResetSuccessMessage = "Password has been reset successfully. You can now sign in.";
@@ -183,19 +182,14 @@ public class AuthService : IAuthService
     {
         if (request == null || string.IsNullOrWhiteSpace(request.Email))
         {
-            return CreateFailureResponse("Email is required.");
+            return CreateSuccessResponse(GenericForgotPasswordMessage);
         }
 
         var normalizedEmail = request.Email.Trim();
         var user = await _userManager.FindByEmailAsync(normalizedEmail);
-        if (user == null || string.IsNullOrWhiteSpace(user.Email))
+        if (user == null || string.IsNullOrWhiteSpace(user.Email) || !user.IsActive)
         {
-            return CreateFailureResponse(PasswordResetAccountNotFoundMessage);
-        }
-
-        if (!user.IsActive)
-        {
-            return CreateFailureResponse(PasswordResetInactiveAccountMessage);
+            return CreateSuccessResponse(GenericForgotPasswordMessage);
         }
 
         try
@@ -208,10 +202,9 @@ public class AuthService : IAuthService
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Failed to send password reset email for user {UserId}.", user.Id);
-            return CreateFailureResponse("Unable to send password reset email right now. Please try again later.");
         }
 
-        return CreateSuccessResponse(PasswordResetEmailSentMessage);
+        return CreateSuccessResponse(GenericForgotPasswordMessage);
     }
 
     public async Task<AuthResponse> ResetPasswordAsync(ResetPasswordRequest request)

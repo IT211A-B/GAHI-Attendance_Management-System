@@ -5,7 +5,7 @@ namespace Attendance_Management_System.Tests;
 public class AuthServiceEmailConfirmationTests
 {
     [Fact]
-    public async Task ForgotPasswordAsync_ReturnsFailure_WhenAccountIsNotFound()
+    public async Task ForgotPasswordAsync_ReturnsGenericSuccess_WhenAccountIsNotFound()
     {
         await using var context = CreateContext();
         var userManager = CreateUserManager();
@@ -19,8 +19,34 @@ public class AuthServiceEmailConfirmationTests
             Email = "missing.student@example.com"
         });
 
-        Assert.False(result.Success);
-        Assert.Equal("No account was found for that email address.", result.Message);
+        Assert.True(result.Success);
+        Assert.Equal("If an account exists for that email, password reset instructions have been sent. Please check your inbox.", result.Message);
+    }
+
+    [Fact]
+    public async Task ForgotPasswordAsync_ReturnsGenericSuccess_WhenAccountIsInactive()
+    {
+        await using var context = CreateContext();
+        var userManager = CreateUserManager();
+        var accountEmailServiceMock = new Mock<IAccountEmailService>(MockBehavior.Strict);
+
+        var user = new User
+        {
+            Id = 45,
+            Email = "inactive.student@example.com",
+            IsActive = false
+        };
+
+        userManager.FindByEmailHandler = _ => Task.FromResult<User?>(user);
+
+        var service = CreateService(context, userManager, accountEmailServiceMock);
+        var result = await service.ForgotPasswordAsync(new ForgotPasswordRequest
+        {
+            Email = user.Email!
+        });
+
+        Assert.True(result.Success);
+        Assert.Equal("If an account exists for that email, password reset instructions have been sent. Please check your inbox.", result.Message);
     }
 
     [Fact]
@@ -61,7 +87,7 @@ public class AuthServiceEmailConfirmationTests
         });
 
         Assert.True(result.Success);
-        Assert.Equal("Password reset instructions have been sent to your email address.", result.Message);
+        Assert.Equal("If an account exists for that email, password reset instructions have been sent. Please check your inbox.", result.Message);
         Assert.Equal($"https://attendance.example.edu/reset-password?userId={user.Id}&token={encodedToken}", capturedLink);
     }
 
