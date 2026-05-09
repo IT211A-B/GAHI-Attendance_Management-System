@@ -62,6 +62,10 @@
                     <input asp-for="Password" autocomplete="current-password" />
                     <span asp-validation-for="Password" class="field-validation"></span>
 
+                    <p class="auth-alt-action">
+                        <a asp-action="ForgotPassword">Forgot your password?</a>
+                    </p>
+
                     <label class="checkbox-row">
                         <input asp-for="RememberMe" />
                         <span>Keep me signed in on this device</span>
