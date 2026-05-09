@@ -9,6 +9,10 @@ public static class RateLimitingPolicyNames
 
     public const string AuthResendVerification = "auth-resend-verification";
 
+    public const string AuthForgotPassword = "auth-forgot-password";
+
+    public const string AuthResetPassword = "auth-reset-password";
+
     public const string QrSessionMutation = "qr-session-mutation";
 
     public const string QrCheckin = "qr-checkin";

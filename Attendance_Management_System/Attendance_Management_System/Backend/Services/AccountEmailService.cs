@@ -54,6 +54,32 @@ public class AccountEmailService : IAccountEmailService
         return _emailSender.SendAsync(toAddress, subject, htmlBody);
     }
 
+    public Task SendPasswordResetEmailAsync(string toAddress, string accountName, string resetLink)
+    {
+        var safeName = WebUtility.HtmlEncode(accountName);
+        var safeLink = WebUtility.HtmlEncode(resetLink);
+
+        var subject = "Reset your DonBosco AMS password";
+        var htmlBody = $"""
+            <div style=\"font-family:Arial,sans-serif;line-height:1.6;color:#1f2937;\">
+              <h2 style=\"margin-bottom:8px;\">Reset your password</h2>
+              <p>Hello {safeName},</p>
+              <p>We received a request to reset your password. Click the button below to continue.</p>
+              <p>
+                <a href=\"{safeLink}\" style=\"display:inline-block;padding:10px 16px;background:#0f766e;color:#ffffff;text-decoration:none;border-radius:6px;\">
+                  Reset Password
+                </a>
+              </p>
+              <p>If the button does not work, copy and paste this link into your browser:</p>
+              <p>{safeLink}</p>
+              <p>If you did not request this change, you can ignore this email.</p>
+              <p style=\"margin-top:20px;\">DonBosco AMS Team</p>
+            </div>
+            """;
+
+        return _emailSender.SendAsync(toAddress, subject, htmlBody);
+    }
+
     public Task SendEnrollmentStatusUpdateAsync(string toAddress, string studentName, string status, string? rejectionReason = null)
     {
         var normalizedStatus = (status ?? string.Empty).Trim().ToLowerInvariant();

@@ -10,5 +10,7 @@ public interface IAuthService
     Task<AuthResponse> RegisterTeacherAsync(TeacherRegisterRequest request);
     Task<AuthResponse> ConfirmEmailAsync(int userId, string token);
     Task<AuthResponse> ResendVerificationAsync(string email);
+    Task<AuthResponse> ForgotPasswordAsync(ForgotPasswordRequest request);
+    Task<AuthResponse> ResetPasswordAsync(ResetPasswordRequest request);
     Task<UserDto?> GetUserProfileAsync(int userId);
 }

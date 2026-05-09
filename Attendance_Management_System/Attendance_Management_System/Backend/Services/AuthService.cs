@@ -20,7 +20,10 @@ public class AuthService : IAuthService
 {
     private const string GenericInvalidCredentialsMessage = "Invalid email or password.";
     private const string GenericResendVerificationMessage = "If an account exists for that email, a verification link has been sent. Please check your inbox.";
+    private const string GenericForgotPasswordMessage = "If an account exists for that email, password reset instructions have been sent. Please check your inbox.";
     private const string InvalidEmailConfirmationMessage = "Invalid or expired email confirmation link.";
+    private const string PasswordResetInvalidLinkMessage = "Invalid or expired password reset link.";
+    private const string PasswordResetSuccessMessage = "Password has been reset successfully. You can now sign in.";
 
     private readonly UserManager<User> _userManager;
     private readonly AppDbContext _context;
@@ -130,7 +133,7 @@ public class AuthService : IAuthService
             return CreateSuccessResponse("Email is already confirmed. You can sign in.");
         }
 
-        var decodedToken = DecodeEmailToken(token);
+        var decodedToken = DecodeToken(token);
         if (string.IsNullOrWhiteSpace(decodedToken))
         {
             return CreateInvalidEmailConfirmationResponse();
@@ -172,6 +175,89 @@ public class AuthService : IAuthService
         }
 
         return CreateSuccessResponse(GenericResendVerificationMessage);
+    }
+
+    public async Task<AuthResponse> ForgotPasswordAsync(ForgotPasswordRequest request)
+    {
+        if (request == null || string.IsNullOrWhiteSpace(request.Email))
+        {
+            return CreateSuccessResponse(GenericForgotPasswordMessage);
+        }
+
+        var normalizedEmail = request.Email.Trim();
+        var user = await _userManager.FindByEmailAsync(normalizedEmail);
+        if (user == null || string.IsNullOrWhiteSpace(user.Email))
+        {
+            return CreateSuccessResponse(GenericForgotPasswordMessage);
+        }
+
+        if (!user.IsActive)
+        {
+            _logger.LogInformation("Ignored forgot-password request for inactive user {UserId}.", user.Id);
+            return CreateSuccessResponse(GenericForgotPasswordMessage);
+        }
+
+        try
+        {
+            var resetLink = await BuildPasswordResetLinkAsync(user);
+            var displayName = await ResolveDisplayNameAsync(user);
+
+            await _accountEmailService.SendPasswordResetEmailAsync(user.Email, displayName, resetLink);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to send password reset email for user {UserId}.", user.Id);
+        }
+
+        return CreateSuccessResponse(GenericForgotPasswordMessage);
+    }
+
+    public async Task<AuthResponse> ResetPasswordAsync(ResetPasswordRequest request)
+    {
+        if (request == null || request.UserId <= 0 || string.IsNullOrWhiteSpace(request.Token))
+        {
+            return CreateFailureResponse(PasswordResetInvalidLinkMessage);
+        }
+
+        if (string.IsNullOrWhiteSpace(request.NewPassword))
+        {
+            return CreateFailureResponse("New password is required.");
+        }
+
+        var user = await _userManager.FindByIdAsync(request.UserId.ToString());
+        if (user == null)
+        {
+            return CreateFailureResponse(PasswordResetInvalidLinkMessage);
+        }
+
+        if (!user.IsActive)
+        {
+            _logger.LogWarning("Password reset attempted for inactive user {UserId}.", user.Id);
+            return CreateFailureResponse(PasswordResetInvalidLinkMessage);
+        }
+
+        var decodedToken = DecodeToken(request.Token);
+        if (string.IsNullOrWhiteSpace(decodedToken))
+        {
+            return CreateFailureResponse(PasswordResetInvalidLinkMessage);
+        }
+
+        var result = await _userManager.ResetPasswordAsync(user, decodedToken, request.NewPassword);
+        if (!result.Succeeded)
+        {
+            if (result.Errors.Any(error => string.Equals(error.Code, "InvalidToken", StringComparison.OrdinalIgnoreCase)))
+            {
+                return CreateFailureResponse(PasswordResetInvalidLinkMessage);
+            }
+
+            var errors = string.Join(", ", result.Errors.Select(error => error.Description));
+            return CreateFailureResponse(
+                string.IsNullOrWhiteSpace(errors)
+                    ? "Unable to reset password right now. Please try again."
+                    : $"Unable to reset password: {errors}");
+        }
+
+        return CreateSuccessResponse(PasswordResetSuccessMessage);
     }
 
     // Registers a new teacher with auto-generated employee number
@@ -513,12 +599,25 @@ public class AuthService : IAuthService
 
     private string BuildEmailConfirmationLink(int userId, string token)
     {
-        var encodedToken = EncodeEmailConfirmationToken(token);
+        var encodedToken = EncodeToken(token);
         var baseUrl = ResolvePublicBaseUrl().TrimEnd('/');
         return $"{baseUrl}/confirm-email?userId={userId}&token={encodedToken}";
     }
 
-    private static string EncodeEmailConfirmationToken(string token)
+    private async Task<string> BuildPasswordResetLinkAsync(User user)
+    {
+        var token = await _userManager.GeneratePasswordResetTokenAsync(user);
+        return BuildPasswordResetLink(user.Id, token);
+    }
+
+    private string BuildPasswordResetLink(int userId, string token)
+    {
+        var encodedToken = EncodeToken(token);
+        var baseUrl = ResolvePublicBaseUrl().TrimEnd('/');
+        return $"{baseUrl}/reset-password?userId={userId}&token={encodedToken}";
+    }
+
+    private static string EncodeToken(string token)
     {
         return WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(token));
     }
@@ -533,7 +632,7 @@ public class AuthService : IAuthService
         return _emailSettings.PublicBaseUrl.Trim();
     }
 
-    private static string? DecodeEmailToken(string token)
+    private static string? DecodeToken(string token)
     {
         try
         {

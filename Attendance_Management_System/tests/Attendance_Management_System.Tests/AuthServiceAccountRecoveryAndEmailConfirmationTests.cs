@@ -2,7 +2,7 @@ using System.Text;
 
 namespace Attendance_Management_System.Tests;
 
-public class AuthServiceEmailConfirmationTests
+public class AuthServiceAccountRecoveryAndEmailConfirmationTests
 {
     [Fact]
     public async Task ForgotPasswordAsync_ReturnsGenericSuccess_WhenAccountIsNotFound()
@@ -89,6 +89,9 @@ public class AuthServiceEmailConfirmationTests
         Assert.True(result.Success);
         Assert.Equal("If an account exists for that email, password reset instructions have been sent. Please check your inbox.", result.Message);
         Assert.Equal($"https://attendance.example.edu/reset-password?userId={user.Id}&token={encodedToken}", capturedLink);
+        accountEmailServiceMock.Verify(
+            service => service.SendPasswordResetEmailAsync(user.Email!, user.Email!, It.IsAny<string>()),
+            Times.Once);
     }
 
     [Fact]
