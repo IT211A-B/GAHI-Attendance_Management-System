@@ -34,6 +34,20 @@ public class RateLimitingSettings
         QueueLimit = 0
     };
 
+    public FixedWindowPolicySettings AuthForgotPassword { get; set; } = new()
+    {
+        PermitLimit = 3,
+        WindowSeconds = 60,
+        QueueLimit = 0
+    };
+
+    public FixedWindowPolicySettings AuthResetPassword { get; set; } = new()
+    {
+        PermitLimit = 5,
+        WindowSeconds = 60,
+        QueueLimit = 0
+    };
+
     public FixedWindowPolicySettings QrSessionMutations { get; set; } = new()
     {
         PermitLimit = 12,
@@ -62,6 +76,8 @@ public class RateLimitingSettings
             && AuthLogin.IsValid()
             && AuthSignup.IsValid()
             && AuthResendVerification.IsValid()
+            && AuthForgotPassword.IsValid()
+            && AuthResetPassword.IsValid()
             && QrSessionMutations.IsValid()
             && QrCheckins.IsValid()
             && QrLiveFeed.IsValid();

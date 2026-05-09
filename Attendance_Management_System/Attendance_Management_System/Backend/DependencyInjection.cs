@@ -198,6 +198,8 @@ public static class DependencyInjection
             AddPartitionedFixedWindowPolicy(options, RateLimitingPolicyNames.AuthLogin, rateLimitingSettings.AuthLogin);
             AddPartitionedFixedWindowPolicy(options, RateLimitingPolicyNames.AuthSignup, rateLimitingSettings.AuthSignup);
             AddPartitionedFixedWindowPolicy(options, RateLimitingPolicyNames.AuthResendVerification, rateLimitingSettings.AuthResendVerification);
+            AddPartitionedFixedWindowPolicy(options, RateLimitingPolicyNames.AuthForgotPassword, rateLimitingSettings.AuthForgotPassword);
+            AddPartitionedFixedWindowPolicy(options, RateLimitingPolicyNames.AuthResetPassword, rateLimitingSettings.AuthResetPassword);
             AddPartitionedFixedWindowPolicy(options, RateLimitingPolicyNames.QrSessionMutation, rateLimitingSettings.QrSessionMutations);
             AddPartitionedFixedWindowPolicy(options, RateLimitingPolicyNames.QrCheckin, rateLimitingSettings.QrCheckins);
             AddPartitionedFixedWindowPolicy(options, RateLimitingPolicyNames.QrLiveFeed, rateLimitingSettings.QrLiveFeed);

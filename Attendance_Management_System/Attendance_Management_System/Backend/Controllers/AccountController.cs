@@ -145,7 +145,7 @@ public class AccountController : Controller
     }
 
     [HttpPost("forgot-password")]
-    [EnableRateLimiting(RateLimitingPolicyNames.AuthResendVerification)]
+    [EnableRateLimiting(RateLimitingPolicyNames.AuthForgotPassword)]
     [AllowAnonymous]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> ForgotPassword(ForgotPasswordViewModel model)
@@ -260,7 +260,7 @@ public class AccountController : Controller
     }
 
     [HttpPost("reset-password")]
-    [EnableRateLimiting(RateLimitingPolicyNames.AuthResendVerification)]
+    [EnableRateLimiting(RateLimitingPolicyNames.AuthResetPassword)]
     [AllowAnonymous]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> ResetPassword(ResetPasswordViewModel model)
