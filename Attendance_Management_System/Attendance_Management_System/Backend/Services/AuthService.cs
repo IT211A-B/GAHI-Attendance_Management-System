@@ -22,7 +22,6 @@ public class AuthService : IAuthService
     private const string GenericResendVerificationMessage = "If an account exists for that email, a verification link has been sent. Please check your inbox.";
     private const string GenericForgotPasswordMessage = "If an account exists for that email, password reset instructions have been sent. Please check your inbox.";
     private const string InvalidEmailConfirmationMessage = "Invalid or expired email confirmation link.";
-    private const string PasswordResetInactiveAccountMessage = "This account is inactive. Please contact administrator.";
     private const string PasswordResetInvalidLinkMessage = "Invalid or expired password reset link.";
     private const string PasswordResetSuccessMessage = "Password has been reset successfully. You can now sign in.";
 
@@ -187,8 +186,14 @@ public class AuthService : IAuthService
 
         var normalizedEmail = request.Email.Trim();
         var user = await _userManager.FindByEmailAsync(normalizedEmail);
-        if (user == null || string.IsNullOrWhiteSpace(user.Email) || !user.IsActive)
+        if (user == null || string.IsNullOrWhiteSpace(user.Email))
         {
+            return CreateSuccessResponse(GenericForgotPasswordMessage);
+        }
+
+        if (!user.IsActive)
+        {
+            _logger.LogInformation("Ignored forgot-password request for inactive user {UserId}.", user.Id);
             return CreateSuccessResponse(GenericForgotPasswordMessage);
         }
 
@@ -227,7 +232,8 @@ public class AuthService : IAuthService
 
         if (!user.IsActive)
         {
-            return CreateFailureResponse(PasswordResetInactiveAccountMessage);
+            _logger.LogWarning("Password reset attempted for inactive user {UserId}.", user.Id);
+            return CreateFailureResponse(PasswordResetInvalidLinkMessage);
         }
 
         var decodedToken = DecodeToken(request.Token);

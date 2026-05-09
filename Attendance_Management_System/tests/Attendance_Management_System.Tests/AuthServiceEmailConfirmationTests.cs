@@ -191,6 +191,37 @@ public class AuthServiceEmailConfirmationTests
     }
 
     [Fact]
+    public async Task ResetPasswordAsync_ReturnsInvalidLink_WhenAccountIsInactive()
+    {
+        await using var context = CreateContext();
+        var userManager = CreateUserManager();
+        var accountEmailServiceMock = new Mock<IAccountEmailService>(MockBehavior.Strict);
+
+        var user = new User
+        {
+            Id = 99,
+            IsActive = false
+        };
+
+        const string rawToken = "InactiveResetToken";
+        var encodedToken = WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(rawToken));
+
+        userManager.FindByIdHandler = _ => Task.FromResult<User?>(user);
+
+        var service = CreateService(context, userManager, accountEmailServiceMock);
+        var result = await service.ResetPasswordAsync(new ResetPasswordRequest
+        {
+            UserId = user.Id,
+            Token = encodedToken,
+            NewPassword = "NewPassword123"
+        });
+
+        Assert.False(result.Success);
+        Assert.Equal("Invalid or expired password reset link.", result.Message);
+        Assert.Equal(0, userManager.ResetPasswordCallCount);
+    }
+
+    [Fact]
     public async Task ResendVerificationAsync_UsesConfiguredPublicBaseUrl()
     {
         await using var context = CreateContext();
