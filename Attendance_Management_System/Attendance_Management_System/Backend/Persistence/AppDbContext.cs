@@ -1,6 +1,7 @@
 using Attendance_Management_System.Backend.Constants;
 using Attendance_Management_System.Backend.Entities;
 using Attendance_Management_System.Backend.Enums;
+using Attendance_Management_System.Backend.Helpers;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
@@ -42,11 +43,11 @@ public class AppDbContext : IdentityDbContext<User, IdentityRole<int>, int>
         {
             entity.Property(u => u.Role)
                 .IsRequired()
-                .HasDefaultValue("student");
+                .HasDefaultValue(UserRole.Student.ToStorageValue());
 
             entity.ToTable(t => t.HasCheckConstraint(
                 "CK_User_Role",
-                "\"Role\" IN ('admin', 'teacher', 'student')"));
+                $"\"Role\" IN ('{UserRole.Admin.ToStorageValue()}', '{UserRole.Teacher.ToStorageValue()}', '{UserRole.Student.ToStorageValue()}')"));
         });
 
         // Classroom configuration
@@ -276,11 +277,11 @@ public class AppDbContext : IdentityDbContext<User, IdentityRole<int>, int>
         // Enrollment configuration
         modelBuilder.Entity<Enrollment>(entity =>
         {
-            entity.Property(e => e.Status).IsRequired().HasDefaultValue("pending");
+            entity.Property(e => e.Status).IsRequired().HasDefaultValue(EnrollmentStatus.Pending.ToStorageValue());
 
             entity.ToTable(t => t.HasCheckConstraint(
                 "CK_Enrollment_Status",
-                "\"Status\" IN ('pending', 'approved', 'rejected')"));
+                $"\"Status\" IN ('{EnrollmentStatus.Pending.ToStorageValue()}', '{EnrollmentStatus.Approved.ToStorageValue()}', '{EnrollmentStatus.Rejected.ToStorageValue()}')"));
 
             entity.HasOne(e => e.Student)
                 .WithMany()

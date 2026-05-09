@@ -1,5 +1,7 @@
 ﻿using System.Security.Claims;
 using Attendance_Management_System.Backend.DTOs.Requests;
+using Attendance_Management_System.Backend.Enums;
+using Attendance_Management_System.Backend.Helpers;
 using Attendance_Management_System.Backend.Interfaces.Services;
 using Attendance_Management_System.Backend.ViewModels.Schedules;
 using Microsoft.AspNetCore.Authorization;
@@ -171,6 +173,6 @@ public class ScheduleManagementController : AppControllerBase
             return (false, 0, string.Empty, false);
         }
 
-        return (true, userId, role, role == "admin");
+        return (true, userId, role, role.IsRole(UserRole.Admin));
     }
 }

@@ -1,4 +1,6 @@
 using System.ComponentModel.DataAnnotations.Schema;
+using Attendance_Management_System.Backend.Enums;
+using Attendance_Management_System.Backend.Helpers;
 
 namespace Attendance_Management_System.Backend.Entities;
 
@@ -15,7 +17,7 @@ public class Enrollment : EntityBase
     public int AcademicYearId { get; set; }
 
     // Status: "pending", "approved", "rejected", or "dropped"
-    public string Status { get; set; } = "pending";
+    public string Status { get; set; } = EnrollmentStatus.Pending.ToStorageValue();
 
     // Timestamp when the student dropped the enrollment (if applicable)
     public DateTimeOffset? DroppedAt { get; set; }

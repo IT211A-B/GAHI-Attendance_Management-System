@@ -1,4 +1,6 @@
 using System.Net;
+using Attendance_Management_System.Backend.Enums;
+using Attendance_Management_System.Backend.Helpers;
 using Attendance_Management_System.Backend.Interfaces.Services;
 
 namespace Attendance_Management_System.Backend.Services;
@@ -82,10 +84,12 @@ public class AccountEmailService : IAccountEmailService
 
     public Task SendEnrollmentStatusUpdateAsync(string toAddress, string studentName, string status, string? rejectionReason = null)
     {
-        var normalizedStatus = (status ?? string.Empty).Trim().ToLowerInvariant();
+        var normalizedStatus = EnumStorage.TryParseEnrollmentStatus(status, out var parsedStatus)
+            ? parsedStatus.ToStorageValue()
+            : EnrollmentStatus.Rejected.ToStorageValue();
         var safeName = WebUtility.HtmlEncode(studentName);
 
-        if (normalizedStatus == "approved")
+        if (normalizedStatus == EnrollmentStatus.Approved.ToStorageValue())
         {
             var subjectApproved = "Your DonBosco AMS enrollment was approved";
             var htmlBodyApproved = $"""

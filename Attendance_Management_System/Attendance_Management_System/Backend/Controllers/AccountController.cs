@@ -1,5 +1,6 @@
 using Attendance_Management_System.Backend.DTOs.Requests;
 using Attendance_Management_System.Backend.Entities;
+using Attendance_Management_System.Backend.Enums;
 using Attendance_Management_System.Backend.Interfaces.Services;
 using Attendance_Management_System.Backend.Persistence;
 using Attendance_Management_System.Backend.Constants;
@@ -403,15 +404,17 @@ public class AccountController : Controller
         }
 
         var user = await _userManager.FindByEmailAsync(email.Trim());
-        if (user == null || user.Role != "student" || user.EmailConfirmed)
+        if (user == null || !user.Role.IsRole(UserRole.Student) || user.EmailConfirmed)
         {
             return;
         }
 
+        var approvedStatus = EnrollmentStatus.Approved.ToStorageValue();
+        var rejectedStatus = EnrollmentStatus.Rejected.ToStorageValue();
         var hasReviewedEnrollment = await _context.Enrollments
             .AsNoTracking()
             .AnyAsync(enrollment =>
-                (enrollment.Status == "approved" || enrollment.Status == "rejected")
+                (enrollment.Status == approvedStatus || enrollment.Status == rejectedStatus)
                 && enrollment.Student != null
                 && enrollment.Student.UserId == user.Id);
 

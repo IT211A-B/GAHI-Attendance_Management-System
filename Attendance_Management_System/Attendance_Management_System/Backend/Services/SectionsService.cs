@@ -15,6 +15,8 @@ namespace Attendance_Management_System.Backend.Services;
 // Service handling all section-related business logic
 public class SectionsService : ISectionsService
 {
+    private static readonly string ApprovedEnrollmentStatus = EnrollmentStatus.Approved.ToStorageValue();
+
     private readonly AppDbContext _context;
     private readonly EnrollmentSettings _enrollmentSettings;
 
@@ -358,7 +360,7 @@ public class SectionsService : ISectionsService
 
         // Get enrollment count for capacity status
         var enrollmentCount = await _context.Enrollments
-            .CountAsync(e => e.SectionId == section.Id && e.Status == "approved", cancellationToken);
+            .CountAsync(e => e.SectionId == section.Id && e.Status == ApprovedEnrollmentStatus, cancellationToken);
 
         var capacityStatus = CalculateCapacityStatus(enrollmentCount);
 
@@ -636,7 +638,7 @@ public class SectionsService : ISectionsService
                 SubjectName = section.Subject != null ? section.Subject.Name : null,
                 section.ClassroomId,
                 ClassroomName = section.Classroom != null ? section.Classroom.Name : null,
-                CurrentEnrollmentCount = section.Enrollments.Count(enrollment => enrollment.Status == "approved"),
+                CurrentEnrollmentCount = section.Enrollments.Count(enrollment => enrollment.Status == ApprovedEnrollmentStatus),
                 section.CreatedAt
             })
             .ToListAsync(cancellationToken);

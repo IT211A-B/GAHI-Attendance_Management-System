@@ -45,7 +45,7 @@ public class EnrollmentListItemViewModel
     public string SectionName { get; set; } = "-";
     public int AcademicYearId { get; set; }
     public string AcademicYearLabel { get; set; } = "-";
-    public string Status { get; set; } = "pending";
+    public string Status { get; set; } = EnrollmentStatus.Pending.ToStorageValue();
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset? ProcessedAt { get; set; }
     public string ProcessorName { get; set; } = "-";
@@ -53,8 +53,8 @@ public class EnrollmentListItemViewModel
     public bool HasWarning { get; set; }
     public string? WarningMessage { get; set; }
 
-    public bool IsPending => Status.Equals("pending", StringComparison.OrdinalIgnoreCase);
-    public bool CanReassign => !Status.Equals("rejected", StringComparison.OrdinalIgnoreCase);
+    public bool IsPending => Status.IsEnrollmentStatus(EnrollmentStatus.Pending);
+    public bool CanReassign => !Status.IsEnrollmentStatus(EnrollmentStatus.Rejected);
 }
 
 public class EnrollmentOptionViewModel

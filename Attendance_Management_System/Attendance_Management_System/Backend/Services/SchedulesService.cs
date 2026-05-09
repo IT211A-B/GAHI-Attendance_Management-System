@@ -1,6 +1,8 @@
 using Attendance_Management_System.Backend.DTOs.Requests;
 using Attendance_Management_System.Backend.DTOs.Responses;
 using Attendance_Management_System.Backend.Entities;
+using Attendance_Management_System.Backend.Enums;
+using Attendance_Management_System.Backend.Helpers;
 using Attendance_Management_System.Backend.Interfaces.Services;
 using Attendance_Management_System.Backend.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -32,7 +34,7 @@ public class SchedulesService : ISchedulesService
     {
         List<Schedule> schedules;
 
-        if (role == "admin")
+        if (role.IsRole(UserRole.Admin))
         {
             // Admin sees all schedules
             schedules = await _context.Schedules

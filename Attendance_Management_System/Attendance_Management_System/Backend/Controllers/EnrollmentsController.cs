@@ -1,6 +1,7 @@
 ﻿using System.Security.Claims;
 using Attendance_Management_System.Backend.DTOs.Requests;
 using Attendance_Management_System.Backend.DTOs.Responses;
+using Attendance_Management_System.Backend.Enums;
 using Attendance_Management_System.Backend.Helpers;
 using Attendance_Management_System.Backend.Interfaces.Services;
 using Attendance_Management_System.Backend.ViewModels.Enrollments;
@@ -43,7 +44,7 @@ public class EnrollmentsController : AppControllerBase
         [FromQuery] int pageSize = DefaultPageSize)
     {
         var role = User.FindFirstValue(ClaimTypes.Role) ?? string.Empty;
-        if (role != "admin" && role != "student")
+        if (!role.IsRole(UserRole.Admin) && !role.IsRole(UserRole.Student))
         {
             return Forbid();
         }
@@ -73,7 +74,7 @@ public class EnrollmentsController : AppControllerBase
         }
 
         var viewModel = await BuildIndexViewModelAsync(
-            role: "student",
+            role: UserRole.Student.ToStorageValue(),
             status: null,
             academicYearId: form.AcademicYearId > 0 ? form.AcademicYearId : null,
             page: 1,
@@ -126,7 +127,7 @@ public class EnrollmentsController : AppControllerBase
 
         var result = await ExecuteServiceCallAsync(() => _enrollmentService.UpdateEnrollmentStatusAsync(id, new UpdateEnrollmentStatusRequest
         {
-            Status = "approved"
+            Status = EnrollmentStatus.Approved.ToStorageValue()
         }, adminId.Value));
 
         if (!result.Success)
@@ -165,7 +166,7 @@ public class EnrollmentsController : AppControllerBase
 
         var result = await ExecuteServiceCallAsync(() => _enrollmentService.UpdateEnrollmentStatusAsync(id, new UpdateEnrollmentStatusRequest
         {
-            Status = "rejected",
+            Status = EnrollmentStatus.Rejected.ToStorageValue(),
             RejectionReason = form.RejectionReason.Trim()
         }, adminId.Value));
 
@@ -230,8 +231,8 @@ public class EnrollmentsController : AppControllerBase
     {
         var model = new EnrollmentsIndexViewModel
         {
-            IsAdmin = role == "admin",
-            IsStudent = role == "student",
+            IsAdmin = role.IsRole(UserRole.Admin),
+            IsStudent = role.IsRole(UserRole.Student),
             SelectedStatus = status,
             SelectedAcademicYearId = academicYearId,
             Page = page,
@@ -379,7 +380,7 @@ public class EnrollmentsController : AppControllerBase
                 SectionName = string.IsNullOrWhiteSpace(enrollment.SectionName) ? "-" : enrollment.SectionName,
                 AcademicYearId = enrollment.AcademicYearId,
                 AcademicYearLabel = string.IsNullOrWhiteSpace(enrollment.AcademicYearLabel) ? "-" : enrollment.AcademicYearLabel,
-                Status = string.IsNullOrWhiteSpace(enrollment.Status) ? "pending" : enrollment.Status,
+                Status = string.IsNullOrWhiteSpace(enrollment.Status) ? EnrollmentStatus.Pending.ToStorageValue() : enrollment.Status,
                 CreatedAt = enrollment.CreatedAt,
                 ProcessedAt = enrollment.ProcessedAt,
                 ProcessorName = string.IsNullOrWhiteSpace(enrollment.ProcessorName) ? "-" : enrollment.ProcessorName,
@@ -490,19 +491,9 @@ public class EnrollmentsController : AppControllerBase
 
     private static string? NormalizeStatus(string? status)
     {
-        if (string.IsNullOrWhiteSpace(status))
-        {
-            return null;
-        }
-
-        var normalized = status.Trim().ToLowerInvariant();
-        return normalized switch
-        {
-            "pending" => "pending",
-            "approved" => "approved",
-            "rejected" => "rejected",
-            _ => null
-        };
+        return EnumStorage.TryParseEnrollmentStatus(status, out var parsedStatus)
+            ? parsedStatus.ToStorageValue()
+            : null;
     }
 
     private IActionResult RedirectToIndex(string? status, int? academicYearId, int page)

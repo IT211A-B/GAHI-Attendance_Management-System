@@ -38,38 +38,44 @@ public class DashboardService : IDashboardService
 
     public async Task<DashboardIndexViewModel> BuildIndexViewModelAsync(int userId, string role, string? window, DateOnly? from, DateOnly? to)
     {
-        var normalizedRole = role.Trim().ToLowerInvariant();
+        var hasKnownRole = EnumStorage.TryParseRole(role, out var parsedRole);
         var currentAcademicYear = await GetCurrentAcademicYearAsync();
         // Date filtering is centralized so all role dashboards use the same window rules.
         var filter = BuildDateFilter(currentAcademicYear, window, from, to);
 
         var viewModel = new DashboardIndexViewModel
         {
-            IsAdmin = normalizedRole == "admin",
-            IsTeacher = normalizedRole == "teacher",
-            IsStudent = normalizedRole == "student",
+            IsAdmin = hasKnownRole && parsedRole == UserRole.Admin,
+            IsTeacher = hasKnownRole && parsedRole == UserRole.Teacher,
+            IsStudent = hasKnownRole && parsedRole == UserRole.Student,
             AcademicPeriodLabel = currentAcademicYear?.YearLabel,
             Filters = filter
         };
 
-        // Populate only the section needed for the caller's role.
-        switch (normalizedRole)
+        if (!hasKnownRole)
         {
-            case "student":
+            viewModel.ErrorMessage = "Your role is not allowed to access this dashboard.";
+            return viewModel;
+        }
+
+        // Populate only the section needed for the caller's role.
+        switch (parsedRole)
+        {
+            case UserRole.Student:
                 viewModel.Student = await BuildStudentSectionAsync(userId, filter);
                 viewModel.ErrorMessage = viewModel.Student is null
                     ? "Student profile is not available for this account."
                     : null;
                 break;
 
-            case "teacher":
+            case UserRole.Teacher:
                 viewModel.Teacher = await BuildTeacherSectionAsync(userId, filter);
                 viewModel.ErrorMessage = viewModel.Teacher is null
                     ? "Teacher profile is not available for this account."
                     : null;
                 break;
 
-            case "admin":
+            case UserRole.Admin:
                 viewModel.Admin = await BuildAdminSectionAsync();
                 break;
 
@@ -197,6 +203,10 @@ public class DashboardService : IDashboardService
 
     private async Task<AdminDashboardSectionViewModel> BuildAdminSectionAsync()
     {
+        var pendingStatus = EnrollmentStatus.Pending.ToStorageValue();
+        var approvedStatus = EnrollmentStatus.Approved.ToStorageValue();
+        var rejectedStatus = EnrollmentStatus.Rejected.ToStorageValue();
+
         var statusCounts = await _context.Enrollments
             .AsNoTracking()
             .GroupBy(e => e.Status)
@@ -207,9 +217,9 @@ public class DashboardService : IDashboardService
             })
             .ToListAsync();
 
-        var pendingCount = statusCounts.FirstOrDefault(s => s.Status == "pending")?.Count ?? 0;
-        var approvedCount = statusCounts.FirstOrDefault(s => s.Status == "approved")?.Count ?? 0;
-        var rejectedCount = statusCounts.FirstOrDefault(s => s.Status == "rejected")?.Count ?? 0;
+        var pendingCount = statusCounts.FirstOrDefault(s => s.Status == pendingStatus)?.Count ?? 0;
+        var approvedCount = statusCounts.FirstOrDefault(s => s.Status == approvedStatus)?.Count ?? 0;
+        var rejectedCount = statusCounts.FirstOrDefault(s => s.Status == rejectedStatus)?.Count ?? 0;
 
         var activeStudentsCount = await _context.Students
             .AsNoTracking()

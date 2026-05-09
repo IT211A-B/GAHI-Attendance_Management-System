@@ -1,5 +1,6 @@
 using Attendance_Management_System.Backend.Entities;
 using Attendance_Management_System.Backend.Enums;
+using Attendance_Management_System.Backend.Helpers;
 using Attendance_Management_System.Backend.Persistence;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -19,13 +20,13 @@ public static class SeedData
             return;
         }
 
-        async Task<User> CreateUserOrThrowAsync(string email, string role, string password)
+        async Task<User> CreateUserOrThrowAsync(string email, UserRole role, string password)
         {
             var user = new User
             {
                 UserName = email,
                 Email = email,
-                Role = role,
+                Role = role.ToStorageValue(),
                 IsActive = true,
                 EmailConfirmed = true
             };
@@ -41,7 +42,7 @@ public static class SeedData
         }
 
         // Seed admin account
-        await CreateUserOrThrowAsync("admin@dbtc-cebu.edu.ph", "admin", "Admin123!");
+        await CreateUserOrThrowAsync("admin@dbtc-cebu.edu.ph", UserRole.Admin, "Admin123!");
 
         // Seed teacher accounts and profiles
         var teacherSeeds = new[]
@@ -64,7 +65,7 @@ public static class SeedData
         foreach (var teacherSeed in teacherSeeds)
         {
             teacherUsersByEmployeeNumber[teacherSeed.EmployeeNumber] =
-                await CreateUserOrThrowAsync(teacherSeed.Email, "teacher", "Teacher123!");
+                await CreateUserOrThrowAsync(teacherSeed.Email, UserRole.Teacher, "Teacher123!");
         }
 
         var teachers = teacherSeeds
@@ -337,7 +338,7 @@ public static class SeedData
         {
             var sectionName = studentSectionAssignments[index];
             var seedSection = sectionSeedByName[sectionName];
-            var studentUser = await CreateUserOrThrowAsync($"student{index + 1:D2}@dbtc-cebu.edu.ph", "student", "Student123!");
+            var studentUser = await CreateUserOrThrowAsync($"student{index + 1:D2}@dbtc-cebu.edu.ph", UserRole.Student, "Student123!");
 
             students.Add(new Student
             {

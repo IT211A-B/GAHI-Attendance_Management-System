@@ -17,8 +17,9 @@ namespace Attendance_Management_System.Backend.Services;
 // Service implementation for managing student enrollments
 public class EnrollmentService : IEnrollmentService
 {
-    private const string EnrollmentApprovedStatus = "approved";
-    private const string EnrollmentRejectedStatus = "rejected";
+    private static readonly string EnrollmentPendingStatus = EnrollmentStatus.Pending.ToStorageValue();
+    private static readonly string EnrollmentApprovedStatus = EnrollmentStatus.Approved.ToStorageValue();
+    private static readonly string EnrollmentRejectedStatus = EnrollmentStatus.Rejected.ToStorageValue();
 
     private readonly AppDbContext _context;
     private readonly EnrollmentSettings _enrollmentSettings;
@@ -55,7 +56,7 @@ public class EnrollmentService : IEnrollmentService
             .Include(e => e.Section)
             .Include(e => e.AcademicYear)
             .Include(e => e.Processor)
-            .Where(e => e.Status == "pending");
+            .Where(e => e.Status == EnrollmentPendingStatus);
 
         // Filter by academic year if provided
         if (academicYearId.HasValue)
@@ -84,9 +85,9 @@ public class EnrollmentService : IEnrollmentService
             .ToDictionaryAsync(t => t.UserId, t => $"{t.FirstName} {t.LastName}");
 
         // Get counts for each status to display in the UI
-        var pendingCount = await _context.Enrollments.CountAsync(e => e.Status == "pending");
-        var approvedCount = await _context.Enrollments.CountAsync(e => e.Status == "approved");
-        var rejectedCount = await _context.Enrollments.CountAsync(e => e.Status == "rejected");
+        var pendingCount = await _context.Enrollments.CountAsync(e => e.Status == EnrollmentPendingStatus);
+        var approvedCount = await _context.Enrollments.CountAsync(e => e.Status == EnrollmentApprovedStatus);
+        var rejectedCount = await _context.Enrollments.CountAsync(e => e.Status == EnrollmentRejectedStatus);
 
         return new EnrollmentListDto
         {
@@ -113,7 +114,15 @@ public class EnrollmentService : IEnrollmentService
         // Filter by status if provided
         if (!string.IsNullOrEmpty(status))
         {
-            query = query.Where(e => e.Status == status.ToLower());
+            if (EnumStorage.TryParseEnrollmentStatus(status, out var requestedStatus))
+            {
+                var normalizedStatus = requestedStatus.ToStorageValue();
+                query = query.Where(e => e.Status == normalizedStatus);
+            }
+            else
+            {
+                query = query.Where(_ => false);
+            }
         }
 
         // Filter by academic year if provided
@@ -143,9 +152,9 @@ public class EnrollmentService : IEnrollmentService
             .ToDictionaryAsync(t => t.UserId, t => $"{t.FirstName} {t.LastName}");
 
         // Get counts for each status to display in the UI
-        var pendingCount = await _context.Enrollments.CountAsync(e => e.Status == "pending");
-        var approvedCount = await _context.Enrollments.CountAsync(e => e.Status == "approved");
-        var rejectedCount = await _context.Enrollments.CountAsync(e => e.Status == "rejected");
+        var pendingCount = await _context.Enrollments.CountAsync(e => e.Status == EnrollmentPendingStatus);
+        var approvedCount = await _context.Enrollments.CountAsync(e => e.Status == EnrollmentApprovedStatus);
+        var rejectedCount = await _context.Enrollments.CountAsync(e => e.Status == EnrollmentRejectedStatus);
 
         return new EnrollmentListDto
         {
@@ -176,19 +185,19 @@ public class EnrollmentService : IEnrollmentService
         }
 
         // Only pending enrollments can be processed
-        if (enrollment.Status != "pending")
+        if (enrollment.Status != EnrollmentPendingStatus)
         {
             throw new InvalidOperationException("This enrollment has already been processed.");
         }
 
-        // Normalize status to lowercase for consistency
-        var status = request.Status.ToLower();
-
-        // Validate status value
-        if (status != EnrollmentApprovedStatus && status != EnrollmentRejectedStatus)
+        // Validate and normalize status from the existing enum values.
+        if (!EnumStorage.TryParseEnrollmentStatus(request.Status, out var requestedStatus)
+            || (requestedStatus != EnrollmentStatus.Approved && requestedStatus != EnrollmentStatus.Rejected))
         {
             throw new InvalidOperationException("Status must be 'approved' or 'rejected'.");
         }
+
+        var status = requestedStatus.ToStorageValue();
 
         // Require rejection reason when rejecting
         if (status == EnrollmentRejectedStatus && string.IsNullOrWhiteSpace(request.RejectionReason))
@@ -352,7 +361,7 @@ public class EnrollmentService : IEnrollmentService
                 && e.Section != null
                 && e.Section.CourseId == request.CourseId
                 && e.AcademicYearId == request.AcademicYearId
-                && (e.Status == "approved" || e.Status == "pending"));
+                && (e.Status == EnrollmentApprovedStatus || e.Status == EnrollmentPendingStatus));
 
         if (existingEnrollment)
         {
@@ -376,7 +385,7 @@ public class EnrollmentService : IEnrollmentService
 
         // Get current enrollment count for the selected section
         var currentCount = await _context.Enrollments
-            .CountAsync(e => e.SectionId == section.Id && e.Status == "approved");
+            .CountAsync(e => e.SectionId == section.Id && e.Status == EnrollmentApprovedStatus);
 
         // Create enrollment with warning if needed
         var enrollment = new Enrollment
@@ -384,7 +393,7 @@ public class EnrollmentService : IEnrollmentService
             StudentId = student.Id,
             SectionId = section.Id,
             AcademicYearId = request.AcademicYearId,
-            Status = "pending",
+            Status = EnrollmentPendingStatus,
             CreatedAt = DateTimeOffset.UtcNow
         };
 
@@ -461,7 +470,7 @@ public class EnrollmentService : IEnrollmentService
 
         // Check capacity on new section
         var currentCount = await _context.Enrollments
-            .CountAsync(e => e.SectionId == request.NewSectionId && e.Status == "approved");
+            .CountAsync(e => e.SectionId == request.NewSectionId && e.Status == EnrollmentApprovedStatus);
 
         if (currentCount >= _enrollmentSettings.OverCapacityLimit)
         {
@@ -485,7 +494,7 @@ public class EnrollmentService : IEnrollmentService
         }
 
         // If the enrollment was approved, update the student's section
-        if (enrollment.Status == "approved" && enrollment.Student != null)
+        if (enrollment.Status == EnrollmentApprovedStatus && enrollment.Student != null)
         {
             enrollment.Student.SectionId = request.NewSectionId;
         }
@@ -511,7 +520,7 @@ public class EnrollmentService : IEnrollmentService
         }
 
         var currentCount = await _context.Enrollments
-            .CountAsync(e => e.SectionId == sectionId && e.Status == "approved");
+            .CountAsync(e => e.SectionId == sectionId && e.Status == EnrollmentApprovedStatus);
 
         var status = CalculateCapacityStatus(currentCount);
         var availableSlots = Math.Max(0, _enrollmentSettings.OverCapacityLimit - currentCount);

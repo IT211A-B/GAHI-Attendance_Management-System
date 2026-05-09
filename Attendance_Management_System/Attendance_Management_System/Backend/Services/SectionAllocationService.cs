@@ -1,5 +1,6 @@
 using Attendance_Management_System.Backend.Configuration;
 using Attendance_Management_System.Backend.Entities;
+using Attendance_Management_System.Backend.Enums;
 using Attendance_Management_System.Backend.Helpers;
 using Attendance_Management_System.Backend.Interfaces.Services;
 using Attendance_Management_System.Backend.Persistence;
@@ -11,6 +12,8 @@ namespace Attendance_Management_System.Backend.Services;
 // Centralized section allocation policy used by signup and student enrollment flows
 public class SectionAllocationService : ISectionAllocationService
 {
+    private static readonly string ApprovedEnrollmentStatus = EnrollmentStatus.Approved.ToStorageValue();
+
     private readonly AppDbContext _context;
     private readonly EnrollmentSettings _enrollmentSettings;
 
@@ -60,7 +63,7 @@ public class SectionAllocationService : ISectionAllocationService
 
         var sectionIds = sections.Select(s => s.Id).ToList();
         var enrollmentCounts = await _context.Enrollments
-            .Where(e => sectionIds.Contains(e.SectionId) && e.Status == "approved")
+            .Where(e => sectionIds.Contains(e.SectionId) && e.Status == ApprovedEnrollmentStatus)
             .GroupBy(e => e.SectionId)
             .ToDictionaryAsync(g => g.Key, g => g.Count());
 
@@ -103,7 +106,7 @@ public class SectionAllocationService : ISectionAllocationService
         {
             var existingSectionIds = existingSections.Select(s => s.Id).ToList();
             var enrollmentCounts = await _context.Enrollments
-                .Where(e => existingSectionIds.Contains(e.SectionId) && e.Status == "approved")
+                .Where(e => existingSectionIds.Contains(e.SectionId) && e.Status == ApprovedEnrollmentStatus)
                 .GroupBy(e => e.SectionId)
                 .ToDictionaryAsync(g => g.Key, g => g.Count());
 

@@ -1,6 +1,8 @@
 using Attendance_Management_System.Backend.Configuration;
 using Attendance_Management_System.Backend.Constants;
 using Attendance_Management_System.Backend.Entities;
+using Attendance_Management_System.Backend.Enums;
+using Attendance_Management_System.Backend.Helpers;
 using Attendance_Management_System.Backend.Interfaces.Repositories;
 using Attendance_Management_System.Backend.Interfaces.Services;
 using Attendance_Management_System.Backend.Persistence;
@@ -147,11 +149,11 @@ public static class DependencyInjection
         // Define role-based authorization policies for access control
         services.AddAuthorization(options =>
         {
-            options.AddPolicy("AdminOnly", policy => policy.RequireRole("admin"));
-            options.AddPolicy("TeacherOnly", policy => policy.RequireRole("teacher"));
-            options.AddPolicy("StudentOnly", policy => policy.RequireRole("student"));
-            options.AddPolicy("AdminOrTeacher", policy => policy.RequireRole("admin", "teacher"));
-            options.AddPolicy("AllRoles", policy => policy.RequireRole("admin", "teacher", "student"));
+            options.AddPolicy("AdminOnly", policy => policy.RequireRole(UserRole.Admin.ToStorageValue()));
+            options.AddPolicy("TeacherOnly", policy => policy.RequireRole(UserRole.Teacher.ToStorageValue()));
+            options.AddPolicy("StudentOnly", policy => policy.RequireRole(UserRole.Student.ToStorageValue()));
+            options.AddPolicy("AdminOrTeacher", policy => policy.RequireRole(UserRole.Admin.ToStorageValue(), UserRole.Teacher.ToStorageValue()));
+            options.AddPolicy("AllRoles", policy => policy.RequireRole(UserRole.Admin.ToStorageValue(), UserRole.Teacher.ToStorageValue(), UserRole.Student.ToStorageValue()));
         });
 
         services.AddRateLimiter(options =>

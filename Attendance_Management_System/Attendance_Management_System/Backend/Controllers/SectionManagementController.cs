@@ -1,6 +1,7 @@
 ﻿using System.Security.Claims;
 using Attendance_Management_System.Backend.DTOs.Requests;
 using Attendance_Management_System.Backend.DTOs.Responses;
+using Attendance_Management_System.Backend.Enums;
 using Attendance_Management_System.Backend.Helpers;
 using Attendance_Management_System.Backend.Interfaces.Services;
 using Attendance_Management_System.Backend.ValueObjects;
@@ -281,7 +282,7 @@ public class SectionManagementController : AppControllerBase
     public async Task<IActionResult> RemoveTeacher(int id, int teacherId)
     {
         var role = User.FindFirstValue(ClaimTypes.Role) ?? string.Empty;
-        var isAdmin = role == "admin";
+        var isAdmin = role.IsRole(UserRole.Admin);
 
         var result = await ExecuteServiceCallAsync(() => _sectionsService.RemoveTeacherFromSectionAsync(id, teacherId, isAdmin));
 
@@ -538,8 +539,8 @@ public class SectionManagementController : AppControllerBase
 
         var viewModel = new SectionsIndexViewModel
         {
-            IsAdmin = role == "admin",
-            IsTeacher = role == "teacher",
+            IsAdmin = role.IsRole(UserRole.Admin),
+            IsTeacher = role.IsRole(UserRole.Teacher),
             SelectedAttendanceDate = requestedAttendanceDate ?? DateOnly.FromDateTime(DateTime.Today)
         };
 
@@ -659,7 +660,7 @@ public class SectionManagementController : AppControllerBase
         var allowedSchedules = schedulesResult.Data
             .Where(schedule => schedule.SectionId == selectedSectionId);
 
-        if (string.Equals(role, "teacher", StringComparison.OrdinalIgnoreCase))
+        if (role.IsRole(UserRole.Teacher))
         {
             allowedSchedules = allowedSchedules.Where(schedule => schedule.IsMine);
         }
@@ -937,7 +938,7 @@ public class SectionManagementController : AppControllerBase
     {
         viewModel.IsCurrentTeacherAssignedToSelectedSection = false;
 
-        if (!string.Equals(role, "teacher", StringComparison.OrdinalIgnoreCase))
+        if (!role.IsRole(UserRole.Teacher))
         {
             return;
         }
@@ -1094,7 +1095,7 @@ public class SectionManagementController : AppControllerBase
 
     private async Task<(bool Success, TeacherContext Context, string? Error)> BuildTeacherContextAsync(int userId, string role)
     {
-        var isAdmin = role == "admin";
+        var isAdmin = role.IsRole(UserRole.Admin);
         if (isAdmin)
         {
             return (true, new TeacherContext { UserId = userId, TeacherId = null, IsAdmin = true }, null);
@@ -1211,7 +1212,7 @@ public class SectionManagementController : AppControllerBase
             return (false, 0, string.Empty, false);
         }
 
-        return (true, userId, role, role == "admin");
+        return (true, userId, role, role.IsRole(UserRole.Admin));
     }
 
     private sealed class TimetableSlotRecord

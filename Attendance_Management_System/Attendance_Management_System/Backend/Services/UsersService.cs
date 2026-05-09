@@ -1,6 +1,8 @@
 using Attendance_Management_System.Backend.DTOs.Requests;
 using Attendance_Management_System.Backend.DTOs.Responses;
 using Attendance_Management_System.Backend.Entities;
+using Attendance_Management_System.Backend.Enums;
+using Attendance_Management_System.Backend.Helpers;
 using Attendance_Management_System.Backend.Interfaces.Services;
 using Attendance_Management_System.Backend.Persistence;
 using Microsoft.AspNetCore.Identity;
@@ -55,7 +57,7 @@ public class UsersService : IUsersService
             };
 
             // Attach student profile data if user is a student
-            if (user.Role == "student" && students.TryGetValue(user.Id, out var student))
+            if (user.Role.IsRole(UserRole.Student) && students.TryGetValue(user.Id, out var student))
             {
                 userDto.StudentNumber = student.StudentNumber;
                 userDto.FirstName = student.FirstName;
@@ -66,7 +68,7 @@ public class UsersService : IUsersService
                 userDto.YearLevel = student.YearLevel;
             }
             // Attach teacher profile data if user is a teacher
-            else if (user.Role == "teacher" && teachers.TryGetValue(user.Id, out var teacher))
+            else if (user.Role.IsRole(UserRole.Teacher) && teachers.TryGetValue(user.Id, out var teacher))
             {
                 userDto.EmployeeNumber = teacher.EmployeeNumber;
                 userDto.FirstName = teacher.FirstName;
@@ -107,19 +109,14 @@ public class UsersService : IUsersService
             throw new InvalidOperationException("An account with this email already exists.");
         }
 
-        // Validate that role is one of the allowed values
-        var validRoles = new[] { "admin", "teacher", "student" };
-        if (!validRoles.Contains(request.Role.ToLower()))
-        {
-            throw new InvalidOperationException("Invalid role. Must be admin, teacher, or student.");
-        }
+        var normalizedRole = NormalizeRoleOrThrow(request.Role);
 
         // Create user with Identity for secure password hashing
         var user = new User
         {
             UserName = request.Email,
             Email = request.Email,
-            Role = request.Role.ToLower(),
+            Role = normalizedRole,
             IsActive = true,
             EmailConfirmed = true
         };
@@ -161,12 +158,7 @@ public class UsersService : IUsersService
         // Update role if provided and valid
         if (!string.IsNullOrEmpty(request.Role))
         {
-            var validRoles = new[] { "admin", "teacher", "student" };
-            if (!validRoles.Contains(request.Role.ToLower()))
-            {
-                throw new InvalidOperationException("Invalid role. Must be admin, teacher, or student.");
-            }
-            user.Role = request.Role.ToLower();
+            user.Role = NormalizeRoleOrThrow(request.Role);
         }
 
         // Update active status if provided (for enable/disable account)
@@ -244,7 +236,7 @@ public class UsersService : IUsersService
         }
 
         // Update personal information in the appropriate profile table based on role
-        if (user.Role == "student")
+        if (user.Role.IsRole(UserRole.Student))
         {
             var student = await _context.Students.FirstOrDefaultAsync(s => s.UserId == user.Id);
             if (student != null)
@@ -257,7 +249,7 @@ public class UsersService : IUsersService
                     student.MiddleName = request.MiddleName;
             }
         }
-        else if (user.Role == "teacher")
+        else if (user.Role.IsRole(UserRole.Teacher))
         {
             var teacher = await _context.Teachers.FirstOrDefaultAsync(t => t.UserId == user.Id);
             if (teacher != null)
@@ -290,7 +282,7 @@ public class UsersService : IUsersService
         };
 
         // Enrich with student-specific data for student role
-        if (user.Role == "student")
+        if (user.Role.IsRole(UserRole.Student))
         {
             var student = await _context.Students
                 .Include(s => s.Course)
@@ -308,7 +300,7 @@ public class UsersService : IUsersService
             }
         }
         // Enrich with teacher-specific data for teacher role
-        else if (user.Role == "teacher")
+        else if (user.Role.IsRole(UserRole.Teacher))
         {
             var teacher = await _context.Teachers
                 .FirstOrDefaultAsync(t => t.UserId == user.Id);
@@ -325,6 +317,16 @@ public class UsersService : IUsersService
         }
 
         return userDto;
+    }
+
+    private static string NormalizeRoleOrThrow(string? role)
+    {
+        if (EnumStorage.TryParseRole(role, out var parsedRole))
+        {
+            return parsedRole.ToStorageValue();
+        }
+
+        throw new InvalidOperationException("Invalid role. Must be admin, teacher, or student.");
     }
 }
 

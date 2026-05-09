@@ -567,13 +567,12 @@ public class AttendanceService : IAttendanceService
             return ScheduleValidationResult.Fail(new KeyNotFoundException("Schedule not found for this section."));
         }
 
-        var normalizedRole = requesterRole.Trim().ToLowerInvariant();
-        if (normalizedRole == "admin")
+        if (requesterRole.IsRole(UserRole.Admin))
         {
             return ScheduleValidationResult.Pass(schedule);
         }
 
-        if (normalizedRole != "teacher")
+        if (!requesterRole.IsRole(UserRole.Teacher))
         {
             return ScheduleValidationResult.Fail(new UnauthorizedAccessException("Access denied."));
         }

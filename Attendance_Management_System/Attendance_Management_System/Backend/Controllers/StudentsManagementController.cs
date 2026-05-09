@@ -1,4 +1,6 @@
 ﻿using System.Security.Claims;
+using Attendance_Management_System.Backend.Enums;
+using Attendance_Management_System.Backend.Helpers;
 using Attendance_Management_System.Backend.Interfaces.Services;
 using Attendance_Management_System.Backend.ViewModels.Students;
 using Microsoft.AspNetCore.Authorization;
@@ -30,7 +32,7 @@ public class StudentsManagementController : AppControllerBase
             return Challenge();
         }
 
-        var isTeacher = string.Equals(role, "teacher", StringComparison.OrdinalIgnoreCase);
+        var isTeacher = role.IsRole(UserRole.Teacher);
         var viewModel = new StudentsIndexViewModel
         {
             SelectedSectionId = sectionId,

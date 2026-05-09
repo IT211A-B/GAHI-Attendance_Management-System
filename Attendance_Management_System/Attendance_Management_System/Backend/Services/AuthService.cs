@@ -5,6 +5,7 @@ using Attendance_Management_System.Backend.Constants;
 using Attendance_Management_System.Backend.DTOs.Requests;
 using Attendance_Management_System.Backend.DTOs.Responses;
 using Attendance_Management_System.Backend.Entities;
+using Attendance_Management_System.Backend.Enums;
 using Attendance_Management_System.Backend.Helpers;
 using Attendance_Management_System.Backend.Interfaces.Services;
 using Attendance_Management_System.Backend.Persistence;
@@ -276,7 +277,7 @@ public class AuthService : IAuthService
         {
             UserName = request.Email,
             Email = request.Email,
-            Role = "teacher",
+            Role = UserRole.Teacher.ToStorageValue(),
             IsActive = true,
             EmailConfirmed = true // Auto-confirm for MVP
         };
@@ -471,7 +472,7 @@ public class AuthService : IAuthService
             IsActive = user.IsActive
         };
 
-        if (user.Role == "student")
+        if (user.Role.IsRole(UserRole.Student))
         {
             var student = await _context.Students
                 .Include(s => s.Course)
@@ -488,7 +489,7 @@ public class AuthService : IAuthService
                 userDto.YearLevel = student.YearLevel;
             }
         }
-        else if (user.Role == "teacher")
+        else if (user.Role.IsRole(UserRole.Teacher))
         {
             var teacher = await _context.Teachers
                 .FirstOrDefaultAsync(t => t.UserId == user.Id, cancellationToken);
@@ -531,9 +532,10 @@ public class AuthService : IAuthService
     {
         try
         {
+            var adminRole = UserRole.Admin.ToStorageValue();
             var adminUserIds = await _context.Users
                 .AsNoTracking()
-                .Where(account => account.Role == "admin" && account.IsActive)
+                .Where(account => account.Role == adminRole && account.IsActive)
                 .Select(account => account.Id)
                 .ToListAsync(cancellationToken);
 
@@ -663,7 +665,7 @@ public class AuthService : IAuthService
         {
             UserName = email,
             Email = email,
-            Role = "student",
+            Role = UserRole.Student.ToStorageValue(),
             IsActive = true,
             EmailConfirmed = false
         };
@@ -697,7 +699,7 @@ public class AuthService : IAuthService
             StudentId = studentId,
             SectionId = sectionId,
             AcademicYearId = academicYearId,
-            Status = "pending"
+            Status = EnrollmentStatus.Pending.ToStorageValue()
         };
     }
 
