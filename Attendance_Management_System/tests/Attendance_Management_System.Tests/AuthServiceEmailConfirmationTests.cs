@@ -5,6 +5,166 @@ namespace Attendance_Management_System.Tests;
 public class AuthServiceEmailConfirmationTests
 {
     [Fact]
+    public async Task ForgotPasswordAsync_ReturnsFailure_WhenAccountIsNotFound()
+    {
+        await using var context = CreateContext();
+        var userManager = CreateUserManager();
+        var accountEmailServiceMock = new Mock<IAccountEmailService>(MockBehavior.Strict);
+
+        userManager.FindByEmailHandler = _ => Task.FromResult<User?>(null);
+
+        var service = CreateService(context, userManager, accountEmailServiceMock);
+        var result = await service.ForgotPasswordAsync(new ForgotPasswordRequest
+        {
+            Email = "missing.student@example.com"
+        });
+
+        Assert.False(result.Success);
+        Assert.Equal("No account was found for that email address.", result.Message);
+    }
+
+    [Fact]
+    public async Task ForgotPasswordAsync_SendsResetLink_UsingConfiguredPublicBaseUrl()
+    {
+        await using var context = CreateContext();
+        var userManager = CreateUserManager();
+        var accountEmailServiceMock = new Mock<IAccountEmailService>(MockBehavior.Strict);
+
+        var user = new User
+        {
+            Id = 105,
+            Email = "student@example.com",
+            IsActive = true
+        };
+
+        const string rawToken = "Reset+/Token=Value";
+        var encodedToken = WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(rawToken));
+        string? capturedLink = null;
+
+        userManager.FindByEmailHandler = _ => Task.FromResult<User?>(user);
+        userManager.GeneratePasswordResetTokenHandler = _ => Task.FromResult(rawToken);
+
+        accountEmailServiceMock
+            .Setup(service => service.SendPasswordResetEmailAsync(user.Email!, user.Email!, It.IsAny<string>()))
+            .Callback<string, string, string>((_, _, resetLink) => capturedLink = resetLink)
+            .Returns(Task.CompletedTask);
+
+        var service = CreateService(
+            context,
+            userManager,
+            accountEmailServiceMock,
+            new EmailSettings { PublicBaseUrl = "https://attendance.example.edu" });
+
+        var result = await service.ForgotPasswordAsync(new ForgotPasswordRequest
+        {
+            Email = user.Email!
+        });
+
+        Assert.True(result.Success);
+        Assert.Equal("Password reset instructions have been sent to your email address.", result.Message);
+        Assert.Equal($"https://attendance.example.edu/reset-password?userId={user.Id}&token={encodedToken}", capturedLink);
+    }
+
+    [Fact]
+    public async Task ResetPasswordAsync_ResetsPassword_WhenTokenIsValid()
+    {
+        await using var context = CreateContext();
+        var userManager = CreateUserManager();
+        var accountEmailServiceMock = new Mock<IAccountEmailService>(MockBehavior.Strict);
+
+        var user = new User
+        {
+            Id = 17,
+            Email = "student@example.com",
+            IsActive = true
+        };
+
+        const string rawToken = "ResetToken+/=";
+        var encodedToken = WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(rawToken));
+
+        userManager.FindByIdHandler = _ => Task.FromResult<User?>(user);
+        userManager.ResetPasswordHandler = (_, _, _) => Task.FromResult(IdentityResult.Success);
+
+        var service = CreateService(context, userManager, accountEmailServiceMock);
+        var result = await service.ResetPasswordAsync(new ResetPasswordRequest
+        {
+            UserId = user.Id,
+            Token = encodedToken,
+            NewPassword = "NewPassword123"
+        });
+
+        Assert.True(result.Success);
+        Assert.Equal("Password has been reset successfully. You can now sign in.", result.Message);
+        Assert.Equal(1, userManager.ResetPasswordCallCount);
+        Assert.Equal(rawToken, userManager.LastResetToken);
+        Assert.Equal("NewPassword123", userManager.LastResetPassword);
+    }
+
+    [Fact]
+    public async Task ResetPasswordAsync_ReturnsFailure_WhenTokenCannotBeDecoded()
+    {
+        await using var context = CreateContext();
+        var userManager = CreateUserManager();
+        var accountEmailServiceMock = new Mock<IAccountEmailService>(MockBehavior.Strict);
+
+        var user = new User
+        {
+            Id = 71,
+            IsActive = true
+        };
+
+        userManager.FindByIdHandler = _ => Task.FromResult<User?>(user);
+
+        var service = CreateService(context, userManager, accountEmailServiceMock);
+        var result = await service.ResetPasswordAsync(new ResetPasswordRequest
+        {
+            UserId = user.Id,
+            Token = "%%%INVALID%%%TOKEN%%%",
+            NewPassword = "NewPassword123"
+        });
+
+        Assert.False(result.Success);
+        Assert.Equal("Invalid or expired password reset link.", result.Message);
+        Assert.Equal(0, userManager.ResetPasswordCallCount);
+    }
+
+    [Fact]
+    public async Task ResetPasswordAsync_ReturnsFailure_WhenIdentityReportsInvalidToken()
+    {
+        await using var context = CreateContext();
+        var userManager = CreateUserManager();
+        var accountEmailServiceMock = new Mock<IAccountEmailService>(MockBehavior.Strict);
+
+        var user = new User
+        {
+            Id = 88,
+            IsActive = true
+        };
+
+        const string rawToken = "ResetToken-Expired";
+        var encodedToken = WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(rawToken));
+
+        userManager.FindByIdHandler = _ => Task.FromResult<User?>(user);
+        userManager.ResetPasswordHandler = (_, _, _) => Task.FromResult(IdentityResult.Failed(new IdentityError
+        {
+            Code = "InvalidToken",
+            Description = "Invalid token"
+        }));
+
+        var service = CreateService(context, userManager, accountEmailServiceMock);
+        var result = await service.ResetPasswordAsync(new ResetPasswordRequest
+        {
+            UserId = user.Id,
+            Token = encodedToken,
+            NewPassword = "NewPassword123"
+        });
+
+        Assert.False(result.Success);
+        Assert.Equal("Invalid or expired password reset link.", result.Message);
+        Assert.Equal(1, userManager.ResetPasswordCallCount);
+    }
+
+    [Fact]
     public async Task ResendVerificationAsync_UsesConfiguredPublicBaseUrl()
     {
         await using var context = CreateContext();
@@ -188,12 +348,23 @@ public class AuthServiceEmailConfirmationTests
 
         public Func<User, Task<string>> GenerateTokenHandler { get; set; } = _ => Task.FromResult(string.Empty);
 
+        public Func<User, Task<string>> GeneratePasswordResetTokenHandler { get; set; } = _ => Task.FromResult(string.Empty);
+
         public Func<User, string, Task<IdentityResult>> ConfirmEmailHandler { get; set; } =
             (_, _) => Task.FromResult(IdentityResult.Failed());
 
+        public Func<User, string, string, Task<IdentityResult>> ResetPasswordHandler { get; set; } =
+            (_, _, _) => Task.FromResult(IdentityResult.Failed());
+
         public int ConfirmEmailCallCount { get; private set; }
 
+        public int ResetPasswordCallCount { get; private set; }
+
         public string? LastConfirmedToken { get; private set; }
+
+        public string? LastResetToken { get; private set; }
+
+        public string? LastResetPassword { get; private set; }
 
         public FakeUserManager()
             : base(
@@ -224,11 +395,24 @@ public class AuthServiceEmailConfirmationTests
             return GenerateTokenHandler(user);
         }
 
+        public override Task<string> GeneratePasswordResetTokenAsync(User user)
+        {
+            return GeneratePasswordResetTokenHandler(user);
+        }
+
         public override Task<IdentityResult> ConfirmEmailAsync(User user, string token)
         {
             ConfirmEmailCallCount++;
             LastConfirmedToken = token;
             return ConfirmEmailHandler(user, token);
+        }
+
+        public override Task<IdentityResult> ResetPasswordAsync(User user, string token, string newPassword)
+        {
+            ResetPasswordCallCount++;
+            LastResetToken = token;
+            LastResetPassword = newPassword;
+            return ResetPasswordHandler(user, token, newPassword);
         }
     }
 }
