@@ -66,6 +66,7 @@ public class SectionPageService : ISectionPageService
             IsTeacher = role.IsRole(UserRole.Teacher)
         };
 
+        // Build the page from service calls, but stop early with a friendly error if sections cannot load.
         var sectionsResult = await TryCallAsync(() => _sectionsService.GetAllSectionsAsync());
         if (!sectionsResult.Success || sectionsResult.Data is null)
         {
@@ -140,6 +141,7 @@ public class SectionPageService : ISectionPageService
                 : selectedSection.SubjectName;
         }
 
+        // The timetable grid is built from raw slot records so the UI can render fixed time cells.
         await PopulateTimetableSubjectOptionsAsync(viewModel, selectedSection);
         await PopulateTeacherAssignmentStateAsync(viewModel, currentUserId, role, selectedSectionId);
 
@@ -292,6 +294,7 @@ public class SectionPageService : ISectionPageService
             return;
         }
 
+        // Teachers only see schedules they own; admins can inspect every schedule in the section.
         var allowedSchedules = schedulesResult.Data
             .Where(schedule => schedule.SectionId == selectedSectionId);
 
@@ -318,6 +321,7 @@ public class SectionPageService : ISectionPageService
             return;
         }
 
+        // Default to the first available schedule when the request does not name a valid one.
         var selectedScheduleId = requestedScheduleId.HasValue && scheduleOptions.Any(schedule => schedule.Id == requestedScheduleId.Value)
             ? requestedScheduleId
             : scheduleOptions.First().Id;
@@ -328,6 +332,7 @@ public class SectionPageService : ISectionPageService
             return;
         }
 
+        // The attendance panel needs the roster and the attendance summary before it can render rows.
         var studentsResult = await TryCallAsync(() => _studentsService.GetStudentsBySectionAsync(selectedSectionId, currentUserId, role));
         if (!studentsResult.Success || studentsResult.Data is null)
         {
@@ -354,6 +359,7 @@ public class SectionPageService : ISectionPageService
         viewModel.AttendanceAbsentCount = summaryResult.Data.AbsentCount;
         viewModel.AttendanceUnmarkedCount = summaryResult.Data.UnmarkedCount;
 
+        // Index records by student so each roster row can be matched in O(1) time.
         var recordsByStudentId = summaryResult.Data.Records
             .GroupBy(record => record.StudentId)
             .ToDictionary(group => group.Key, group => group.First());
@@ -378,6 +384,7 @@ public class SectionPageService : ISectionPageService
             ? "-"
             : $"{student.CourseCode} {student.CourseName}".Trim();
 
+        // Unmarked students still render as rows so the table stays complete.
         var hasRecord = record is not null;
         var isMarked = hasRecord && record!.IsMarked;
         var statusLabel = hasRecord ? record!.StatusLabel : AttendancePolicy.ToLabel(AttendanceStatusKind.Unmarked);
@@ -479,6 +486,7 @@ public class SectionPageService : ISectionPageService
             }
 
             var selectedCourse = viewModel.Courses.FirstOrDefault(course => course.Id == viewModel.CreateForm.CourseId);
+            // Keep the default year level inside the selected course's allowed range when the course changes.
             if (selectedCourse?.MinYearLevel is int minYearLevel
                 && selectedCourse.MaxYearLevel is int maxYearLevel
                 && (viewModel.CreateForm.YearLevel < minYearLevel || viewModel.CreateForm.YearLevel > maxYearLevel))
@@ -773,6 +781,7 @@ public class SectionPageService : ISectionPageService
 
     private static async Task<(bool Success, T? Data, string? Error)> TryCallAsync<T>(Func<Task<T>> serviceCall)
     {
+        // Convert exceptions into a uniform success/error tuple so page assembly can fail gracefully.
         try
         {
             var data = await serviceCall();

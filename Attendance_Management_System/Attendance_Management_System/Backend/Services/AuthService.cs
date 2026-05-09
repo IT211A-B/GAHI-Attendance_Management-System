@@ -135,6 +135,7 @@ public class AuthService : IAuthService
             return CreateSuccessResponse("Email is already confirmed. You can sign in.");
         }
 
+        // Confirmation tokens arrive URL-encoded, so decode them before handing them to Identity.
         var decodedToken = DecodeToken(token);
         if (string.IsNullOrWhiteSpace(decodedToken))
         {
@@ -161,6 +162,7 @@ public class AuthService : IAuthService
         var user = await _userManager.FindByEmailAsync(normalizedEmail);
         if (user == null || user.EmailConfirmed || !user.IsActive || string.IsNullOrWhiteSpace(user.Email))
         {
+            // Keep the response neutral so callers cannot infer whether an account exists.
             return CreateSuccessResponse(GenericResendVerificationMessage);
         }
 
@@ -190,6 +192,7 @@ public class AuthService : IAuthService
         var user = await _userManager.FindByEmailAsync(normalizedEmail);
         if (user == null || string.IsNullOrWhiteSpace(user.Email))
         {
+            // Keep the response neutral so callers cannot infer whether an account exists.
             return CreateSuccessResponse(GenericForgotPasswordMessage);
         }
 
@@ -249,6 +252,7 @@ public class AuthService : IAuthService
         {
             if (result.Errors.Any(error => string.Equals(error.Code, "InvalidToken", StringComparison.OrdinalIgnoreCase)))
             {
+                // Expired or tampered tokens should read as a generic invalid-link error.
                 return CreateFailureResponse(PasswordResetInvalidLinkMessage);
             }
 
@@ -424,6 +428,7 @@ public class AuthService : IAuthService
         int resolvedYearLevel,
         CancellationToken cancellationToken = default)
     {
+        // Registration is transactional so the user, student, and enrollment records stay aligned.
         await using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
 
         try
@@ -457,6 +462,7 @@ public class AuthService : IAuthService
 
     private async Task RunPostStudentRegistrationSideEffectsAsync(User user, string studentDisplayName, string studentNumber, CancellationToken cancellationToken = default)
     {
+        // Only fire emails and notifications after the database work has succeeded.
         await TrySendSignupAndVerificationEmailsAsync(user, studentDisplayName);
         await TryNotifyAdminsOfSignupAsync(user, studentDisplayName, studentNumber, cancellationToken);
     }
@@ -464,6 +470,7 @@ public class AuthService : IAuthService
     // Constructs UserDto with student or teacher details based on role
     private async Task<UserDto> BuildUserDtoAsync(User user, CancellationToken cancellationToken = default)
     {
+        // The response shape changes with the user's role, so load the matching profile record.
         var userDto = new UserDto
         {
             Id = user.Id,

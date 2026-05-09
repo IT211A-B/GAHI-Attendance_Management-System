@@ -44,6 +44,7 @@ public class AccountController : Controller
     [AllowAnonymous]
     public IActionResult Login(string? returnUrl = null)
     {
+        // Signed-in users should skip the login form and go straight to the dashboard.
         if (User.Identity?.IsAuthenticated == true)
         {
             return RedirectToAction("Index", "Dashboard");
@@ -61,6 +62,7 @@ public class AccountController : Controller
     [AllowAnonymous]
     public IActionResult ForgotPassword()
     {
+        // The form stays public, but authenticated users do not need to reset their password.
         if (User.Identity?.IsAuthenticated == true)
         {
             return RedirectToAction("Index", "Dashboard");
@@ -74,6 +76,7 @@ public class AccountController : Controller
     [AllowAnonymous]
     public async Task<IActionResult> Signup()
     {
+        // The signup page needs its dependent dropdowns populated before the view renders.
         if (User.Identity?.IsAuthenticated == true)
         {
             return RedirectToAction("Index", "Dashboard");
@@ -121,6 +124,7 @@ public class AccountController : Controller
         {
             if (result.IsNotAllowed)
             {
+                // A blocked sign-in here usually means the account exists but email verification is still pending.
                 ViewData["EmailVerificationRequired"] = true;
                 ViewData["EmailVerificationAddress"] = model.Email;
                 ModelState.AddModelError(string.Empty, "Please verify your email before signing in. You can request a new verification link below.");
@@ -150,6 +154,7 @@ public class AccountController : Controller
             return View(model);
         }
 
+        // Keep the response generic so the endpoint does not reveal whether the email exists.
         var request = new ForgotPasswordRequest
         {
             Email = model.Email.Trim()
@@ -176,6 +181,7 @@ public class AccountController : Controller
             return RedirectToAction("Index", "Dashboard");
         }
 
+        // Rebuild the options before validation runs so any errors can re-render the same choices.
         await PopulateSignupOptionsAsync(model);
 
         if (!ModelState.IsValid)
@@ -245,6 +251,7 @@ public class AccountController : Controller
             Token = token ?? string.Empty
         };
 
+        // Invalid links still render the page so the user sees the error in context.
         if (userId <= 0 || string.IsNullOrWhiteSpace(token))
         {
             ModelState.AddModelError(string.Empty, "Invalid or expired password reset link.");

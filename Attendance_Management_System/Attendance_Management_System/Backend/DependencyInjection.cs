@@ -55,6 +55,7 @@ public static class DependencyInjection
         var configuredRateLimiting = configuration
             .GetSection(RateLimitingSettings.SectionName)
             .Get<RateLimitingSettings>();
+        // Bad rate-limit config should not block startup; safe defaults keep the app usable.
         var rateLimitingSettings = configuredRateLimiting?.IsValid() == true
             ? configuredRateLimiting
             : RateLimitingSettings.Default;
@@ -227,6 +228,7 @@ public static class DependencyInjection
 
     private static string BuildRateLimitPartitionKey(HttpContext httpContext)
     {
+        // Signed-in users share a bucket by account; anonymous requests fall back to IP.
         if (httpContext.User.Identity?.IsAuthenticated == true)
         {
             var userId = httpContext.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
@@ -248,6 +250,7 @@ public static class DependencyInjection
 
     private static bool ShouldReturnJsonRateLimitResponse(HttpRequest request)
     {
+        // API clients should receive a machine-readable 429 instead of a browser-style response.
         if (request.Path.StartsWithSegments("/attendance/qr/options")
             || request.Path.StartsWithSegments("/attendance/qr/sessions")
             || request.Path.Equals("/attendance/qr/checkins", StringComparison.OrdinalIgnoreCase))
@@ -290,6 +293,7 @@ public static class DependencyInjection
 
     private static bool IsQrApiRequest(HttpRequest request)
     {
+        // QR endpoints should return status codes instead of redirecting anonymous users to HTML pages.
         if (!request.Path.StartsWithSegments("/attendance/qr", out var remaining))
         {
             return false;

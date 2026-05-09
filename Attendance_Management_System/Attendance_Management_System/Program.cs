@@ -101,6 +101,7 @@ app.MapHub<NotificationHub>("/hubs/notifications").DisableRateLimiting();
 app.MapHealthChecks("/health").DisableRateLimiting();
 
 // Run database migrations and seed initial data on startup
+// Tests own their schema and seed data, so skip startup writes in that environment.
 if (!app.Environment.IsEnvironment("Testing"))
 {
     using var scope = app.Services.CreateScope();

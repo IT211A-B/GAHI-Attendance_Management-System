@@ -228,6 +228,7 @@ public class SchedulesService : ISchedulesService
             }
         }
 
+        // Batch creation must be atomic so a partial weekday range is never persisted.
         await using var transaction = await _context.Database.BeginTransactionAsync();
 
         // Keep self-assignment behavior for teacher-created schedules
@@ -276,6 +277,7 @@ public class SchedulesService : ISchedulesService
         }
 
         var isOwner = schedule.TeacherId.HasValue && schedule.TeacherId.Value == teacherId.Value;
+        // Teachers can claim an unowned slot only when they are already assigned to the section.
         var canClaimUnowned = !schedule.TeacherId.HasValue
             && await _context.SectionTeachers
                 .AnyAsync(st => st.SectionId == schedule.SectionId && st.TeacherId == teacherId.Value);
@@ -385,6 +387,7 @@ public class SchedulesService : ISchedulesService
         }
 
         // Check if attendance records exist for this schedule
+        // Attendance history makes the slot part of record-keeping, so it cannot be deleted.
         var hasAttendance = await _context.Attendances.AnyAsync(a => a.ScheduleId == id);
         if (hasAttendance)
         {
@@ -574,6 +577,7 @@ public class SchedulesService : ISchedulesService
             .ToListAsync();
 
         // Check if current teacher owns this schedule slot
+        // The UI uses this flag to decide whether edit controls should appear.
         var isMine = teacherId.HasValue
             && schedule.TeacherId.HasValue
             && schedule.TeacherId.Value == teacherId.Value;

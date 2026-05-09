@@ -121,6 +121,7 @@ public class EnrollmentService : IEnrollmentService
             }
             else
             {
+                // Unknown status filters intentionally return no rows instead of throwing.
                 query = query.Where(_ => false);
             }
         }
