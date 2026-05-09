@@ -60,6 +60,18 @@ public class AccountController : Controller
         return View(new LoginViewModel { ReturnUrl = returnUrl });
     }
 
+    [HttpGet("forgot-password")]
+    [AllowAnonymous]
+    public IActionResult ForgotPassword()
+    {
+        if (User.Identity?.IsAuthenticated == true)
+        {
+            return RedirectToAction("Index", "Dashboard");
+        }
+
+        return View(new ForgotPasswordViewModel());
+    }
+
 
     [HttpGet("signup")]
     [AllowAnonymous]
@@ -132,6 +144,33 @@ public class AccountController : Controller
         return RedirectToAction("Index", "Dashboard");
     }
 
+    [HttpPost("forgot-password")]
+    [EnableRateLimiting(RateLimitingPolicyNames.AuthResendVerification)]
+    [AllowAnonymous]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> ForgotPassword(ForgotPasswordViewModel model)
+    {
+        if (!ModelState.IsValid)
+        {
+            return View(model);
+        }
+
+        var request = new ForgotPasswordRequest
+        {
+            Email = model.Email.Trim()
+        };
+
+        var result = await _authService.ForgotPasswordAsync(request);
+        if (!result.Success)
+        {
+            ModelState.AddModelError(string.Empty, result.Message ?? "Unable to process password reset right now.");
+            return View(model);
+        }
+
+        TempData["AuthSuccess"] = result.Message ?? "Password reset instructions have been sent to your email address.";
+        return RedirectToAction(nameof(ForgotPassword));
+    }
+
     [HttpPost("signup")]
     [EnableRateLimiting(RateLimitingPolicyNames.AuthSignup)]
     [AllowAnonymous]
@@ -182,7 +221,7 @@ public class AccountController : Controller
 
     [HttpGet("confirm-email")]
     [AllowAnonymous]
-    public async Task<IActionResult> ConfirmEmail([FromQuery] int userId, [FromQuery] string token)
+    public async Task<IActionResult> ConfirmEmail(int userId, string token)
     {
         var result = await _authService.ConfirmEmailAsync(userId, token);
         if (result.Success)
@@ -194,6 +233,58 @@ public class AccountController : Controller
             TempData["AuthError"] = result.Message;
         }
 
+        return RedirectToAction(nameof(Login));
+    }
+
+    [HttpGet("reset-password")]
+    [AllowAnonymous]
+    public IActionResult ResetPassword(int userId, string token)
+    {
+        if (User.Identity?.IsAuthenticated == true)
+        {
+            return RedirectToAction("Index", "Dashboard");
+        }
+
+        var model = new ResetPasswordViewModel
+        {
+            UserId = userId,
+            Token = token ?? string.Empty
+        };
+
+        if (userId <= 0 || string.IsNullOrWhiteSpace(token))
+        {
+            ModelState.AddModelError(string.Empty, "Invalid or expired password reset link.");
+        }
+
+        return View(model);
+    }
+
+    [HttpPost("reset-password")]
+    [EnableRateLimiting(RateLimitingPolicyNames.AuthResendVerification)]
+    [AllowAnonymous]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> ResetPassword(ResetPasswordViewModel model)
+    {
+        if (!ModelState.IsValid)
+        {
+            return View(model);
+        }
+
+        var request = new ResetPasswordRequest
+        {
+            UserId = model.UserId,
+            Token = model.Token,
+            NewPassword = model.NewPassword
+        };
+
+        var result = await _authService.ResetPasswordAsync(request);
+        if (!result.Success)
+        {
+            ModelState.AddModelError(string.Empty, result.Message ?? "Unable to reset password right now.");
+            return View(model);
+        }
+
+        TempData["AuthSuccess"] = result.Message ?? "Password has been reset successfully. You can now sign in.";
         return RedirectToAction(nameof(Login));
     }
 
