@@ -257,7 +257,6 @@ public class EnrollmentService : IEnrollmentService
         if (enrollment.Student?.User != null)
         {
             enrollment.Student.User.IsActive = true;
-            enrollment.Student.User.EmailConfirmed = true;
         }
 
         // If approved, assign the student to the section.
