@@ -52,7 +52,7 @@ public class AuthService : IAuthService
     }
 
     // Authenticates user by verifying email and password
-    public async Task<AuthResponse> LoginAsync(LoginRequest request)
+    public async Task<AuthResponse> LoginAsync(LoginRequest request, CancellationToken cancellationToken = default)
     {
         // Find user by email address
         var user = await _userManager.FindByEmailAsync(request.Email);
@@ -78,21 +78,21 @@ public class AuthService : IAuthService
         }
 
         // Build user DTO with role-specific details
-        var userDto = await BuildUserDtoAsync(user);
+        var userDto = await BuildUserDtoAsync(user, cancellationToken);
 
         return CreateSuccessResponse("Login successful.", userDto);
     }
 
     // Registers a new student and creates pending enrollment request
-    public async Task<AuthResponse> RegisterStudentAsync(RegisterRequest request)
+    public async Task<AuthResponse> RegisterStudentAsync(RegisterRequest request, CancellationToken cancellationToken = default)
     {
-        var validationError = await ValidateStudentRegistrationRequestAsync(request);
+        var validationError = await ValidateStudentRegistrationRequestAsync(request, cancellationToken);
         if (validationError != null)
         {
             return validationError;
         }
 
-        var sectionResolution = await ResolveStudentRegistrationSectionAsync(request);
+        var sectionResolution = await ResolveStudentRegistrationSectionAsync(request, cancellationToken);
         if (sectionResolution.Error != null || sectionResolution.AssignedSection == null)
         {
             return sectionResolution.Error ?? CreateFailureResponse("Unable to complete registration right now. Please try again.");
@@ -101,7 +101,8 @@ public class AuthService : IAuthService
         var registrationResult = await CreateStudentRegistrationAsync(
             request,
             sectionResolution.AssignedSection,
-            sectionResolution.ResolvedYearLevel);
+            sectionResolution.ResolvedYearLevel,
+            cancellationToken);
 
         if (registrationResult.Error != null || registrationResult.User == null)
         {
@@ -109,13 +110,13 @@ public class AuthService : IAuthService
         }
 
         var studentDisplayName = BuildDisplayName(request.FirstName, request.MiddleName, request.LastName);
-        await RunPostStudentRegistrationSideEffectsAsync(registrationResult.User, studentDisplayName, request.StudentNumber);
+        await RunPostStudentRegistrationSideEffectsAsync(registrationResult.User, studentDisplayName, request.StudentNumber, cancellationToken);
 
-        var userDto = await BuildUserDtoAsync(registrationResult.User);
+        var userDto = await BuildUserDtoAsync(registrationResult.User, cancellationToken);
         return CreateSuccessResponse("Registration successful. Your enrollment is pending approval.", userDto);
     }
 
-    public async Task<AuthResponse> ConfirmEmailAsync(int userId, string token)
+    public async Task<AuthResponse> ConfirmEmailAsync(int userId, string token, CancellationToken cancellationToken = default)
     {
         if (userId <= 0 || string.IsNullOrWhiteSpace(token))
         {
@@ -148,7 +149,7 @@ public class AuthService : IAuthService
         return CreateSuccessResponse("Email confirmed successfully. You can now sign in.");
     }
 
-    public async Task<AuthResponse> ResendVerificationAsync(string email)
+    public async Task<AuthResponse> ResendVerificationAsync(string email, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(email))
         {
@@ -165,7 +166,7 @@ public class AuthService : IAuthService
         try
         {
             var confirmationLink = await BuildEmailConfirmationLinkAsync(user);
-            var displayName = await ResolveDisplayNameAsync(user);
+            var displayName = await ResolveDisplayNameAsync(user, cancellationToken);
 
             await _accountEmailService.SendVerificationEmailAsync(user.Email, displayName, confirmationLink);
         }
@@ -177,7 +178,7 @@ public class AuthService : IAuthService
         return CreateSuccessResponse(GenericResendVerificationMessage);
     }
 
-    public async Task<AuthResponse> ForgotPasswordAsync(ForgotPasswordRequest request)
+    public async Task<AuthResponse> ForgotPasswordAsync(ForgotPasswordRequest request, CancellationToken cancellationToken = default)
     {
         if (request == null || string.IsNullOrWhiteSpace(request.Email))
         {
@@ -200,7 +201,7 @@ public class AuthService : IAuthService
         try
         {
             var resetLink = await BuildPasswordResetLinkAsync(user);
-            var displayName = await ResolveDisplayNameAsync(user);
+            var displayName = await ResolveDisplayNameAsync(user, cancellationToken);
 
             await _accountEmailService.SendPasswordResetEmailAsync(user.Email, displayName, resetLink);
         }
@@ -212,7 +213,7 @@ public class AuthService : IAuthService
         return CreateSuccessResponse(GenericForgotPasswordMessage);
     }
 
-    public async Task<AuthResponse> ResetPasswordAsync(ResetPasswordRequest request)
+    public async Task<AuthResponse> ResetPasswordAsync(ResetPasswordRequest request, CancellationToken cancellationToken = default)
     {
         if (request == null || request.UserId <= 0 || string.IsNullOrWhiteSpace(request.Token))
         {
@@ -261,7 +262,7 @@ public class AuthService : IAuthService
     }
 
     // Registers a new teacher with auto-generated employee number
-    public async Task<AuthResponse> RegisterTeacherAsync(TeacherRegisterRequest request)
+    public async Task<AuthResponse> RegisterTeacherAsync(TeacherRegisterRequest request, CancellationToken cancellationToken = default)
     {
         // Check if email already exists
         var existingUser = await _userManager.FindByEmailAsync(request.Email);
@@ -289,7 +290,7 @@ public class AuthService : IAuthService
         }
 
         // Generate employee number (auto-generated)
-        var employeeNumber = await GenerateEmployeeNumberAsync();
+        var employeeNumber = await GenerateEmployeeNumberAsync(cancellationToken);
 
         // Create teacher record
         var teacher = new Teacher
@@ -304,15 +305,15 @@ public class AuthService : IAuthService
         };
 
         _context.Teachers.Add(teacher);
-        await _context.SaveChangesAsync();
+        await _context.SaveChangesAsync(cancellationToken);
 
-        var userDto = await BuildUserDtoAsync(user);
+        var userDto = await BuildUserDtoAsync(user, cancellationToken);
 
         return CreateSuccessResponse("Teacher registration successful.", userDto);
     }
 
     // Retrieves user profile with role-specific information
-    public async Task<UserDto?> GetUserProfileAsync(int userId)
+    public async Task<UserDto?> GetUserProfileAsync(int userId, CancellationToken cancellationToken = default)
     {
         var user = await _userManager.FindByIdAsync(userId.ToString());
         if (user == null)
@@ -320,10 +321,10 @@ public class AuthService : IAuthService
             return null;
         }
 
-        return await BuildUserDtoAsync(user);
+        return await BuildUserDtoAsync(user, cancellationToken);
     }
 
-    private async Task<AuthResponse?> ValidateStudentRegistrationRequestAsync(RegisterRequest request)
+    private async Task<AuthResponse?> ValidateStudentRegistrationRequestAsync(RegisterRequest request, CancellationToken cancellationToken = default)
     {
         // Check if email already exists
         var existingUser = await _userManager.FindByEmailAsync(request.Email);
@@ -334,7 +335,7 @@ public class AuthService : IAuthService
 
         // Check if student number already exists
         var existingStudentNumber = await _context.Students
-            .AnyAsync(student => student.StudentNumber == request.StudentNumber);
+            .AnyAsync(student => student.StudentNumber == request.StudentNumber, cancellationToken);
         if (existingStudentNumber)
         {
             return CreateFailureResponse("This student number is already registered.");
@@ -343,7 +344,7 @@ public class AuthService : IAuthService
         // Validate CourseId exists and year level is valid for selected stage.
         var course = await _context.Courses
             .AsNoTracking()
-            .FirstOrDefaultAsync(selectedCourse => selectedCourse.Id == request.CourseId);
+            .FirstOrDefaultAsync(selectedCourse => selectedCourse.Id == request.CourseId, cancellationToken);
         if (course == null)
         {
             return CreateFailureResponse("Invalid course selected.");
@@ -357,7 +358,7 @@ public class AuthService : IAuthService
         }
 
         // Validate AcademicYearId exists
-        var academicYearExists = await _context.AcademicYears.AnyAsync(academicYear => academicYear.Id == request.AcademicYearId);
+        var academicYearExists = await _context.AcademicYears.AnyAsync(academicYear => academicYear.Id == request.AcademicYearId, cancellationToken);
         if (!academicYearExists)
         {
             return CreateFailureResponse("Invalid academic year selected.");
@@ -366,7 +367,7 @@ public class AuthService : IAuthService
         return null;
     }
 
-    private async Task<(Section? AssignedSection, int ResolvedYearLevel, AuthResponse? Error)> ResolveStudentRegistrationSectionAsync(RegisterRequest request)
+    private async Task<(Section? AssignedSection, int ResolvedYearLevel, AuthResponse? Error)> ResolveStudentRegistrationSectionAsync(RegisterRequest request, CancellationToken cancellationToken = default)
     {
         var resolvedYearLevel = request.YearLevel;
 
@@ -375,7 +376,7 @@ public class AuthService : IAuthService
         {
             var assignedSection = await _context.Sections
                 .AsNoTracking()
-                .FirstOrDefaultAsync(section => section.Id == request.SectionId.Value);
+                .FirstOrDefaultAsync(section => section.Id == request.SectionId.Value, cancellationToken);
 
             if (assignedSection == null)
             {
@@ -419,9 +420,10 @@ public class AuthService : IAuthService
     private async Task<(User? User, AuthResponse? Error)> CreateStudentRegistrationAsync(
         RegisterRequest request,
         Section assignedSection,
-        int resolvedYearLevel)
+        int resolvedYearLevel,
+        CancellationToken cancellationToken = default)
     {
-        await using var transaction = await _context.Database.BeginTransactionAsync();
+        await using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
 
         try
         {
@@ -436,30 +438,30 @@ public class AuthService : IAuthService
 
             var student = BuildStudentEntity(request, user.Id, resolvedYearLevel);
             _context.Students.Add(student);
-            await _context.SaveChangesAsync();
+            await _context.SaveChangesAsync(cancellationToken);
 
             var enrollment = BuildPendingEnrollment(student.Id, assignedSection.Id, request.AcademicYearId);
             _context.Enrollments.Add(enrollment);
-            await _context.SaveChangesAsync();
+            await _context.SaveChangesAsync(cancellationToken);
 
-            await transaction.CommitAsync();
+            await transaction.CommitAsync(cancellationToken);
             return (user, null);
         }
         catch
         {
-            await transaction.RollbackAsync();
+            await transaction.RollbackAsync(cancellationToken);
             return (null, CreateFailureResponse("Unable to complete registration right now. Please try again."));
         }
     }
 
-    private async Task RunPostStudentRegistrationSideEffectsAsync(User user, string studentDisplayName, string studentNumber)
+    private async Task RunPostStudentRegistrationSideEffectsAsync(User user, string studentDisplayName, string studentNumber, CancellationToken cancellationToken = default)
     {
         await TrySendSignupAndVerificationEmailsAsync(user, studentDisplayName);
-        await TryNotifyAdminsOfSignupAsync(user, studentDisplayName, studentNumber);
+        await TryNotifyAdminsOfSignupAsync(user, studentDisplayName, studentNumber, cancellationToken);
     }
 
     // Constructs UserDto with student or teacher details based on role
-    private async Task<UserDto> BuildUserDtoAsync(User user)
+    private async Task<UserDto> BuildUserDtoAsync(User user, CancellationToken cancellationToken = default)
     {
         var userDto = new UserDto
         {
@@ -473,7 +475,7 @@ public class AuthService : IAuthService
         {
             var student = await _context.Students
                 .Include(s => s.Course)
-                .FirstOrDefaultAsync(s => s.UserId == user.Id);
+                .FirstOrDefaultAsync(s => s.UserId == user.Id, cancellationToken);
 
             if (student != null)
             {
@@ -489,7 +491,7 @@ public class AuthService : IAuthService
         else if (user.Role == "teacher")
         {
             var teacher = await _context.Teachers
-                .FirstOrDefaultAsync(t => t.UserId == user.Id);
+                .FirstOrDefaultAsync(t => t.UserId == user.Id, cancellationToken);
 
             if (teacher != null)
             {
@@ -525,7 +527,7 @@ public class AuthService : IAuthService
         }
     }
 
-    private async Task TryNotifyAdminsOfSignupAsync(User user, string studentDisplayName, string studentNumber)
+    private async Task TryNotifyAdminsOfSignupAsync(User user, string studentDisplayName, string studentNumber, CancellationToken cancellationToken = default)
     {
         try
         {
@@ -533,7 +535,7 @@ public class AuthService : IAuthService
                 .AsNoTracking()
                 .Where(account => account.Role == "admin" && account.IsActive)
                 .Select(account => account.Id)
-                .ToListAsync();
+                .ToListAsync(cancellationToken);
 
             if (adminUserIds.Count == 0)
             {
@@ -564,13 +566,13 @@ public class AuthService : IAuthService
         }
     }
 
-    private async Task<string> ResolveDisplayNameAsync(User user)
+    private async Task<string> ResolveDisplayNameAsync(User user, CancellationToken cancellationToken = default)
     {
         var studentName = await _context.Students
             .AsNoTracking()
             .Where(student => student.UserId == user.Id)
             .Select(student => new { student.FirstName, student.MiddleName, student.LastName })
-            .FirstOrDefaultAsync();
+            .FirstOrDefaultAsync(cancellationToken);
 
         if (studentName != null)
         {
@@ -581,7 +583,7 @@ public class AuthService : IAuthService
             .AsNoTracking()
             .Where(teacher => teacher.UserId == user.Id)
             .Select(teacher => new { teacher.FirstName, teacher.MiddleName, teacher.LastName })
-            .FirstOrDefaultAsync();
+            .FirstOrDefaultAsync(cancellationToken);
 
         if (teacherName != null)
         {
@@ -723,10 +725,10 @@ public class AuthService : IAuthService
         };
     }
 
-    private async Task<string> GenerateEmployeeNumberAsync()
+    private async Task<string> GenerateEmployeeNumberAsync(CancellationToken cancellationToken = default)
     {
         // Get the count of teachers to generate sequential employee number
-        var teacherCount = await _context.Teachers.CountAsync();
+        var teacherCount = await _context.Teachers.CountAsync(cancellationToken);
         var year = DateTime.UtcNow.Year;
         return $"EMP{year}{(teacherCount + 1):D4}";
     }
