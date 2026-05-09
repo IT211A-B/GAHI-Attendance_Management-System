@@ -16,6 +16,8 @@ namespace Attendance_Management_System.Backend.Controllers;
 public class AccountController : Controller
 {
     private const string GenericForgotPasswordNotice = "If an account exists for that email, password reset instructions have been sent. Please check your inbox.";
+    private const string GenericInvalidCredentialsNotice = "Invalid email or password.";
+    private const string GenericLoginUnavailableNotice = "Unable to sign in right now. Please try again shortly.";
 
     private readonly SignInManager<User> _signInManager;
     private readonly UserManager<User> _userManager;
@@ -110,13 +112,13 @@ public class AccountController : Controller
         catch (PostgresException ex) when (ex.SqlState == PostgresErrorCodes.InvalidPassword)
         {
             _logger.LogError(ex, "PostgreSQL authentication failed while processing login.");
-            ModelState.AddModelError(string.Empty, "Login is temporarily unavailable due to a database configuration issue.");
+            ModelState.AddModelError(string.Empty, GenericLoginUnavailableNotice);
             return View(model);
         }
         catch (NpgsqlException ex)
         {
             _logger.LogError(ex, "PostgreSQL connection failure while processing login.");
-            ModelState.AddModelError(string.Empty, "Login is temporarily unavailable. Please try again later.");
+            ModelState.AddModelError(string.Empty, GenericLoginUnavailableNotice);
             return View(model);
         }
 
@@ -131,7 +133,7 @@ public class AccountController : Controller
                 return View(model);
             }
 
-            ModelState.AddModelError(string.Empty, "Invalid email or password.");
+            ModelState.AddModelError(string.Empty, GenericInvalidCredentialsNotice);
             return View(model);
         }
 
