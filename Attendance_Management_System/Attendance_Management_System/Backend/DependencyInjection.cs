@@ -3,10 +3,8 @@ using Attendance_Management_System.Backend.Constants;
 using Attendance_Management_System.Backend.Entities;
 using Attendance_Management_System.Backend.Enums;
 using Attendance_Management_System.Backend.Helpers;
-using Attendance_Management_System.Backend.Interfaces.Repositories;
 using Attendance_Management_System.Backend.Interfaces.Services;
 using Attendance_Management_System.Backend.Persistence;
-using Attendance_Management_System.Backend.Repositories;
 using Attendance_Management_System.Backend.Services;
 using Attendance_Management_System.Backend.Security;
 using System.Globalization;
@@ -115,10 +113,6 @@ public static class DependencyInjection
                 return Task.CompletedTask;
             };
         });
-
-        // Register generic repository pattern for data access
-        services.AddScoped(typeof(IRepository<>), typeof(GenericRepository<>));
-        services.AddScoped<IUnitOfWork, UnitOfWork>();
 
         // Register application services for business logic
         services.AddScoped<IAuthService, AuthService>();
