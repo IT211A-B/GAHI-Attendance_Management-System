@@ -1,0 +1,167 @@
+@model Attendance_Management_System.Backend.ViewModels.Sections.SectionAttendanceIndexViewModel
+@{
+    ViewData["Title"] = "Attendance Checklist";
+}
+
+<section class="panel">
+    <h3>Attendance Checklist</h3>
+    <p class="muted">Choose a section, schedule, and date, then mark or correct attendance directly from the student
+        list.</p>
+
+        @if (TempData["SectionAttendanceSuccess"] is string attendanceSuccess)
+        {
+            <p class="status-pill active">@attendanceSuccess</p>
+        }
+
+        @if (TempData["SectionAttendanceError"] is string attendanceError)
+        {
+            <p class="form-validation">@attendanceError</p>
+        }
+
+        @if (!string.IsNullOrWhiteSpace(Model.ErrorMessage))
+        {
+            <p class="form-validation">@Model.ErrorMessage</p>
+        }
+
+        <form method="get" class="filters-grid three">
+            <div>
+                <label for="sectionId">Section</label>
+                <select id="sectionId" name="sectionId" class="input-select">
+                    @if (!Model.SectionOptions.Any())
+                    {
+                        <option value="">No sections available</option>
+                    }
+                    else
+                    {
+                        @foreach (var sectionOption in Model.SectionOptions)
+                        {
+                            <option value="@sectionOption.Id" selected="@(Model.SelectedSectionId == sectionOption.Id)">
+                                @sectionOption.Name</option>
+                            }
+                        }
+                    </select>
+                </div>
+
+                <div>
+                    <label for="scheduleId">Schedule</label>
+                    <select id="scheduleId" name="scheduleId" class="input-select">
+                        @if (!Model.AttendanceSchedules.Any())
+                        {
+                            <option value="">No schedule available</option>
+                        }
+                        else
+                        {
+                            @foreach (var schedule in Model.AttendanceSchedules)
+                            {
+                                <option value="@schedule.Id" selected="@(Model.SelectedAttendanceScheduleId == schedule.Id)">
+                                    @schedule.Label
+                                </option>
+                            }
+                        }
+                    </select>
+                </div>
+
+                <div>
+                    <label for="attendanceDate">Date</label>
+                    <input id="attendanceDate" name="attendanceDate" type="date" class="input-select"
+                           value="@Model.SelectedAttendanceDate.ToString("yyyy-MM-dd")" />
+                </div>
+
+                <button type="submit" class="btn-primary btn-inline">Load Student List</button>
+            </form>
+
+            @if (!string.IsNullOrWhiteSpace(Model.AttendanceErrorMessage))
+            {
+                <p class="form-validation">@Model.AttendanceErrorMessage</p>
+            }
+            else if (!Model.SelectedSectionId.HasValue)
+            {
+                <p class="footer-note">Select a section first to mark attendance.</p>
+            }
+            else if (!Model.AttendanceSchedules.Any())
+            {
+                <p class="footer-note">No schedules found for this section.</p>
+            }
+            else if (!Model.AttendanceStudents.Any())
+            {
+                <p class="footer-note">No students found in this section.</p>
+            }
+            else
+            {
+                <section class="grid-4 compact-gap">
+                    <article class="stat-card">
+                        <p class="stat-title">Total</p>
+                        <p class="stat-value">@Model.AttendanceTotalStudents</p>
+                    </article>
+                    <article class="stat-card">
+                        <p class="stat-title">Present</p>
+                        <p class="stat-value success">@Model.AttendancePresentCount</p>
+                    </article>
+                    <article class="stat-card">
+                        <p class="stat-title">Late</p>
+                        <p class="stat-value warning">@Model.AttendanceLateCount</p>
+                    </article>
+                    <article class="stat-card">
+                        <p class="stat-title">Absent</p>
+                        <p class="stat-value danger">@Model.AttendanceAbsentCount</p>
+                    </article>
+                    <article class="stat-card">
+                        <p class="stat-title">Unmarked</p>
+                        <p class="stat-value">@Model.AttendanceUnmarkedCount</p>
+                    </article>
+                </section>
+
+                <div class="table-wrap">
+                    <table class="app-table">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Student Number</th>
+                                <th>Full Name</th>
+                                <th>Year</th>
+                                <th>Course</th>
+                                <th>Status</th>
+                                <th>Time In</th>
+                                <th>Remarks</th>
+                                <th>Marked By</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var student in Model.AttendanceStudents)
+                            {
+                                <tr>
+                                    <td>@student.StudentId</td>
+                                    <td>@student.StudentNumber</td>
+                                    <td>@student.FullName</td>
+                                    <td>@student.YearLevel</td>
+                                    <td>@student.CourseText</td>
+                                    <td>
+                                        <span class="status-pill @student.StatusClass">@student.StatusLabel</span>
+                                    </td>
+                                    <td>@student.ExistingTimeIn</td>
+                                    <td>@student.ExistingRemarks</td>
+                                    <td>@student.MarkerName</td>
+                                    <td>
+                                        <form asp-controller="SectionAttendance" asp-action="MarkSectionAttendance" method="post"
+                                              class="stack-form">
+                                            @Html.AntiForgeryToken()
+                                            <input type="hidden" name="SectionId" value="@Model.SelectedSectionId" />
+                                            <input type="hidden" name="ScheduleId" value="@Model.SelectedAttendanceScheduleId" />
+                                            <input type="hidden" name="StudentId" value="@student.StudentId" />
+                                            <input type="hidden" name="Date"
+                                                   value="@Model.SelectedAttendanceDate.ToString("yyyy-MM-dd")" />
+                                            <input type="time" name="TimeIn" class="input-select compact-input"
+                                                   value="@student.ExistingTimeInValue" />
+                                            <input type="text" name="Remarks" class="input-select compact-input"
+                                                   value="@student.EditableRemarksValue" placeholder="Optional remarks" />
+                                            <button type="submit" class="btn-primary btn-xs">@student.ActionLabel</button>
+                                        </form>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </section>

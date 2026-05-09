@@ -10,4 +10,7 @@ public abstract class EntityBase
 
     // Timestamp when the entity was created, defaults to current UTC time
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+
+    // Timestamp when the entity was last updated
+    public DateTimeOffset? UpdatedAt { get; set; }
 }

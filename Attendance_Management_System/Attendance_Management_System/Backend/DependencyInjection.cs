@@ -1,10 +1,10 @@
 using Attendance_Management_System.Backend.Configuration;
 using Attendance_Management_System.Backend.Constants;
 using Attendance_Management_System.Backend.Entities;
-using Attendance_Management_System.Backend.Interfaces.Repositories;
+using Attendance_Management_System.Backend.Enums;
+using Attendance_Management_System.Backend.Helpers;
 using Attendance_Management_System.Backend.Interfaces.Services;
 using Attendance_Management_System.Backend.Persistence;
-using Attendance_Management_System.Backend.Repositories;
 using Attendance_Management_System.Backend.Services;
 using Attendance_Management_System.Backend.Security;
 using System.Globalization;
@@ -55,6 +55,7 @@ public static class DependencyInjection
         var configuredRateLimiting = configuration
             .GetSection(RateLimitingSettings.SectionName)
             .Get<RateLimitingSettings>();
+        // Bad rate-limit config should not block startup; safe defaults keep the app usable.
         var rateLimitingSettings = configuredRateLimiting?.IsValid() == true
             ? configuredRateLimiting
             : RateLimitingSettings.Default;
@@ -114,13 +115,10 @@ public static class DependencyInjection
             };
         });
 
-        // Register generic repository pattern for data access
-        services.AddScoped(typeof(IRepository<>), typeof(GenericRepository<>));
-        services.AddScoped<IUnitOfWork, UnitOfWork>();
-
         // Register application services for business logic
         services.AddScoped<IAuthService, AuthService>();
         services.AddScoped<IDashboardService, DashboardService>();
+        services.AddScoped<ISectionPageService, SectionPageService>();
         services.AddScoped<IAttendanceService, AttendanceService>();
         services.AddScoped<IAttendanceQrService, AttendanceQrService>();
         services.AddScoped<IEnrollmentService, EnrollmentService>();
@@ -147,11 +145,11 @@ public static class DependencyInjection
         // Define role-based authorization policies for access control
         services.AddAuthorization(options =>
         {
-            options.AddPolicy("AdminOnly", policy => policy.RequireRole("admin"));
-            options.AddPolicy("TeacherOnly", policy => policy.RequireRole("teacher"));
-            options.AddPolicy("StudentOnly", policy => policy.RequireRole("student"));
-            options.AddPolicy("AdminOrTeacher", policy => policy.RequireRole("admin", "teacher"));
-            options.AddPolicy("AllRoles", policy => policy.RequireRole("admin", "teacher", "student"));
+            options.AddPolicy("AdminOnly", policy => policy.RequireRole(UserRole.Admin.ToStorageValue()));
+            options.AddPolicy("TeacherOnly", policy => policy.RequireRole(UserRole.Teacher.ToStorageValue()));
+            options.AddPolicy("StudentOnly", policy => policy.RequireRole(UserRole.Student.ToStorageValue()));
+            options.AddPolicy("AdminOrTeacher", policy => policy.RequireRole(UserRole.Admin.ToStorageValue(), UserRole.Teacher.ToStorageValue()));
+            options.AddPolicy("AllRoles", policy => policy.RequireRole(UserRole.Admin.ToStorageValue(), UserRole.Teacher.ToStorageValue(), UserRole.Student.ToStorageValue()));
         });
 
         services.AddRateLimiter(options =>
@@ -230,6 +228,7 @@ public static class DependencyInjection
 
     private static string BuildRateLimitPartitionKey(HttpContext httpContext)
     {
+        // Signed-in users share a bucket by account; anonymous requests fall back to IP.
         if (httpContext.User.Identity?.IsAuthenticated == true)
         {
             var userId = httpContext.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
@@ -251,6 +250,7 @@ public static class DependencyInjection
 
     private static bool ShouldReturnJsonRateLimitResponse(HttpRequest request)
     {
+        // API clients should receive a machine-readable 429 instead of a browser-style response.
         if (request.Path.StartsWithSegments("/attendance/qr/options")
             || request.Path.StartsWithSegments("/attendance/qr/sessions")
             || request.Path.Equals("/attendance/qr/checkins", StringComparison.OrdinalIgnoreCase))
@@ -293,6 +293,7 @@ public static class DependencyInjection
 
     private static bool IsQrApiRequest(HttpRequest request)
     {
+        // QR endpoints should return status codes instead of redirecting anonymous users to HTML pages.
         if (!request.Path.StartsWithSegments("/attendance/qr", out var remaining))
         {
             return false;

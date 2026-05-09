@@ -189,7 +189,7 @@ public class TeacherHistoryService : ITeacherHistoryService
                 Date = filterDate,
                 TimeIn = null,
                 TimeOut = null,
-                Remarks = "Unmarked",
+                Remarks = AttendancePolicy.ToLabel(AttendanceStatusKind.Unmarked),
                 MarkedAt = DateTimeOffset.MinValue,
                 MarkedBy = 0,
                 MarkerName = null,

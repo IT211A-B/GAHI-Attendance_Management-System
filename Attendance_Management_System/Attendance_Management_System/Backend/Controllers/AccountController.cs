@@ -1,7 +1,6 @@
 using Attendance_Management_System.Backend.DTOs.Requests;
 using Attendance_Management_System.Backend.Entities;
 using Attendance_Management_System.Backend.Interfaces.Services;
-using Attendance_Management_System.Backend.Persistence;
 using Attendance_Management_System.Backend.Constants;
 using Attendance_Management_System.Backend.Helpers;
 using Attendance_Management_System.Backend.ViewModels.Auth;
@@ -9,7 +8,6 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
-using Microsoft.EntityFrameworkCore;
 using Npgsql;
 
 namespace Attendance_Management_System.Backend.Controllers;
@@ -24,7 +22,6 @@ public class AccountController : Controller
     private readonly IAuthService _authService;
     private readonly ICoursesService _coursesService;
     private readonly IAcademicYearsService _academicYearsService;
-    private readonly AppDbContext _context;
     private readonly ILogger<AccountController> _logger;
 
     public AccountController(
@@ -33,7 +30,6 @@ public class AccountController : Controller
         IAuthService authService,
         ICoursesService coursesService,
         IAcademicYearsService academicYearsService,
-        AppDbContext context,
         ILogger<AccountController> logger)
     {
         _signInManager = signInManager;
@@ -41,7 +37,6 @@ public class AccountController : Controller
         _authService = authService;
         _coursesService = coursesService;
         _academicYearsService = academicYearsService;
-        _context = context;
         _logger = logger;
     }
 
@@ -49,6 +44,7 @@ public class AccountController : Controller
     [AllowAnonymous]
     public IActionResult Login(string? returnUrl = null)
     {
+        // Signed-in users should skip the login form and go straight to the dashboard.
         if (User.Identity?.IsAuthenticated == true)
         {
             return RedirectToAction("Index", "Dashboard");
@@ -66,6 +62,7 @@ public class AccountController : Controller
     [AllowAnonymous]
     public IActionResult ForgotPassword()
     {
+        // The form stays public, but authenticated users do not need to reset their password.
         if (User.Identity?.IsAuthenticated == true)
         {
             return RedirectToAction("Index", "Dashboard");
@@ -79,6 +76,7 @@ public class AccountController : Controller
     [AllowAnonymous]
     public async Task<IActionResult> Signup()
     {
+        // The signup page needs its dependent dropdowns populated before the view renders.
         if (User.Identity?.IsAuthenticated == true)
         {
             return RedirectToAction("Index", "Dashboard");
@@ -99,8 +97,6 @@ public class AccountController : Controller
         {
             return View(model);
         }
-
-        await EnsureReviewedStudentAccountCanSignInAsync(model.Email);
 
         Microsoft.AspNetCore.Identity.SignInResult result;
         try
@@ -128,6 +124,7 @@ public class AccountController : Controller
         {
             if (result.IsNotAllowed)
             {
+                // A blocked sign-in here usually means the account exists but email verification is still pending.
                 ViewData["EmailVerificationRequired"] = true;
                 ViewData["EmailVerificationAddress"] = model.Email;
                 ModelState.AddModelError(string.Empty, "Please verify your email before signing in. You can request a new verification link below.");
@@ -157,6 +154,7 @@ public class AccountController : Controller
             return View(model);
         }
 
+        // Keep the response generic so the endpoint does not reveal whether the email exists.
         var request = new ForgotPasswordRequest
         {
             Email = model.Email.Trim()
@@ -183,6 +181,7 @@ public class AccountController : Controller
             return RedirectToAction("Index", "Dashboard");
         }
 
+        // Rebuild the options before validation runs so any errors can re-render the same choices.
         await PopulateSignupOptionsAsync(model);
 
         if (!ModelState.IsValid)
@@ -252,6 +251,7 @@ public class AccountController : Controller
             Token = token ?? string.Empty
         };
 
+        // Invalid links still render the page so the user sees the error in context.
         if (userId <= 0 || string.IsNullOrWhiteSpace(token))
         {
             ModelState.AddModelError(string.Empty, "Invalid or expired password reset link.");
@@ -393,35 +393,5 @@ public class AccountController : Controller
     {
         var trimmed = value?.Trim();
         return string.IsNullOrWhiteSpace(trimmed) ? null : trimmed;
-    }
-
-    private async Task EnsureReviewedStudentAccountCanSignInAsync(string? email)
-    {
-        if (string.IsNullOrWhiteSpace(email))
-        {
-            return;
-        }
-
-        var user = await _userManager.FindByEmailAsync(email.Trim());
-        if (user == null || user.Role != "student" || user.EmailConfirmed)
-        {
-            return;
-        }
-
-        var hasReviewedEnrollment = await _context.Enrollments
-            .AsNoTracking()
-            .AnyAsync(enrollment =>
-                (enrollment.Status == "approved" || enrollment.Status == "rejected")
-                && enrollment.Student != null
-                && enrollment.Student.UserId == user.Id);
-
-        if (!hasReviewedEnrollment)
-        {
-            return;
-        }
-
-        user.IsActive = true;
-        user.EmailConfirmed = true;
-        await _userManager.UpdateAsync(user);
     }
 }

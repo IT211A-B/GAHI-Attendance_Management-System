@@ -6,6 +6,7 @@ using Attendance_Management_System.Backend.Constants;
 using Attendance_Management_System.Backend.DTOs.Requests;
 using Attendance_Management_System.Backend.DTOs.Responses;
 using Attendance_Management_System.Backend.Entities;
+using Attendance_Management_System.Backend.Enums;
 using Attendance_Management_System.Backend.Helpers;
 using Attendance_Management_System.Backend.Interfaces.Services;
 using Attendance_Management_System.Backend.Persistence;
@@ -512,7 +513,7 @@ public class AttendanceQrService : IAttendanceQrService
 
     public async Task<AttendanceQrCheckinResultDto> SubmitCheckinAsync(int userId, string role, SubmitAttendanceQrCheckinRequest request)
     {
-        if (!string.Equals(role, "student", StringComparison.OrdinalIgnoreCase))
+        if (!role.IsRole(UserRole.Student))
         {
             throw new UnauthorizedAccessException("Only students can submit QR check-ins.");
         }
@@ -572,13 +573,14 @@ public class AttendanceQrService : IAttendanceQrService
             throw new KeyNotFoundException("No active academic year found.");
         }
 
+        var approvedEnrollmentStatus = EnrollmentStatus.Approved.ToStorageValue();
         var hasApprovedEnrollment = await _context.Enrollments
             .AsNoTracking()
             .AnyAsync(enrollment =>
                 enrollment.StudentId == student.Id
                 && enrollment.SectionId == session.SectionId
                 && enrollment.AcademicYearId == activeAcademicYearId.Value
-                && enrollment.Status == "approved");
+                && enrollment.Status == approvedEnrollmentStatus);
 
         // Require both approved enrollment and current section assignment.
         if (!hasApprovedEnrollment || student.SectionId != session.SectionId)
@@ -646,7 +648,7 @@ public class AttendanceQrService : IAttendanceQrService
         {
             SessionId = session.SessionId,
             Status = normalizedStatus,
-            Message = normalizedStatus == "late"
+            Message = normalizedStatus == AttendanceStatusKind.Late.ToStorageValue()
                 ? "Attendance submitted. You are marked late."
                 : "Attendance submitted successfully.",
             RecordedAtUtc = checkin.CheckedInAtUtc
@@ -658,8 +660,8 @@ public class AttendanceQrService : IAttendanceQrService
     private async Task<(bool Success, int TeacherId, DateOnly SchoolDate, string ErrorMessage)> ResolveOwnerContextAsync(int userId, string role)
     {
         // Admin is accepted here only when the account is linked to a teacher profile.
-        var isTeacherRole = string.Equals(role, "teacher", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(role, "admin", StringComparison.OrdinalIgnoreCase);
+        var isTeacherRole = role.IsRole(UserRole.Teacher)
+            || role.IsRole(UserRole.Admin);
 
         if (!isTeacherRole)
         {
@@ -956,9 +958,13 @@ public class AttendanceQrService : IAttendanceQrService
     private static string NormalizeStatus(string? statusLabel)
     {
         // Live feed currently supports compact "present" and "late" status values.
-        return string.Equals(statusLabel, "Late", StringComparison.OrdinalIgnoreCase)
-            ? "late"
-            : "present";
+        if (EnumStorage.TryParseAttendanceStatus(statusLabel, out var parsedStatus)
+            && parsedStatus == AttendanceStatusKind.Late)
+        {
+            return AttendanceStatusKind.Late.ToStorageValue();
+        }
+
+        return AttendanceStatusKind.Present.ToStorageValue();
     }
 
     private sealed class AttendanceQrTokenPayload

@@ -3,7 +3,7 @@ namespace Attendance_Management_System.Tests;
 public class EnrollmentServiceApprovalTests
 {
     [Fact]
-    public async Task UpdateEnrollmentStatusAsync_Approved_ConfirmsStudentUserAndAssignsSection()
+    public async Task UpdateEnrollmentStatusAsync_Approved_ActivatesStudentUserWithoutAutoConfirmingEmail_AndAssignsSection()
     {
         await using var context = CreateContext();
         var notificationServiceMock = new Mock<INotificationService>();
@@ -150,11 +150,11 @@ public class EnrollmentServiceApprovalTests
         Assert.Equal("approved", updatedEnrollment.Status);
         Assert.Equal(section.Id, updatedStudent.SectionId);
         Assert.True(updatedUser.IsActive);
-        Assert.True(updatedUser.EmailConfirmed);
+        Assert.False(updatedUser.EmailConfirmed);
     }
 
     [Fact]
-    public async Task UpdateEnrollmentStatusAsync_Rejected_KeepsEmailBoundAndUnlocksSignIn()
+    public async Task UpdateEnrollmentStatusAsync_Rejected_KeepsEmailUnconfirmed_WhileActivatingAccount()
     {
         await using var context = CreateContext();
         var notificationServiceMock = new Mock<INotificationService>();
@@ -306,7 +306,7 @@ public class EnrollmentServiceApprovalTests
         Assert.Equal("Missing admission requirements.", updatedEnrollment.RejectionReason);
         Assert.Null(updatedStudent.SectionId);
         Assert.True(updatedUser.IsActive);
-        Assert.True(updatedUser.EmailConfirmed);
+        Assert.False(updatedUser.EmailConfirmed);
     }
 
     [Fact]

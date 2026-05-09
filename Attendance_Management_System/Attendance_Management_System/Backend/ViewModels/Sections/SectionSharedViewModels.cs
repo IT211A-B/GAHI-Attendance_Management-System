@@ -3,42 +3,6 @@ using Attendance_Management_System.Backend.Enums;
 
 namespace Attendance_Management_System.Backend.ViewModels.Sections;
 
-public class SectionsIndexViewModel
-{
-    public IReadOnlyList<SectionListItemViewModel> Sections { get; set; } = [];
-    public IReadOnlyList<SectionOptionViewModel> SectionOptions { get; set; } = [];
-    public IReadOnlyList<SectionReferenceOptionViewModel> TimetableSubjects { get; set; } = [];
-    public IReadOnlyList<SectionTeacherOptionViewModel> TeacherOptions { get; set; } = [];
-    public IReadOnlyList<SectionReferenceOptionViewModel> AcademicPeriods { get; set; } = [];
-    public IReadOnlyList<SectionReferenceOptionViewModel> Courses { get; set; } = [];
-    public IReadOnlyList<SectionSubjectReferenceOptionViewModel> Subjects { get; set; } = [];
-    public IReadOnlyList<SectionReferenceOptionViewModel> Classrooms { get; set; } = [];
-    public IReadOnlyList<SectionTimetableRowViewModel> TimetableRows { get; set; } = [];
-    public IReadOnlyList<SectionAttendanceScheduleOptionViewModel> AttendanceSchedules { get; set; } = [];
-    public IReadOnlyList<SectionAttendanceStudentRowViewModel> AttendanceStudents { get; set; } = [];
-    public CreateSectionFormViewModel CreateForm { get; set; } = new();
-    public int? SelectedSectionId { get; set; }
-    public int? SelectedAttendanceScheduleId { get; set; }
-    public DateOnly SelectedAttendanceDate { get; set; } = DateOnly.FromDateTime(DateTime.Today);
-    public string SelectedSectionName { get; set; } = string.Empty;
-    public int SelectedSectionSubjectId { get; set; }
-    public string SelectedSectionSubjectName { get; set; } = string.Empty;
-    public bool IsAdmin { get; set; }
-    public bool IsTeacher { get; set; }
-    public bool IsCurrentTeacherAssignedToSelectedSection { get; set; }
-    public int AttendanceTotalStudents { get; set; }
-    public int AttendancePresentCount { get; set; }
-    public int AttendanceLateCount { get; set; }
-    public int AttendanceAbsentCount { get; set; }
-    public int AttendanceUnmarkedCount { get; set; }
-    public string? ErrorMessage { get; set; }
-    public string? CreateSectionOptionsErrorMessage { get; set; }
-    public string? TeacherOptionsErrorMessage { get; set; }
-    public string? TimetableErrorMessage { get; set; }
-    public string? TimetableSubjectsErrorMessage { get; set; }
-    public string? AttendanceErrorMessage { get; set; }
-}
-
 public class SectionOptionViewModel
 {
     public int Id { get; set; }
@@ -117,7 +81,7 @@ public class SectionAttendanceStudentRowViewModel
     public int YearLevel { get; set; }
     public string CourseText { get; set; } = "-";
     public bool IsMarked { get; set; }
-    public string StatusLabel { get; set; } = "Unmarked";
+    public string StatusLabel { get; set; } = AttendanceStatusKind.Unmarked.ToString();
     public string StatusClass { get; set; } = "inactive";
     public string ExistingTimeIn { get; set; } = "-";
     public string ExistingTimeInValue { get; set; } = string.Empty;

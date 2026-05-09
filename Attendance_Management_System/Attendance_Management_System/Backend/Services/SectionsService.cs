@@ -15,6 +15,8 @@ namespace Attendance_Management_System.Backend.Services;
 // Service handling all section-related business logic
 public class SectionsService : ISectionsService
 {
+    private static readonly string ApprovedEnrollmentStatus = EnrollmentStatus.Approved.ToStorageValue();
+
     private readonly AppDbContext _context;
     private readonly EnrollmentSettings _enrollmentSettings;
 
@@ -28,7 +30,7 @@ public class SectionsService : ISectionsService
     }
 
     // Retrieves all sections with related entity names (academic year, course, subject, classroom)
-    public async Task<List<SectionDto>> GetAllSectionsAsync()
+    public async Task<List<SectionDto>> GetAllSectionsAsync(CancellationToken cancellationToken = default)
     {
         var sections = await _context.Sections
             .Include(s => s.AcademicYear)
@@ -50,17 +52,17 @@ public class SectionsService : ISectionsService
                 ClassroomName = s.Classroom != null ? s.Classroom.Name : null,
                 CreatedAt = s.CreatedAt
             })
-            .ToListAsync();
+            .ToListAsync(cancellationToken);
 
         return sections;
     }
 
-    public async Task<List<SectionDto>> GetSectionsByTeacherUserIdAsync(int teacherUserId)
+    public async Task<List<SectionDto>> GetSectionsByTeacherUserIdAsync(int teacherUserId, CancellationToken cancellationToken = default)
     {
         var teacherId = await _context.Teachers
             .Where(teacher => teacher.UserId == teacherUserId)
             .Select(teacher => (int?)teacher.Id)
-            .FirstOrDefaultAsync();
+            .FirstOrDefaultAsync(cancellationToken);
 
         if (!teacherId.HasValue)
         {
@@ -76,7 +78,7 @@ public class SectionsService : ISectionsService
                 .Where(schedule => schedule.TeacherId == teacherId.Value)
                 .Select(schedule => schedule.SectionId))
             .Distinct()
-            .ToListAsync();
+            .ToListAsync(cancellationToken);
 
         var sections = await _context.Sections
             .Include(section => section.AcademicYear)
@@ -100,20 +102,20 @@ public class SectionsService : ISectionsService
                 ClassroomName = section.Classroom != null ? section.Classroom.Name : null,
                 CreatedAt = section.CreatedAt
             })
-            .ToListAsync();
+            .ToListAsync(cancellationToken);
 
         return sections;
     }
 
     // Retrieves a single section by ID with related entity details
-    public async Task<SectionDto> GetSectionByIdAsync(int id)
+    public async Task<SectionDto> GetSectionByIdAsync(int id, CancellationToken cancellationToken = default)
     {
         var section = await _context.Sections
             .Include(s => s.AcademicYear)
             .Include(s => s.Course)
             .Include(s => s.Subject)
             .Include(s => s.Classroom)
-            .FirstOrDefaultAsync(s => s.Id == id);
+            .FirstOrDefaultAsync(s => s.Id == id, cancellationToken);
 
         // Return error if section doesn't exist
         if (section == null)
@@ -140,10 +142,10 @@ public class SectionsService : ISectionsService
     }
 
     // Retrieves all sections for a specific academic year
-    public async Task<List<SectionDto>> GetSectionsByAcademicYearIdAsync(int academicYearId)
+    public async Task<List<SectionDto>> GetSectionsByAcademicYearIdAsync(int academicYearId, CancellationToken cancellationToken = default)
     {
         // Validate academic year exists before querying sections
-        var academicYearExists = await _context.AcademicYears.AnyAsync(ay => ay.Id == academicYearId);
+        var academicYearExists = await _context.AcademicYears.AnyAsync(ay => ay.Id == academicYearId, cancellationToken);
         if (!academicYearExists)
         {
             throw new KeyNotFoundException("Academic year not found.");
@@ -170,15 +172,15 @@ public class SectionsService : ISectionsService
                 ClassroomName = s.Classroom != null ? s.Classroom.Name : null,
                 CreatedAt = s.CreatedAt
             })
-            .ToListAsync();
+            .ToListAsync(cancellationToken);
 
         return sections;
     }
 
-    public async Task<SectionDto> CreateSectionAsync(CreateSectionRequest request)
+    public async Task<SectionDto> CreateSectionAsync(CreateSectionRequest request, CancellationToken cancellationToken = default)
     {
         // Validate academic year exists
-        var academicYearExists = await _context.AcademicYears.AnyAsync(ay => ay.Id == request.AcademicYearId);
+        var academicYearExists = await _context.AcademicYears.AnyAsync(ay => ay.Id == request.AcademicYearId, cancellationToken);
         if (!academicYearExists)
         {
             throw new InvalidOperationException("Academic year not found.");
@@ -187,7 +189,7 @@ public class SectionsService : ISectionsService
         // Validate course exists
         var course = await _context.Courses
             .AsNoTracking()
-            .FirstOrDefaultAsync(selectedCourse => selectedCourse.Id == request.CourseId);
+            .FirstOrDefaultAsync(selectedCourse => selectedCourse.Id == request.CourseId, cancellationToken);
         if (course == null)
         {
             throw new InvalidOperationException("Course not found.");
@@ -203,7 +205,7 @@ public class SectionsService : ISectionsService
         var subjectCourseId = await _context.Subjects
             .Where(subject => subject.Id == request.SubjectId)
             .Select(subject => (int?)subject.CourseId)
-            .FirstOrDefaultAsync();
+            .FirstOrDefaultAsync(cancellationToken);
 
         if (!subjectCourseId.HasValue)
         {
@@ -216,7 +218,7 @@ public class SectionsService : ISectionsService
         }
 
         // Validate classroom exists
-        var classroomExists = await _context.Classrooms.AnyAsync(c => c.Id == request.ClassroomId);
+        var classroomExists = await _context.Classrooms.AnyAsync(c => c.Id == request.ClassroomId, cancellationToken);
         if (!classroomExists)
         {
             throw new InvalidOperationException("Classroom not found.");
@@ -233,16 +235,16 @@ public class SectionsService : ISectionsService
         };
 
         _context.Sections.Add(section);
-        await _context.SaveChangesAsync();
+        await _context.SaveChangesAsync(cancellationToken);
 
-        var dto = await BuildSectionDtoAsync(section);
+        var dto = await BuildSectionDtoAsync(section, cancellationToken);
 
         return dto;
     }
 
-    public async Task<SectionDto> UpdateSectionAsync(int id, UpdateSectionRequest request)
+    public async Task<SectionDto> UpdateSectionAsync(int id, UpdateSectionRequest request, CancellationToken cancellationToken = default)
     {
-        var section = await _context.Sections.FindAsync(id);
+        var section = await _context.Sections.FindAsync(new object[] { id }, cancellationToken);
 
         if (section == null)
         {
@@ -252,7 +254,7 @@ public class SectionsService : ISectionsService
         // Validate academic year exists if being changed
         if (request.AcademicYearId.HasValue && request.AcademicYearId != section.AcademicYearId)
         {
-            var academicYearExists = await _context.AcademicYears.AnyAsync(ay => ay.Id == request.AcademicYearId.Value);
+            var academicYearExists = await _context.AcademicYears.AnyAsync(ay => ay.Id == request.AcademicYearId.Value, cancellationToken);
             if (!academicYearExists)
             {
                 throw new InvalidOperationException("Academic year not found.");
@@ -262,7 +264,7 @@ public class SectionsService : ISectionsService
         // Validate course exists if being changed
         if (request.CourseId.HasValue && request.CourseId != section.CourseId)
         {
-            var courseExists = await _context.Courses.AnyAsync(c => c.Id == request.CourseId.Value);
+            var courseExists = await _context.Courses.AnyAsync(c => c.Id == request.CourseId.Value, cancellationToken);
             if (!courseExists)
             {
                 throw new InvalidOperationException("Course not found.");
@@ -272,7 +274,7 @@ public class SectionsService : ISectionsService
         // Validate subject exists if being changed
         if (request.SubjectId.HasValue && request.SubjectId != section.SubjectId)
         {
-            var subjectExists = await _context.Subjects.AnyAsync(s => s.Id == request.SubjectId.Value);
+            var subjectExists = await _context.Subjects.AnyAsync(s => s.Id == request.SubjectId.Value, cancellationToken);
             if (!subjectExists)
             {
                 throw new InvalidOperationException("Subject not found.");
@@ -282,7 +284,7 @@ public class SectionsService : ISectionsService
         // Validate classroom exists if being changed
         if (request.ClassroomId.HasValue && request.ClassroomId != section.ClassroomId)
         {
-            var classroomExists = await _context.Classrooms.AnyAsync(c => c.Id == request.ClassroomId.Value);
+            var classroomExists = await _context.Classrooms.AnyAsync(c => c.Id == request.ClassroomId.Value, cancellationToken);
             if (!classroomExists)
             {
                 throw new InvalidOperationException("Classroom not found.");
@@ -294,7 +296,7 @@ public class SectionsService : ISectionsService
 
         var targetCourse = await _context.Courses
             .AsNoTracking()
-            .FirstOrDefaultAsync(selectedCourse => selectedCourse.Id == targetCourseId);
+            .FirstOrDefaultAsync(selectedCourse => selectedCourse.Id == targetCourseId, cancellationToken);
 
         if (targetCourse == null)
         {
@@ -320,16 +322,16 @@ public class SectionsService : ISectionsService
         if (request.ClassroomId.HasValue)
             section.ClassroomId = request.ClassroomId.Value;
 
-        await _context.SaveChangesAsync();
+        await _context.SaveChangesAsync(cancellationToken);
 
-        var dto = await BuildSectionDtoAsync(section);
+        var dto = await BuildSectionDtoAsync(section, cancellationToken);
 
         return dto;
     }
 
-    public async Task DeleteSectionAsync(int id)
+    public async Task DeleteSectionAsync(int id, CancellationToken cancellationToken = default)
     {
-        var section = await _context.Sections.FindAsync(id);
+        var section = await _context.Sections.FindAsync(new object[] { id }, cancellationToken);
 
         if (section == null)
         {
@@ -337,28 +339,28 @@ public class SectionsService : ISectionsService
         }
 
         // Check if section has enrollments
-        var hasEnrollments = await _context.Enrollments.AnyAsync(e => e.SectionId == id);
+        var hasEnrollments = await _context.Enrollments.AnyAsync(e => e.SectionId == id, cancellationToken);
         if (hasEnrollments)
         {
             throw new InvalidOperationException("Cannot delete section that has enrollments.");
         }
 
         _context.Sections.Remove(section);
-        await _context.SaveChangesAsync();
+        await _context.SaveChangesAsync(cancellationToken);
 
         return;
     }
 
-    private async Task<SectionDto> BuildSectionDtoAsync(Section section)
+    private async Task<SectionDto> BuildSectionDtoAsync(Section section, CancellationToken cancellationToken = default)
     {
-        var academicYear = await _context.AcademicYears.FindAsync(section.AcademicYearId);
-        var course = await _context.Courses.FindAsync(section.CourseId);
-        var subject = await _context.Subjects.FindAsync(section.SubjectId);
-        var classroom = await _context.Classrooms.FindAsync(section.ClassroomId);
+        var academicYear = await _context.AcademicYears.FindAsync(new object[] { section.AcademicYearId }, cancellationToken);
+        var course = await _context.Courses.FindAsync(new object[] { section.CourseId }, cancellationToken);
+        var subject = await _context.Subjects.FindAsync(new object[] { section.SubjectId }, cancellationToken);
+        var classroom = await _context.Classrooms.FindAsync(new object[] { section.ClassroomId }, cancellationToken);
 
         // Get enrollment count for capacity status
         var enrollmentCount = await _context.Enrollments
-            .CountAsync(e => e.SectionId == section.Id && e.Status == "approved");
+            .CountAsync(e => e.SectionId == section.Id && e.Status == ApprovedEnrollmentStatus, cancellationToken);
 
         var capacityStatus = CalculateCapacityStatus(enrollmentCount);
 
@@ -383,12 +385,12 @@ public class SectionsService : ISectionsService
 
     private static readonly string[] DayNames = { "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat" };
 
-    public async Task<TimetableResponse> GetTimetableAsync(int sectionId, int? currentUserId = null)
+    public async Task<TimetableResponse> GetTimetableAsync(int sectionId, int? currentUserId = null, CancellationToken cancellationToken = default)
     {
         // Check if section exists
         var section = await _context.Sections
             .Include(s => s.Classroom)
-            .FirstOrDefaultAsync(s => s.Id == sectionId);
+            .FirstOrDefaultAsync(s => s.Id == sectionId, cancellationToken);
 
         if (section == null)
         {
@@ -402,7 +404,7 @@ public class SectionsService : ISectionsService
             currentTeacherId = await _context.Teachers
                 .Where(t => t.UserId == currentUserId.Value)
                 .Select(t => (int?)t.Id)
-                .FirstOrDefaultAsync();
+                .FirstOrDefaultAsync(cancellationToken);
         }
 
         // Get all schedules for this section
@@ -410,7 +412,7 @@ public class SectionsService : ISectionsService
             .Include(s => s.Subject)
             .Include(s => s.Teacher)
             .Where(s => s.SectionId == sectionId)
-            .ToListAsync();
+            .ToListAsync(cancellationToken);
 
         // Build timetable dictionary with all 7 days
         var timetable = new Dictionary<string, List<ScheduleSlotDto>>();
@@ -463,10 +465,10 @@ public class SectionsService : ISectionsService
         return response;
     }
 
-    public async Task<List<SectionTeacherDto>> GetSectionTeachersAsync(int sectionId)
+    public async Task<List<SectionTeacherDto>> GetSectionTeachersAsync(int sectionId, CancellationToken cancellationToken = default)
     {
         // Check if section exists
-        var sectionExists = await _context.Sections.AnyAsync(s => s.Id == sectionId);
+        var sectionExists = await _context.Sections.AnyAsync(s => s.Id == sectionId, cancellationToken);
         if (!sectionExists)
         {
             throw new KeyNotFoundException("Section not found.");
@@ -485,22 +487,22 @@ public class SectionsService : ISectionsService
                 Department = st.Teacher != null ? st.Teacher.Department : string.Empty,
                 AssignedAt = st.AssignedAt
             })
-            .ToListAsync();
+            .ToListAsync(cancellationToken);
 
         return teachers;
     }
 
-    public async Task<SectionTeacherDto> AssignTeacherToSectionAsync(int sectionId, AssignTeacherRequest request)
+    public async Task<SectionTeacherDto> AssignTeacherToSectionAsync(int sectionId, AssignTeacherRequest request, CancellationToken cancellationToken = default)
     {
         // Check if section exists
-        var section = await _context.Sections.FindAsync(sectionId);
+        var section = await _context.Sections.FindAsync(new object[] { sectionId }, cancellationToken);
         if (section == null)
         {
             throw new KeyNotFoundException("Section not found.");
         }
 
         // Check if teacher exists and is active
-        var teacher = await _context.Teachers.FindAsync(request.TeacherId);
+        var teacher = await _context.Teachers.FindAsync(new object[] { request.TeacherId }, cancellationToken);
         if (teacher == null)
         {
             throw new KeyNotFoundException("Teacher not found.");
@@ -513,7 +515,7 @@ public class SectionsService : ISectionsService
 
         // Check if assignment already exists
         var existingAssignment = await _context.SectionTeachers
-            .AnyAsync(st => st.SectionId == sectionId && st.TeacherId == request.TeacherId);
+            .AnyAsync(st => st.SectionId == sectionId && st.TeacherId == request.TeacherId, cancellationToken);
 
         if (existingAssignment)
         {
@@ -528,7 +530,7 @@ public class SectionsService : ISectionsService
         };
 
         _context.SectionTeachers.Add(sectionTeacher);
-        await _context.SaveChangesAsync();
+        await _context.SaveChangesAsync(cancellationToken);
 
         var dto = new SectionTeacherDto
         {
@@ -544,10 +546,10 @@ public class SectionsService : ISectionsService
         return dto;
     }
 
-    public async Task RemoveTeacherFromSectionAsync(int sectionId, int teacherId, bool isAdmin = false, bool removeOwnedSchedules = false)
+    public async Task RemoveTeacherFromSectionAsync(int sectionId, int teacherId, bool isAdmin = false, bool removeOwnedSchedules = false, CancellationToken cancellationToken = default)
     {
         var sectionTeacher = await _context.SectionTeachers
-            .FirstOrDefaultAsync(st => st.SectionId == sectionId && st.TeacherId == teacherId);
+            .FirstOrDefaultAsync(st => st.SectionId == sectionId && st.TeacherId == teacherId, cancellationToken);
 
         if (sectionTeacher == null)
         {
@@ -561,19 +563,19 @@ public class SectionsService : ISectionsService
         {
             var ownedScheduleIds = await teacherSchedulesQuery
                 .Select(schedule => schedule.Id)
-                .ToListAsync();
+                .ToListAsync(cancellationToken);
 
             if (ownedScheduleIds.Count > 0)
             {
                 var hasAttendance = await _context.Attendances
-                    .AnyAsync(attendance => ownedScheduleIds.Contains(attendance.ScheduleId));
+                    .AnyAsync(attendance => ownedScheduleIds.Contains(attendance.ScheduleId), cancellationToken);
 
                 if (hasAttendance)
                 {
                     throw new InvalidOperationException("Cannot unassign because one or more of your schedules already have attendance records.");
                 }
 
-                var ownedSchedules = await teacherSchedulesQuery.ToListAsync();
+                var ownedSchedules = await teacherSchedulesQuery.ToListAsync(cancellationToken);
                 _context.Schedules.RemoveRange(ownedSchedules);
             }
         }
@@ -581,7 +583,7 @@ public class SectionsService : ISectionsService
         // Non-admin users cannot remove teachers from sections that have schedules
         if (!isAdmin && !removeOwnedSchedules)
         {
-            var hasSchedules = await _context.Schedules.AnyAsync(s => s.SectionId == sectionId);
+            var hasSchedules = await _context.Schedules.AnyAsync(s => s.SectionId == sectionId, cancellationToken);
             if (hasSchedules)
             {
                 throw new InvalidOperationException("Cannot remove teacher from section with existing schedules.");
@@ -589,17 +591,17 @@ public class SectionsService : ISectionsService
         }
 
         _context.SectionTeachers.Remove(sectionTeacher);
-        await _context.SaveChangesAsync();
+        await _context.SaveChangesAsync(cancellationToken);
 
         return;
     }
 
     // Retrieves sections filtered by course and year level for enrollment purposes
-    public async Task<List<SectionDto>> GetSectionsByCourseAndYearLevelAsync(int courseId, int yearLevel, int? academicYearId = null)
+    public async Task<List<SectionDto>> GetSectionsByCourseAndYearLevelAsync(int courseId, int yearLevel, int? academicYearId = null, CancellationToken cancellationToken = default)
     {
         var course = await _context.Courses
             .AsNoTracking()
-            .FirstOrDefaultAsync(selectedCourse => selectedCourse.Id == courseId);
+            .FirstOrDefaultAsync(selectedCourse => selectedCourse.Id == courseId, cancellationToken);
 
         if (course == null)
         {
@@ -613,10 +615,7 @@ public class SectionsService : ISectionsService
         }
 
         var query = _context.Sections
-            .Include(s => s.AcademicYear)
-            .Include(s => s.Course)
-            .Include(s => s.Subject)
-            .Include(s => s.Classroom)
+            .AsNoTracking()
             .Where(s => s.CourseId == courseId && s.YearLevel == yearLevel);
 
         if (academicYearId.HasValue)
@@ -624,18 +623,45 @@ public class SectionsService : ISectionsService
             query = query.Where(s => s.AcademicYearId == academicYearId.Value);
         }
 
-        var sections = await query
+        var sectionRows = await query
             .OrderBy(s => s.Name)
-            .ToListAsync();
+            .Select(section => new
+            {
+                section.Id,
+                section.Name,
+                section.YearLevel,
+                section.AcademicYearId,
+                AcademicYearLabel = section.AcademicYear != null ? section.AcademicYear.YearLabel : null,
+                section.CourseId,
+                CourseName = section.Course != null ? section.Course.Name : null,
+                section.SubjectId,
+                SubjectName = section.Subject != null ? section.Subject.Name : null,
+                section.ClassroomId,
+                ClassroomName = section.Classroom != null ? section.Classroom.Name : null,
+                CurrentEnrollmentCount = section.Enrollments.Count(enrollment => enrollment.Status == ApprovedEnrollmentStatus),
+                section.CreatedAt
+            })
+            .ToListAsync(cancellationToken);
 
-        var dtos = new List<SectionDto>();
-        foreach (var section in sections)
-        {
-            var dto = await BuildSectionDtoAsync(section);
-            dtos.Add(dto);
-        }
-
-        return dtos;
+        return sectionRows
+            .Select(section => new SectionDto
+            {
+                Id = section.Id,
+                Name = section.Name,
+                YearLevel = section.YearLevel,
+                AcademicYearId = section.AcademicYearId,
+                AcademicYearLabel = section.AcademicYearLabel,
+                CourseId = section.CourseId,
+                CourseName = section.CourseName,
+                SubjectId = section.SubjectId,
+                SubjectName = section.SubjectName,
+                ClassroomId = section.ClassroomId,
+                ClassroomName = section.ClassroomName,
+                CurrentEnrollmentCount = section.CurrentEnrollmentCount,
+                CapacityStatus = CalculateCapacityStatus(section.CurrentEnrollmentCount).ToString(),
+                CreatedAt = section.CreatedAt
+            })
+            .ToList();
     }
 
     // Calculates the capacity status based on enrollment count

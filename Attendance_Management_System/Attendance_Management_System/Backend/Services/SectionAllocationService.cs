@@ -1,5 +1,6 @@
 using Attendance_Management_System.Backend.Configuration;
 using Attendance_Management_System.Backend.Entities;
+using Attendance_Management_System.Backend.Enums;
 using Attendance_Management_System.Backend.Helpers;
 using Attendance_Management_System.Backend.Interfaces.Services;
 using Attendance_Management_System.Backend.Persistence;
@@ -11,6 +12,8 @@ namespace Attendance_Management_System.Backend.Services;
 // Centralized section allocation policy used by signup and student enrollment flows
 public class SectionAllocationService : ISectionAllocationService
 {
+    private static readonly string ApprovedEnrollmentStatus = EnrollmentStatus.Approved.ToStorageValue();
+
     private readonly AppDbContext _context;
     private readonly EnrollmentSettings _enrollmentSettings;
 
@@ -24,6 +27,7 @@ public class SectionAllocationService : ISectionAllocationService
 
     public async Task<Section?> AllocateSectionAsync(int courseId, int academicYearId, int yearLevel)
     {
+        // Reject mismatched course or year-level requests before touching section inventory.
         var course = await _context.Courses
             .AsNoTracking()
             .FirstOrDefaultAsync(selectedCourse => selectedCourse.Id == courseId);
@@ -33,16 +37,19 @@ public class SectionAllocationService : ISectionAllocationService
             return null;
         }
 
+        // Only sections in the same course, academic year, and year level can be reused.
         var sections = await _context.Sections
             .Where(s => s.CourseId == courseId && s.AcademicYearId == academicYearId && s.YearLevel == yearLevel)
             .ToListAsync();
 
+        // Prefer an existing seat before considering new section creation.
         var bestSection = await SelectBestSectionAsync(sections);
         if (bestSection != null)
         {
             return bestSection;
         }
 
+        // Respect settings that intentionally disable automatic section growth.
         if (!_enrollmentSettings.AutoCreateSections)
         {
             return null;
@@ -59,8 +66,9 @@ public class SectionAllocationService : ISectionAllocationService
         }
 
         var sectionIds = sections.Select(s => s.Id).ToList();
+        // Measure load using approved enrollments only; pending requests should not block allocation.
         var enrollmentCounts = await _context.Enrollments
-            .Where(e => sectionIds.Contains(e.SectionId) && e.Status == "approved")
+            .Where(e => sectionIds.Contains(e.SectionId) && e.Status == ApprovedEnrollmentStatus)
             .GroupBy(e => e.SectionId)
             .ToDictionaryAsync(g => g.Key, g => g.Count());
 
@@ -80,6 +88,7 @@ public class SectionAllocationService : ISectionAllocationService
 
         if (!_enrollmentSettings.DeterministicSectionAssignment)
         {
+            // Random assignment spreads students across eligible sections when deterministic mode is off.
             var randomIndex = Random.Shared.Next(candidates.Count);
             return candidates[randomIndex].Section;
         }
@@ -101,9 +110,10 @@ public class SectionAllocationService : ISectionAllocationService
     {
         if (existingSections.Any())
         {
+            // If at least one section still has space, reuse it instead of creating a new one.
             var existingSectionIds = existingSections.Select(s => s.Id).ToList();
             var enrollmentCounts = await _context.Enrollments
-                .Where(e => existingSectionIds.Contains(e.SectionId) && e.Status == "approved")
+                .Where(e => existingSectionIds.Contains(e.SectionId) && e.Status == ApprovedEnrollmentStatus)
                 .GroupBy(e => e.SectionId)
                 .ToDictionaryAsync(g => g.Key, g => g.Count());
 
@@ -116,6 +126,7 @@ public class SectionAllocationService : ISectionAllocationService
             }
         }
 
+        // New sections need a course, a classroom, and a subject before they can be created safely.
         var course = await _context.Courses.FindAsync(courseId);
         var classroom = await _context.Classrooms.FirstOrDefaultAsync();
         var subject = await _context.Subjects.FirstOrDefaultAsync(s => s.CourseId == courseId);
@@ -125,6 +136,7 @@ public class SectionAllocationService : ISectionAllocationService
             return null;
         }
 
+        // Keep the generated section name unique within the current course/year-level set.
         var existingNames = existingSections
             .Select(section => section.Name)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);

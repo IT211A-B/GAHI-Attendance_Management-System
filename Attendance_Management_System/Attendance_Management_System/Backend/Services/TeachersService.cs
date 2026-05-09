@@ -1,6 +1,8 @@
 using Attendance_Management_System.Backend.DTOs.Requests;
 using Attendance_Management_System.Backend.DTOs.Responses;
 using Attendance_Management_System.Backend.Entities;
+using Attendance_Management_System.Backend.Enums;
+using Attendance_Management_System.Backend.Helpers;
 using Attendance_Management_System.Backend.Interfaces.Services;
 using Attendance_Management_System.Backend.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -239,7 +241,7 @@ public class TeachersService : ITeachersService
         }
 
         // Ensure user has the teacher role
-        if (user.Role != "teacher")
+        if (!user.Role.IsRole(UserRole.Teacher))
         {
             throw new InvalidOperationException("User does not have the teacher role.");
         }

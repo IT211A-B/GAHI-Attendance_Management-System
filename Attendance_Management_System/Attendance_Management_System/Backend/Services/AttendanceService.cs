@@ -334,6 +334,7 @@ public class AttendanceService : IAttendanceService
             throw new KeyNotFoundException("Section not found.");
         }
 
+        // Load the roster and the marks separately so the summary can include unmarked students.
         var students = await _context.Students
             .Where(student => student.SectionId == sectionId && student.IsActive)
             .ToListAsync();
@@ -390,7 +391,7 @@ public class AttendanceService : IAttendanceService
                 Date = date,
                 TimeIn = null,
                 TimeOut = null,
-                Remarks = "Unmarked",
+                Remarks = AttendancePolicy.ToLabel(AttendanceStatusKind.Unmarked),
                 MarkedAt = DateTimeOffset.MinValue,
                 MarkedBy = 0,
                 MarkerName = null,
@@ -401,6 +402,7 @@ public class AttendanceService : IAttendanceService
             });
         }
 
+        // Summary metrics come from real attendance rows, not the synthesized display-only placeholders.
         var presentCount = markedRecords.Count(row => AttendancePolicy.CountsAsPresent(row.Status));
         var lateCount = markedRecords.Count(row => row.Status == AttendanceStatusKind.Late);
         var absentCount = markedRecords.Count(row => row.Status == AttendanceStatusKind.Absent);
@@ -447,6 +449,7 @@ public class AttendanceService : IAttendanceService
             .OrderByDescending(attendance => attendance.Date)
             .ToListAsync();
 
+        // Resolve marker names in one batch instead of querying once per attendance row.
         var markerUserIds = attendances
             .Where(attendance => attendance.MarkedBy > 0)
             .Select(attendance => attendance.MarkedBy)
@@ -462,6 +465,7 @@ public class AttendanceService : IAttendanceService
             teacherNames.TryGetValue(attendance.MarkedBy, out var markerName);
 
             var scheduleStart = attendance.Schedule?.StartTime ?? new TimeOnly(0, 0);
+            // Status is recomputed from the schedule start time so late markers stay consistent.
             var status = AttendancePolicy.GetMarkedStatus(attendance.TimeIn, scheduleStart, _attendanceSettings);
 
             return new AttendanceDto
@@ -542,6 +546,7 @@ public class AttendanceService : IAttendanceService
                 new InvalidOperationException("Teachers cannot mark attendance for future dates."));
         }
 
+        // Backfill rules keep attendance corrections within the configured window.
         if (!AttendancePolicy.IsWithinTeacherWindow(_attendanceSettings, date, schoolToday))
         {
             return ScheduleValidationResult.Fail(
@@ -567,13 +572,13 @@ public class AttendanceService : IAttendanceService
             return ScheduleValidationResult.Fail(new KeyNotFoundException("Schedule not found for this section."));
         }
 
-        var normalizedRole = requesterRole.Trim().ToLowerInvariant();
-        if (normalizedRole == "admin")
+        if (requesterRole.IsRole(UserRole.Admin))
         {
             return ScheduleValidationResult.Pass(schedule);
         }
 
-        if (normalizedRole != "teacher")
+        // Read access is narrower than write access: admins can read any schedule, teachers only their own.
+        if (!requesterRole.IsRole(UserRole.Teacher))
         {
             return ScheduleValidationResult.Fail(new UnauthorizedAccessException("Access denied."));
         }
@@ -610,7 +615,9 @@ public class AttendanceService : IAttendanceService
         // Missing time-in is treated as absent; auto-fill that remark when caller leaves it blank.
         if (!timeIn.HasValue)
         {
-            return string.IsNullOrWhiteSpace(trimmed) ? "Absent" : trimmed;
+            return string.IsNullOrWhiteSpace(trimmed)
+                ? AttendancePolicy.ToLabel(AttendanceStatusKind.Absent)
+                : trimmed;
         }
 
         return string.IsNullOrWhiteSpace(trimmed) ? null : trimmed;

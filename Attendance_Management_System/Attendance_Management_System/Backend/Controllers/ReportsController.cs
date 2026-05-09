@@ -1,4 +1,6 @@
 ﻿using System.Security.Claims;
+using Attendance_Management_System.Backend.Enums;
+using Attendance_Management_System.Backend.Helpers;
 using Attendance_Management_System.Backend.Interfaces.Services;
 using Attendance_Management_System.Backend.ViewModels.Reports;
 using Microsoft.AspNetCore.Authorization;
@@ -50,12 +52,12 @@ public class ReportsController : AppControllerBase
         }
 
         var accessibleSchedules = schedulesResult.Data
-            .Where(schedule => !string.Equals(role, "teacher", StringComparison.OrdinalIgnoreCase) || schedule.IsMine)
+            .Where(schedule => !role.IsRole(UserRole.Teacher) || schedule.IsMine)
             .OrderBy(schedule => schedule.DayOfWeek)
             .ThenBy(schedule => schedule.StartTime)
             .ToList();
 
-        if (string.Equals(role, "admin", StringComparison.OrdinalIgnoreCase))
+        if (role.IsRole(UserRole.Admin))
         {
             var sectionsResult = await ExecuteServiceCallAsync(() => _sectionsService.GetAllSectionsAsync());
             if (!sectionsResult.Success || sectionsResult.Data is null)

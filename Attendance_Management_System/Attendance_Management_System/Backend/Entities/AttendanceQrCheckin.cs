@@ -1,4 +1,6 @@
 using System.ComponentModel.DataAnnotations.Schema;
+using Attendance_Management_System.Backend.Enums;
+using Attendance_Management_System.Backend.Helpers;
 
 namespace Attendance_Management_System.Backend.Entities;
 
@@ -15,7 +17,7 @@ public class AttendanceQrCheckin : EntityBase
     public DateTimeOffset CheckedInAtUtc { get; set; } = DateTimeOffset.UtcNow;
 
     // Canonical status value: present or late.
-    public string Status { get; set; } = "present";
+    public string Status { get; set; } = AttendanceStatusKind.Present.ToStorageValue();
 
     // Optional FK to attendance record created/updated by this check-in.
     public int? AttendanceId { get; set; }

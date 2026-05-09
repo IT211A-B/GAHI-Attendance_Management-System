@@ -31,7 +31,7 @@ public class AttendanceManagementController : Controller
     [Authorize(Policy = "AdminOrTeacher")]
     public IActionResult Index([FromQuery] int? sectionId, [FromQuery] int? scheduleId, [FromQuery] DateOnly? date)
     {
-        return RedirectToAction("Index", "SectionManagement", new
+        return RedirectToAction("Index", "SectionAttendance", new
         {
             sectionId,
             scheduleId,
@@ -221,7 +221,7 @@ public class AttendanceManagementController : Controller
     {
         TempData["SectionAttendanceError"] = "The standalone attendance page is retired. Use the section checklist to mark or correct attendance.";
 
-        return RedirectToAction("Index", "SectionManagement", new
+        return RedirectToAction("Index", "SectionAttendance", new
         {
             sectionId = form.SectionId,
             scheduleId = form.ScheduleId,

@@ -1,6 +1,8 @@
 using Attendance_Management_System.Backend.Constants;
 using Attendance_Management_System.Backend.DTOs.Responses;
 using Attendance_Management_System.Backend.Entities;
+using Attendance_Management_System.Backend.Enums;
+using Attendance_Management_System.Backend.Helpers;
 using Attendance_Management_System.Backend.Interfaces.Services;
 using Attendance_Management_System.Backend.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -50,14 +52,14 @@ public class StudentsService : IStudentsService
         }
 
         // Admin: Return full profile for any student
-        if (requesterRole == "admin")
+        if (requesterRole.IsRole(UserRole.Admin))
         {
             var fullProfile = MapToFullProfile(student);
             return fullProfile;
         }
 
         // Student: Return full profile if viewing self, basic profile otherwise
-        if (requesterRole == "student")
+        if (requesterRole.IsRole(UserRole.Student))
         {
             if (student.UserId == requesterUserId)
             {
@@ -71,7 +73,7 @@ public class StudentsService : IStudentsService
         }
 
         // Teacher: Return basic profile only if student is in their section
-        if (requesterRole == "teacher")
+        if (requesterRole.IsRole(UserRole.Teacher))
         {
             if (student.SectionId == null)
             {
@@ -114,14 +116,14 @@ public class StudentsService : IStudentsService
         }
 
         // Admin: Can view all students in any section
-        if (requesterRole == "admin")
+        if (requesterRole.IsRole(UserRole.Admin))
         {
             var students = await GetStudentsBySectionId(sectionId);
             return students;
         }
 
         // Teacher: Can only view students in their assigned sections
-        if (requesterRole == "teacher")
+        if (requesterRole.IsRole(UserRole.Teacher))
         {
             var teacher = await _context.Teachers.FirstOrDefaultAsync(t => t.UserId == requesterUserId);
             if (teacher == null)

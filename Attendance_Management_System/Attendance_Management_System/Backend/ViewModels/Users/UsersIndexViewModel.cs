@@ -1,11 +1,18 @@
 using System.ComponentModel.DataAnnotations;
+using Attendance_Management_System.Backend.Enums;
+using Attendance_Management_System.Backend.Helpers;
 
 namespace Attendance_Management_System.Backend.ViewModels.Users;
 
 public class UsersIndexViewModel
 {
     public IReadOnlyList<UserListItemViewModel> Users { get; set; } = [];
-    public IReadOnlyList<string> AvailableRoles { get; set; } = ["admin", "teacher", "student"];
+    public IReadOnlyList<string> AvailableRoles { get; set; } =
+    [
+        UserRole.Admin.ToStorageValue(),
+        UserRole.Teacher.ToStorageValue(),
+        UserRole.Student.ToStorageValue()
+    ];
     public CreateUserFormViewModel CreateForm { get; set; } = new();
     public string? ErrorMessage { get; set; }
 }
@@ -33,5 +40,5 @@ public class CreateUserFormViewModel
 
     [Required(ErrorMessage = "Role is required")]
     [Display(Name = "Role")]
-    public string Role { get; set; } = "student";
+    public string Role { get; set; } = UserRole.Student.ToStorageValue();
 }
