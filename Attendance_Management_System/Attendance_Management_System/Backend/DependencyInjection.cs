@@ -10,11 +10,11 @@ using Attendance_Management_System.Backend.Security;
 using System.Globalization;
 using System.Security.Claims;
 using System.Threading.RateLimiting;
+using FluentEmail.MailKitSmtp;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Options;
 
 namespace Attendance_Management_System.Backend;
 
@@ -43,11 +43,27 @@ public static class DependencyInjection
         // Bind QR attendance settings from configuration to strongly-typed class
         services.Configure<AttendanceQrSettings>(configuration.GetSection(AttendanceQrSettings.SectionName));
 
-        // Bind and validate email settings on startup so generated links always use a safe public origin.
-        services.AddSingleton<IValidateOptions<EmailSettings>, EmailSettingsValidator>();
+        var emailSettingsSection = configuration.GetSection(EmailSettings.SectionName);
+
+        // Bind email settings with minimal startup constraints.
         services.AddOptions<EmailSettings>()
-            .Bind(configuration.GetSection(EmailSettings.SectionName))
-            .ValidateOnStart();
+            .Bind(emailSettingsSection);
+
+        var emailSettings = emailSettingsSection.Get<EmailSettings>() ?? new EmailSettings();
+
+        services
+            .AddFluentEmail(emailSettings.FromAddress, emailSettings.FromName)
+            .AddMailKitSender(new SmtpClientOptions
+            {
+                Server = emailSettings.Host,
+                Port = emailSettings.Port,
+                User = emailSettings.Username,
+                Password = emailSettings.Password,
+                RequiresAuthentication = !string.IsNullOrWhiteSpace(emailSettings.Username)
+                    && !string.IsNullOrWhiteSpace(emailSettings.Password),
+                UsePickupDirectory = false,
+                UseSsl = emailSettings.UseSsl
+            });
 
         // Bind rate limiting settings from configuration to strongly-typed class
         services.Configure<RateLimitingSettings>(configuration.GetSection(RateLimitingSettings.SectionName));

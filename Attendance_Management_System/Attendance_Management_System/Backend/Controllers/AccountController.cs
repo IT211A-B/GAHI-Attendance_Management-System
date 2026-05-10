@@ -91,20 +91,42 @@ public class AccountController : Controller
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Login(LoginViewModel model)
     {
-        if (ModelState.IsValid)
+        if (!ModelState.IsValid)
+        {
+            return View(model);
+        }
+
+        try
         {
             var result = await _signInManager.PasswordSignInAsync(model.Email, model.Password, model.RememberMe, lockoutOnFailure: false);
             if (result.Succeeded)
             {
                 return RedirectToAction("Index", "Dashboard");
             }
-            else
+
+            if (result.IsNotAllowed)
             {
-                ModelState.AddModelError(string.Empty, "Invalid email or password.");
+                ViewData["EmailVerificationRequired"] = true;
+                ViewData["EmailVerificationAddress"] = model.Email;
+                ModelState.AddModelError(string.Empty, "Please verify your email before signing in. You can request a new verification link below.");
                 return View(model);
             }
+
+            ModelState.AddModelError(string.Empty, "Invalid email or password.");
+            return View(model);
         }
-        return View(model);
+        catch (PostgresException ex) when (ex.SqlState == PostgresErrorCodes.InvalidPassword)
+        {
+            _logger.LogError(ex, "PostgreSQL authentication failed while attempting to sign in user {Email}.", model.Email);
+            ModelState.AddModelError(string.Empty, "Unable to sign in right now. Please try again shortly.");
+            return View(model);
+        }
+        catch (NpgsqlException ex)
+        {
+            _logger.LogError(ex, "PostgreSQL connection failure while attempting to sign in user {Email}.", model.Email);
+            ModelState.AddModelError(string.Empty, "Unable to sign in right now. Please try again shortly.");
+            return View(model);
+        }
     }
 
     [HttpPost("forgot-password")]

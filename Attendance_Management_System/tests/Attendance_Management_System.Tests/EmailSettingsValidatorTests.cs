@@ -5,72 +5,66 @@ public class EmailSettingsValidatorTests
     [Fact]
     public void Validate_ReturnsFailure_WhenPublicBaseUrlMissing()
     {
-        var validator = CreateValidator(Environments.Production);
+        var validator = CreateValidator();
 
-        var result = validator.Validate(Options.DefaultName, new EmailSettings { PublicBaseUrl = "" });
+        var result = validator.Validate(Options.DefaultName, CreateValidSettings(""));
 
         Assert.True(result.Failed);
         Assert.Contains(result.Failures!, failure => failure.Contains(nameof(EmailSettings.PublicBaseUrl), StringComparison.Ordinal));
     }
 
     [Fact]
-    public void Validate_ReturnsFailure_WhenProductionUrlIsNotHttps()
+    public void Validate_ReturnsFailure_WhenUrlIsNotAbsolute()
     {
-        var validator = CreateValidator(Environments.Production);
+        var validator = CreateValidator();
 
-        var result = validator.Validate(Options.DefaultName, new EmailSettings { PublicBaseUrl = "http://attendance.example.edu" });
+        var result = validator.Validate(Options.DefaultName, CreateValidSettings("attendance.example.edu"));
 
         Assert.True(result.Failed);
-        Assert.Contains(result.Failures!, failure => failure.Contains("https", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(result.Failures!, failure => failure.Contains("absolute URL", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]
-    public void Validate_ReturnsFailure_WhenProductionUrlIsLoopback()
+    public void Validate_ReturnsFailure_WhenUrlSchemeIsNotHttpOrHttps()
     {
-        var validator = CreateValidator(Environments.Production);
+        var validator = CreateValidator();
 
-        var result = validator.Validate(Options.DefaultName, new EmailSettings { PublicBaseUrl = "https://localhost:7050" });
+        var result = validator.Validate(Options.DefaultName, CreateValidSettings("ftp://attendance.example.edu"));
 
         Assert.True(result.Failed);
-        Assert.Contains(result.Failures!, failure => failure.Contains("loopback", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(result.Failures!, failure => failure.Contains("http or https", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]
-    public void Validate_ReturnsSuccess_WhenProductionUrlIsHttpsAndPublic()
+    public void Validate_ReturnsSuccess_WhenUrlUsesHttp()
     {
-        var validator = CreateValidator(Environments.Production);
+        var validator = CreateValidator();
 
-        var result = validator.Validate(Options.DefaultName, new EmailSettings { PublicBaseUrl = "https://attendance.example.edu" });
+        var result = validator.Validate(Options.DefaultName, CreateValidSettings("http://attendance.example.edu"));
 
         Assert.True(result.Succeeded);
     }
 
     [Fact]
-    public void Validate_ReturnsSuccess_WhenDevelopmentUsesLocalhostHttps()
+    public void Validate_ReturnsSuccess_WhenUrlUsesHttpsLocalhost()
     {
-        var validator = CreateValidator(Environments.Development);
+        var validator = CreateValidator();
 
-        var result = validator.Validate(Options.DefaultName, new EmailSettings { PublicBaseUrl = "https://localhost:7050" });
+        var result = validator.Validate(Options.DefaultName, CreateValidSettings("https://localhost:7050"));
 
         Assert.True(result.Succeeded);
     }
 
-    private static EmailSettingsValidator CreateValidator(string environmentName)
+    private static EmailSettings CreateValidSettings(string publicBaseUrl)
     {
-        return new EmailSettingsValidator(new TestHostEnvironment
+        return new EmailSettings
         {
-            EnvironmentName = environmentName
-        });
+            PublicBaseUrl = publicBaseUrl
+        };
     }
 
-    private sealed class TestHostEnvironment : IHostEnvironment
+    private static EmailSettingsValidator CreateValidator()
     {
-        public string EnvironmentName { get; set; } = Environments.Production;
-
-        public string ApplicationName { get; set; } = "Attendance_Management_System.Tests";
-
-        public string ContentRootPath { get; set; } = AppContext.BaseDirectory;
-
-        public IFileProvider ContentRootFileProvider { get; set; } = new NullFileProvider();
+        return new EmailSettingsValidator();
     }
 }

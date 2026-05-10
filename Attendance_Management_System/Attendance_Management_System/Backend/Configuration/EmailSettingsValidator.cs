@@ -4,13 +4,6 @@ namespace Attendance_Management_System.Backend.Configuration;
 
 public class EmailSettingsValidator : IValidateOptions<EmailSettings>
 {
-    private readonly IHostEnvironment _hostEnvironment;
-
-    public EmailSettingsValidator(IHostEnvironment hostEnvironment)
-    {
-        _hostEnvironment = hostEnvironment;
-    }
-
     public ValidateOptionsResult Validate(string? name, EmailSettings options)
     {
         if (options is null)
@@ -34,19 +27,6 @@ public class EmailSettingsValidator : IValidateOptions<EmailSettings>
             && !string.Equals(parsedUri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase))
         {
             return ValidateOptionsResult.Fail($"{EmailSettings.SectionName}:{nameof(EmailSettings.PublicBaseUrl)} must use http or https.");
-        }
-
-        if (!_hostEnvironment.IsDevelopment() && !_hostEnvironment.IsEnvironment("Testing"))
-        {
-            if (!string.Equals(parsedUri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase))
-            {
-                return ValidateOptionsResult.Fail($"{EmailSettings.SectionName}:{nameof(EmailSettings.PublicBaseUrl)} must use https outside development.");
-            }
-
-            if (parsedUri.IsLoopback)
-            {
-                return ValidateOptionsResult.Fail($"{EmailSettings.SectionName}:{nameof(EmailSettings.PublicBaseUrl)} cannot use localhost or loopback outside development.");
-            }
         }
 
         return ValidateOptionsResult.Success;
