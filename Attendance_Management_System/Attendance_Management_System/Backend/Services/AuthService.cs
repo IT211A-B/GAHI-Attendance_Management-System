@@ -1,5 +1,3 @@
-using System.Text;
-using System.Text.Json;
 using Attendance_Management_System.Backend.Configuration;
 using Attendance_Management_System.Backend.Constants;
 using Attendance_Management_System.Backend.DTOs.Requests;
@@ -13,6 +11,8 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+using System.Text;
+using System.Text.Json;
 
 namespace Attendance_Management_System.Backend.Services;
 
@@ -46,38 +46,6 @@ public class AuthService : IAuthService
         _notificationService = notificationService;
         _emailSettings = emailSettings.Value;
         _logger = logger;
-    }
-
-    // Authenticates user by verifying email and password
-    public async Task<AuthResponse> LoginAsync(LoginRequest request, CancellationToken cancellationToken = default)
-    {
-        // Find user by email address
-        var user = await _userManager.FindByEmailAsync(request.Email);
-
-        // Return generic error to prevent email enumeration attacks
-        if (user == null)
-        {
-            return CreateFailureResponse("Invalid email or password.");
-        }
-
-        // Check if account is active
-        if (!user.IsActive)
-        {
-            return CreateFailureResponse("Your account has been deactivated. Please contact administrator.");
-        }
-
-        // Verify password against stored hash
-        var isPasswordValid = await _userManager.CheckPasswordAsync(user, request.Password);
-
-        if (!isPasswordValid)
-        {
-            return CreateFailureResponse("Invalid email or password.");
-        }
-
-        // Build user DTO with role-specific details
-        var userDto = await BuildUserDtoAsync(user, cancellationToken);
-
-        return CreateSuccessResponse("Login successful.", userDto);
     }
 
     // Registers a new student and creates pending enrollment request

@@ -4,7 +4,7 @@ using MailKit.Net.Smtp;
 using MimeKit;
 using MimeKit.Text;
 using Microsoft.Extensions.Options;
-
+ 
 namespace Attendance_Management_System.Backend.Services;
 
 public class SmtpEmailSender : IEmailSender

@@ -91,54 +91,20 @@ public class AccountController : Controller
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Login(LoginViewModel model)
     {
-        if (!ModelState.IsValid)
+        if (ModelState.IsValid)
         {
-            return View(model);
-        }
-
-        Microsoft.AspNetCore.Identity.SignInResult result;
-        try
-        {
-            result = await _signInManager.PasswordSignInAsync(
-                model.Email,
-                model.Password,
-                model.RememberMe,
-                lockoutOnFailure: false);
-        }
-        catch (PostgresException ex) when (ex.SqlState == PostgresErrorCodes.InvalidPassword)
-        {
-            _logger.LogError(ex, "PostgreSQL authentication failed while processing login.");
-            ModelState.AddModelError(string.Empty, "Unable to sign in right now. Please try again shortly.");
-            return View(model);
-        }
-        catch (NpgsqlException ex)
-        {
-            _logger.LogError(ex, "PostgreSQL connection failure while processing login.");
-            ModelState.AddModelError(string.Empty, "Unable to sign in right now. Please try again shortly.");
-            return View(model);
-        }
-
-        if (!result.Succeeded)
-        {
-            if (result.IsNotAllowed)
+            var result = await _signInManager.PasswordSignInAsync(model.Email, model.Password, model.RememberMe, lockoutOnFailure: false);
+            if (result.Succeeded)
             {
-                // A blocked sign-in here usually means the account exists but email verification is still pending.
-                ViewData["EmailVerificationRequired"] = true;
-                ViewData["EmailVerificationAddress"] = model.Email;
-                ModelState.AddModelError(string.Empty, "Please verify your email before signing in. You can request a new verification link below.");
+                return RedirectToAction("Index", "Dashboard");
+            }
+            else
+            {
+                ModelState.AddModelError(string.Empty, "Invalid email or password.");
                 return View(model);
             }
-
-            ModelState.AddModelError(string.Empty, "Invalid email or password.");
-            return View(model);
         }
-
-        if (!string.IsNullOrWhiteSpace(model.ReturnUrl) && Url.IsLocalUrl(model.ReturnUrl))
-        {
-            return Redirect(model.ReturnUrl);
-        }
-
-        return RedirectToAction("Index", "Dashboard");
+        return View(model);
     }
 
     [HttpPost("forgot-password")]
@@ -174,46 +140,38 @@ public class AccountController : Controller
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Signup(StudentSignupViewModel model)
     {
-        if (User.Identity?.IsAuthenticated == true)
+        if (ModelState.IsValid) 
         {
-            return RedirectToAction("Index", "Dashboard");
+            // Rebuild the options before validation runs so any errors can re-render the same choices.
+            await PopulateSignupOptionsAsync(model);
+            var request = new RegisterRequest
+            {
+                Email = model.Email.Trim(),
+                Password = model.Password,
+                ConfirmPassword = model.ConfirmPassword,
+                FirstName = model.FirstName.Trim(),
+                MiddleName = NormalizeOptional(model.MiddleName),
+                LastName = model.LastName.Trim(),
+                Birthdate = model.Birthdate,
+                Gender = model.Gender.Trim(),
+                Address = model.Address.Trim(),
+                GuardianName = model.GuardianName.Trim(),
+                GuardianContact = model.GuardianContact.Trim(),
+                CourseId = model.CourseId,
+                YearLevel = model.YearLevel,
+                AcademicYearId = model.AcademicYearId
+            };
+            var result = await _authService.RegisterStudentAsync(request);
+            if (!result.Success)
+            {
+                ModelState.AddModelError(string.Empty, result.Message ?? "Unable to complete registration right now.");
+                return View(model);
+            }
+
+            TempData["AuthSuccess"] = result.Message ?? "Registration successful. You can now sign in.";
+            return RedirectToAction(nameof(Login));
         }
-
-        // Rebuild the options before validation runs so any errors can re-render the same choices.
-        await PopulateSignupOptionsAsync(model);
-
-        if (!ModelState.IsValid)
-        {
-            return View(model);
-        }
-
-        var request = new RegisterRequest
-        {
-            Email = model.Email.Trim(),
-            Password = model.Password,
-            ConfirmPassword = model.ConfirmPassword,
-            FirstName = model.FirstName.Trim(),
-            MiddleName = NormalizeOptional(model.MiddleName),
-            LastName = model.LastName.Trim(),
-            Birthdate = model.Birthdate,
-            Gender = model.Gender.Trim(),
-            Address = model.Address.Trim(),
-            GuardianName = model.GuardianName.Trim(),
-            GuardianContact = model.GuardianContact.Trim(),
-            CourseId = model.CourseId,
-            YearLevel = model.YearLevel,
-            AcademicYearId = model.AcademicYearId
-        };
-
-        var result = await _authService.RegisterStudentAsync(request);
-        if (!result.Success)
-        {
-            ModelState.AddModelError(string.Empty, result.Message ?? "Unable to complete registration right now.");
-            return View(model);
-        }
-
-        TempData["AuthSuccess"] = result.Message ?? "Registration successful. You can now sign in.";
-        return RedirectToAction(nameof(Login));
+        return View(model);
     }
 
     [HttpGet("confirm-email")]
