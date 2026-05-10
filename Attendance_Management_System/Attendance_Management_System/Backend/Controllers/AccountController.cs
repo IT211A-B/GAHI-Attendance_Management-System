@@ -162,38 +162,40 @@ public class AccountController : Controller
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Signup(StudentSignupViewModel model)
     {
-        if (ModelState.IsValid) 
-        {
-            // Rebuild the options before validation runs so any errors can re-render the same choices.
-            await PopulateSignupOptionsAsync(model);
-            var request = new RegisterRequest
-            {
-                Email = model.Email.Trim(),
-                Password = model.Password,
-                ConfirmPassword = model.ConfirmPassword,
-                FirstName = model.FirstName.Trim(),
-                MiddleName = NormalizeOptional(model.MiddleName),
-                LastName = model.LastName.Trim(),
-                Birthdate = model.Birthdate,
-                Gender = model.Gender.Trim(),
-                Address = model.Address.Trim(),
-                GuardianName = model.GuardianName.Trim(),
-                GuardianContact = model.GuardianContact.Trim(),
-                CourseId = model.CourseId,
-                YearLevel = model.YearLevel,
-                AcademicYearId = model.AcademicYearId
-            };
-            var result = await _authService.RegisterStudentAsync(request);
-            if (!result.Success)
-            {
-                ModelState.AddModelError(string.Empty, result.Message ?? "Unable to complete registration right now.");
-                return View(model);
-            }
+        await PopulateSignupOptionsAsync(model);
 
-            TempData["AuthSuccess"] = result.Message ?? "Registration successful. You can now sign in.";
-            return RedirectToAction(nameof(Login));
+        if (!ModelState.IsValid)
+        {
+            return View(model);
         }
-        return View(model);
+
+        var request = new RegisterRequest
+        {
+            Email = model.Email.Trim(),
+            Password = model.Password,
+            ConfirmPassword = model.ConfirmPassword,
+            FirstName = model.FirstName.Trim(),
+            MiddleName = NormalizeOptional(model.MiddleName),
+            LastName = model.LastName.Trim(),
+            Birthdate = model.Birthdate,
+            Gender = model.Gender.Trim(),
+            Address = model.Address.Trim(),
+            GuardianName = model.GuardianName.Trim(),
+            GuardianContact = model.GuardianContact.Trim(),
+            CourseId = model.CourseId,
+            YearLevel = model.YearLevel,
+            AcademicYearId = model.AcademicYearId
+        };
+
+        var result = await _authService.RegisterStudentAsync(request);
+        if (!result.Success)
+        {
+            ModelState.AddModelError(string.Empty, result.Message ?? "Unable to complete registration right now.");
+            return View(model);
+        }
+
+        TempData["AuthSuccess"] = result.Message ?? "Registration successful. You can now sign in.";
+        return RedirectToAction(nameof(Login));
     }
 
     [HttpGet("confirm-email")]

@@ -51,47 +51,175 @@ public class AuthService : IAuthService
     // Registers a new student and creates pending enrollment request
     public async Task<AuthResponse> RegisterStudentAsync(RegisterRequest request, CancellationToken cancellationToken = default)
     {
-        var validationError = await ValidateStudentRegistrationRequestAsync(request, cancellationToken);
-        if (validationError != null)
+        var existingUser = await _userManager.FindByEmailAsync(request.Email);
+        if (existingUser != null)
         {
-            return validationError;
+            return CreateFailureResponse("An account with this email already exists.");
         }
 
-        var sectionResolution = await ResolveStudentRegistrationSectionAsync(request, cancellationToken);
-        if (sectionResolution.Error != null || sectionResolution.AssignedSection == null)
+        var course = await _context.Courses
+            .AsNoTracking()
+            .FirstOrDefaultAsync(selectedCourse => selectedCourse.Id == request.CourseId, cancellationToken);
+        if (course == null)
         {
-            return sectionResolution.Error ?? CreateFailureResponse("Unable to complete registration right now. Please try again.");
+            return CreateFailureResponse("Invalid course selected.");
         }
 
-        var registrationResult = await CreateStudentRegistrationAsync(
-            request,
-            sectionResolution.AssignedSection,
-            sectionResolution.ResolvedYearLevel,
-            cancellationToken);
-
-        if (registrationResult.Error != null || registrationResult.User == null || string.IsNullOrWhiteSpace(registrationResult.StudentNumber))
+        if (!EducationLevelPolicy.IsYearLevelAllowed(course.EducationLevel, request.YearLevel))
         {
-            return registrationResult.Error ?? CreateFailureResponse("Unable to complete registration right now. Please try again.");
+            var allowedRange = EducationLevelPolicy.GetAllowedYearRange(course.EducationLevel);
+            return CreateFailureResponse(
+                $"Year level {request.YearLevel} is not valid for {EducationLevelPolicy.ToDisplayLabel(course.EducationLevel)}. Allowed range is {allowedRange.MinYearLevel}-{allowedRange.MaxYearLevel}.");
+        }
+
+        var academicYearExists = await _context.AcademicYears
+            .AnyAsync(academicYear => academicYear.Id == request.AcademicYearId, cancellationToken);
+        if (!academicYearExists)
+        {
+            return CreateFailureResponse("Invalid academic year selected.");
+        }
+
+        var resolvedYearLevel = request.YearLevel;
+        Section? assignedSection = null;
+
+        if (request.SectionId.HasValue && request.SectionId.Value > 0)
+        {
+            assignedSection = await _context.Sections
+                .AsNoTracking()
+                .FirstOrDefaultAsync(section => section.Id == request.SectionId.Value, cancellationToken);
+
+            if (assignedSection == null)
+            {
+                return CreateFailureResponse("Invalid section selected.");
+            }
+
+            if (assignedSection.CourseId != request.CourseId)
+            {
+                return CreateFailureResponse("Selected section does not belong to the selected course.");
+            }
+
+            if (assignedSection.AcademicYearId != request.AcademicYearId)
+            {
+                return CreateFailureResponse("Selected section does not belong to the selected academic period.");
+            }
+
+            if (assignedSection.YearLevel != resolvedYearLevel)
+            {
+                return CreateFailureResponse("Selected section year level does not match your chosen year level.");
+            }
+        }
+        else
+        {
+            assignedSection = await _sectionAllocationService
+                .AllocateSectionAsync(request.CourseId, request.AcademicYearId, resolvedYearLevel);
+
+            if (assignedSection == null)
+            {
+                return CreateFailureResponse("No available sections for the selected course and academic period. Please contact an administrator.");
+            }
+
+            if (assignedSection.YearLevel != resolvedYearLevel)
+            {
+                return CreateFailureResponse("No available section matches the selected year level for this program.");
+            }
+        }
+
+        User? user = null;
+        string? studentNumber = null;
+
+        await using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
+        try
+        {
+            user = new User
+            {
+                UserName = request.Email,
+                Email = request.Email,
+                Role = UserRole.Student.ToStorageValue(),
+                IsActive = true,
+                EmailConfirmed = false
+            };
+
+            var userCreateResult = await _userManager.CreateAsync(user, request.Password);
+            if (!userCreateResult.Succeeded)
+            {
+                await transaction.RollbackAsync(cancellationToken);
+                var errors = string.Join(", ", userCreateResult.Errors.Select(error => error.Description));
+                return CreateFailureResponse($"Registration failed: {errors}");
+            }
+
+            studentNumber = await GenerateStudentNumberAsync(cancellationToken);
+            if (studentNumber == null)
+            {
+                await transaction.RollbackAsync(cancellationToken);
+                _logger.LogWarning("Unable to generate a unique student number after {AttemptCount} attempts.", StudentNumberGenerationMaxAttempts);
+                return CreateFailureResponse("Unable to complete registration right now. Please try again.");
+            }
+
+            var student = new Student
+            {
+                UserId = user.Id,
+                CourseId = request.CourseId,
+                SectionId = null,
+                StudentNumber = studentNumber,
+                FirstName = request.FirstName,
+                LastName = request.LastName,
+                MiddleName = request.MiddleName,
+                Birthdate = request.Birthdate,
+                Gender = request.Gender,
+                Address = request.Address,
+                GuardianName = request.GuardianName,
+                GuardianContact = request.GuardianContact,
+                YearLevel = resolvedYearLevel,
+                IsActive = true
+            };
+
+            _context.Students.Add(student);
+            await _context.SaveChangesAsync(cancellationToken);
+
+            var enrollment = new Enrollment
+            {
+                StudentId = student.Id,
+                SectionId = assignedSection.Id,
+                AcademicYearId = request.AcademicYearId,
+                Status = EnrollmentStatus.Pending.ToStorageValue()
+            };
+
+            _context.Enrollments.Add(enrollment);
+            await _context.SaveChangesAsync(cancellationToken);
+
+            await transaction.CommitAsync(cancellationToken);
+        }
+        catch
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            return CreateFailureResponse("Unable to complete registration right now. Please try again.");
+        }
+
+        if (user == null || string.IsNullOrWhiteSpace(studentNumber))
+        {
+            return CreateFailureResponse("Unable to complete registration right now. Please try again.");
         }
 
         var studentDisplayName = BuildDisplayName(request.FirstName, request.MiddleName, request.LastName);
-        await RunPostStudentRegistrationSideEffectsAsync(registrationResult.User, studentDisplayName, registrationResult.StudentNumber, cancellationToken);
+        await RunPostStudentRegistrationSideEffectsAsync(user, studentDisplayName, studentNumber, cancellationToken);
 
-        var userDto = await BuildUserDtoAsync(registrationResult.User, cancellationToken);
+        var userDto = await BuildUserDtoAsync(user, cancellationToken);
         return CreateSuccessResponse("Registration successful. Your enrollment is pending approval.", userDto);
     }
 
     public async Task<AuthResponse> ConfirmEmailAsync(int userId, string token, CancellationToken cancellationToken = default)
     {
+        const string invalidMessage = "Invalid or expired email confirmation link.";
+
         if (userId <= 0 || string.IsNullOrWhiteSpace(token))
         {
-            return CreateInvalidEmailConfirmationResponse();
+            return CreateFailureResponse(invalidMessage);
         }
 
         var user = await _userManager.FindByIdAsync(userId.ToString());
         if (user == null)
         {
-            return CreateInvalidEmailConfirmationResponse();
+            return CreateFailureResponse(invalidMessage);
         }
 
         if (user.EmailConfirmed)
@@ -103,13 +231,13 @@ public class AuthService : IAuthService
         var decodedToken = DecodeToken(token);
         if (string.IsNullOrWhiteSpace(decodedToken))
         {
-            return CreateInvalidEmailConfirmationResponse();
+            return CreateFailureResponse(invalidMessage);
         }
 
         var result = await _userManager.ConfirmEmailAsync(user, decodedToken);
         if (!result.Succeeded)
         {
-            return CreateInvalidEmailConfirmationResponse();
+            return CreateFailureResponse(invalidMessage);
         }
 
         return CreateSuccessResponse("Email confirmed successfully. You can now sign in.");
@@ -117,9 +245,11 @@ public class AuthService : IAuthService
 
     public async Task<AuthResponse> ResendVerificationAsync(string email, CancellationToken cancellationToken = default)
     {
+        const string responseMessage = "If an account exists for that email, a verification link has been sent. Please check your inbox.";
+
         if (string.IsNullOrWhiteSpace(email))
         {
-            return CreateSuccessResponse("If an account exists for that email, a verification link has been sent. Please check your inbox.");
+            return CreateSuccessResponse(responseMessage);
         }
 
         var normalizedEmail = email.Trim();
@@ -127,12 +257,13 @@ public class AuthService : IAuthService
         if (user == null || user.EmailConfirmed || !user.IsActive || string.IsNullOrWhiteSpace(user.Email))
         {
             // Keep the response neutral so callers cannot infer whether an account exists.
-            return CreateSuccessResponse("If an account exists for that email, a verification link has been sent. Please check your inbox.");
+            return CreateSuccessResponse(responseMessage);
         }
 
         try
         {
-            var confirmationLink = await BuildEmailConfirmationLinkAsync(user);
+            var token = await _userManager.GenerateEmailConfirmationTokenAsync(user);
+            var confirmationLink = BuildUserLink(user.Id, token, "confirm-email");
             var displayName = await ResolveDisplayNameAsync(user, cancellationToken);
 
             await _accountEmailService.SendVerificationEmailAsync(user.Email, displayName, confirmationLink);
@@ -142,14 +273,16 @@ public class AuthService : IAuthService
             _logger.LogWarning(ex, "Failed to resend verification email for user {UserId}.", user.Id);
         }
 
-        return CreateSuccessResponse("If an account exists for that email, a verification link has been sent. Please check your inbox.");
+        return CreateSuccessResponse(responseMessage);
     }
 
     public async Task<AuthResponse> ForgotPasswordAsync(ForgotPasswordRequest request, CancellationToken cancellationToken = default)
     {
+        const string responseMessage = "If an account exists for that email, password reset instructions have been sent. Please check your inbox.";
+
         if (request == null || string.IsNullOrWhiteSpace(request.Email))
         {
-            return CreateSuccessResponse("If an account exists for that email, password reset instructions have been sent. Please check your inbox.");
+            return CreateSuccessResponse(responseMessage);
         }
 
         var normalizedEmail = request.Email.Trim();
@@ -157,18 +290,19 @@ public class AuthService : IAuthService
         if (user == null || string.IsNullOrWhiteSpace(user.Email))
         {
             // Keep the response neutral so callers cannot infer whether an account exists.
-            return CreateSuccessResponse("If an account exists for that email, password reset instructions have been sent. Please check your inbox.");
+            return CreateSuccessResponse(responseMessage);
         }
 
         if (!user.IsActive)
         {
             _logger.LogInformation("Ignored forgot-password request for inactive user {UserId}.", user.Id);
-            return CreateSuccessResponse("If an account exists for that email, password reset instructions have been sent. Please check your inbox.");
+            return CreateSuccessResponse(responseMessage);
         }
 
         try
         {
-            var resetLink = await BuildPasswordResetLinkAsync(user);
+            var token = await _userManager.GeneratePasswordResetTokenAsync(user);
+            var resetLink = BuildUserLink(user.Id, token, "reset-password");
             var displayName = await ResolveDisplayNameAsync(user, cancellationToken);
 
             await _accountEmailService.SendPasswordResetEmailAsync(user.Email, displayName, resetLink);
@@ -178,14 +312,16 @@ public class AuthService : IAuthService
             _logger.LogWarning(ex, "Failed to send password reset email for user {UserId}.", user.Id);
         }
 
-        return CreateSuccessResponse("If an account exists for that email, password reset instructions have been sent. Please check your inbox.");
+        return CreateSuccessResponse(responseMessage);
     }
 
     public async Task<AuthResponse> ResetPasswordAsync(ResetPasswordRequest request, CancellationToken cancellationToken = default)
     {
+        const string invalidLinkMessage = "Invalid or expired password reset link.";
+
         if (request == null || request.UserId <= 0 || string.IsNullOrWhiteSpace(request.Token))
         {
-            return CreateFailureResponse("Invalid or expired password reset link.");
+            return CreateFailureResponse(invalidLinkMessage);
         }
 
         if (string.IsNullOrWhiteSpace(request.NewPassword))
@@ -196,19 +332,19 @@ public class AuthService : IAuthService
         var user = await _userManager.FindByIdAsync(request.UserId.ToString());
         if (user == null)
         {
-            return CreateFailureResponse("Invalid or expired password reset link.");
+            return CreateFailureResponse(invalidLinkMessage);
         }
 
         if (!user.IsActive)
         {
             _logger.LogWarning("Password reset attempted for inactive user {UserId}.", user.Id);
-            return CreateFailureResponse("Invalid or expired password reset link.");
+            return CreateFailureResponse(invalidLinkMessage);
         }
 
         var decodedToken = DecodeToken(request.Token);
         if (string.IsNullOrWhiteSpace(decodedToken))
         {
-            return CreateFailureResponse("Invalid or expired password reset link.");
+            return CreateFailureResponse(invalidLinkMessage);
         }
 
         var result = await _userManager.ResetPasswordAsync(user, decodedToken, request.NewPassword);
@@ -217,7 +353,7 @@ public class AuthService : IAuthService
             if (result.Errors.Any(error => string.Equals(error.Code, "InvalidToken", StringComparison.OrdinalIgnoreCase)))
             {
                 // Expired or tampered tokens should read as a generic invalid-link error.
-                return CreateFailureResponse("Invalid or expired password reset link.");
+                return CreateFailureResponse(invalidLinkMessage);
             }
 
             var errors = string.Join(", ", result.Errors.Select(error => error.Description));
@@ -293,142 +429,60 @@ public class AuthService : IAuthService
         return await BuildUserDtoAsync(user, cancellationToken);
     }
 
-    private async Task<AuthResponse?> ValidateStudentRegistrationRequestAsync(RegisterRequest request, CancellationToken cancellationToken = default)
+    private async Task RunPostStudentRegistrationSideEffectsAsync(User user, string studentDisplayName, string studentNumber, CancellationToken cancellationToken = default)
     {
-        // Check if email already exists
-        var existingUser = await _userManager.FindByEmailAsync(request.Email);
-        if (existingUser != null)
+        if (!string.IsNullOrWhiteSpace(user.Email))
         {
-            return CreateFailureResponse("An account with this email already exists.");
-        }
-
-        // Validate CourseId exists and year level is valid for selected stage.
-        var course = await _context.Courses
-            .AsNoTracking()
-            .FirstOrDefaultAsync(selectedCourse => selectedCourse.Id == request.CourseId, cancellationToken);
-        if (course == null)
-        {
-            return CreateFailureResponse("Invalid course selected.");
-        }
-
-        if (!EducationLevelPolicy.IsYearLevelAllowed(course.EducationLevel, request.YearLevel))
-        {
-            var allowedRange = EducationLevelPolicy.GetAllowedYearRange(course.EducationLevel);
-            return CreateFailureResponse(
-                $"Year level {request.YearLevel} is not valid for {EducationLevelPolicy.ToDisplayLabel(course.EducationLevel)}. Allowed range is {allowedRange.MinYearLevel}-{allowedRange.MaxYearLevel}.");
-        }
-
-        // Validate AcademicYearId exists
-        var academicYearExists = await _context.AcademicYears.AnyAsync(academicYear => academicYear.Id == request.AcademicYearId, cancellationToken);
-        if (!academicYearExists)
-        {
-            return CreateFailureResponse("Invalid academic year selected.");
-        }
-
-        return null;
-    }
-
-    private async Task<(Section? AssignedSection, int ResolvedYearLevel, AuthResponse? Error)> ResolveStudentRegistrationSectionAsync(RegisterRequest request, CancellationToken cancellationToken = default)
-    {
-        var resolvedYearLevel = request.YearLevel;
-
-        // Optional explicit section still supported for backward compatibility.
-        if (request.SectionId.HasValue && request.SectionId.Value > 0)
-        {
-            var assignedSection = await _context.Sections
-                .AsNoTracking()
-                .FirstOrDefaultAsync(section => section.Id == request.SectionId.Value, cancellationToken);
-
-            if (assignedSection == null)
+            try
             {
-                return (null, resolvedYearLevel, CreateFailureResponse("Invalid section selected."));
-            }
+                var token = await _userManager.GenerateEmailConfirmationTokenAsync(user);
+                var confirmationLink = BuildUserLink(user.Id, token, "confirm-email");
 
-            if (assignedSection.CourseId != request.CourseId)
+                await _accountEmailService.SendSignupAcknowledgmentAsync(user.Email, studentDisplayName);
+                await _accountEmailService.SendVerificationEmailAsync(user.Email, studentDisplayName, confirmationLink);
+            }
+            catch (Exception ex)
             {
-                return (null, resolvedYearLevel, CreateFailureResponse("Selected section does not belong to the selected course."));
+                _logger.LogWarning(ex, "Failed to send signup/verification emails for user {UserId}.", user.Id);
             }
-
-            if (assignedSection.AcademicYearId != request.AcademicYearId)
-            {
-                return (null, resolvedYearLevel, CreateFailureResponse("Selected section does not belong to the selected academic period."));
-            }
-
-            if (assignedSection.YearLevel != resolvedYearLevel)
-            {
-                return (null, resolvedYearLevel, CreateFailureResponse("Selected section year level does not match your chosen year level."));
-            }
-
-            return (assignedSection, resolvedYearLevel, null);
         }
-
-        var autoAssignedSection = await _sectionAllocationService
-            .AllocateSectionAsync(request.CourseId, request.AcademicYearId, resolvedYearLevel);
-
-        if (autoAssignedSection == null)
-        {
-            return (null, resolvedYearLevel, CreateFailureResponse("No available sections for the selected course and academic period. Please contact an administrator."));
-        }
-
-        if (autoAssignedSection.YearLevel != resolvedYearLevel)
-        {
-            return (null, resolvedYearLevel, CreateFailureResponse("No available section matches the selected year level for this program."));
-        }
-
-        return (autoAssignedSection, resolvedYearLevel, null);
-    }
-
-    private async Task<(User? User, string? StudentNumber, AuthResponse? Error)> CreateStudentRegistrationAsync(
-        RegisterRequest request,
-        Section assignedSection,
-        int resolvedYearLevel,
-        CancellationToken cancellationToken = default)
-    {
-        // Registration is transactional so the user, student, and enrollment records stay aligned.
-        await using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
 
         try
         {
-            var user = BuildStudentUser(request.Email);
-            var userCreateResult = await _userManager.CreateAsync(user, request.Password);
-            if (!userCreateResult.Succeeded)
+            var adminRole = UserRole.Admin.ToStorageValue();
+            var adminUserIds = await _context.Users
+                .AsNoTracking()
+                .Where(account => account.Role == adminRole && account.IsActive)
+                .Select(account => account.Id)
+                .ToListAsync(cancellationToken);
+
+            if (adminUserIds.Count == 0)
             {
-                await transaction.RollbackAsync();
-                var errors = string.Join(", ", userCreateResult.Errors.Select(error => error.Description));
-                return (null, null, CreateFailureResponse($"Registration failed: {errors}"));
+                return;
             }
 
-            var studentNumber = await GenerateStudentNumberAsync(cancellationToken);
-            if (studentNumber == null)
+            var payloadJson = JsonSerializer.Serialize(new
             {
-                await transaction.RollbackAsync(cancellationToken);
-                _logger.LogWarning("Unable to generate a unique student number after {AttemptCount} attempts.", StudentNumberGenerationMaxAttempts);
-                return (null, null, CreateFailureResponse("Unable to complete registration right now. Please try again."));
+                StudentUserId = user.Id,
+                StudentNumber = studentNumber,
+                StudentName = studentDisplayName
+            });
+
+            foreach (var adminUserId in adminUserIds)
+            {
+                await _notificationService.CreateAsync(
+                    adminUserId,
+                    NotificationTypes.Signup,
+                    "New Student Signup",
+                    $"{studentDisplayName} submitted a new signup request.",
+                    NotificationLinks.Enrollments,
+                    payloadJson);
             }
-
-            var student = BuildStudentEntity(request, user.Id, resolvedYearLevel, studentNumber);
-            _context.Students.Add(student);
-            await _context.SaveChangesAsync(cancellationToken);
-
-            var enrollment = BuildPendingEnrollment(student.Id, assignedSection.Id, request.AcademicYearId);
-            _context.Enrollments.Add(enrollment);
-            await _context.SaveChangesAsync(cancellationToken);
-
-            await transaction.CommitAsync(cancellationToken);
-            return (user, studentNumber, null);
         }
-        catch
+        catch (Exception ex)
         {
-            await transaction.RollbackAsync(cancellationToken);
-            return (null, null, CreateFailureResponse("Unable to complete registration right now. Please try again."));
+            _logger.LogWarning(ex, "Failed to notify admin users about student signup for user {UserId}.", user.Id);
         }
-    }
-
-    private async Task RunPostStudentRegistrationSideEffectsAsync(User user, string studentDisplayName, string studentNumber, CancellationToken cancellationToken = default)
-    {
-        // Only fire emails and notifications after the database work has succeeded.
-        await TrySendSignupAndVerificationEmailsAsync(user, studentDisplayName);
-        await TryNotifyAdminsOfSignupAsync(user, studentDisplayName, studentNumber, cancellationToken);
     }
 
     // Constructs UserDto with student or teacher details based on role
@@ -479,66 +533,6 @@ public class AuthService : IAuthService
         return userDto;
     }
 
-    private async Task TrySendSignupAndVerificationEmailsAsync(User user, string studentDisplayName)
-    {
-        if (string.IsNullOrWhiteSpace(user.Email))
-        {
-            return;
-        }
-
-        try
-        {
-            var confirmationLink = await BuildEmailConfirmationLinkAsync(user);
-
-            await _accountEmailService.SendSignupAcknowledgmentAsync(user.Email, studentDisplayName);
-            await _accountEmailService.SendVerificationEmailAsync(user.Email, studentDisplayName, confirmationLink);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Failed to send signup/verification emails for user {UserId}.", user.Id);
-        }
-    }
-
-    private async Task TryNotifyAdminsOfSignupAsync(User user, string studentDisplayName, string studentNumber, CancellationToken cancellationToken = default)
-    {
-        try
-        {
-            var adminRole = UserRole.Admin.ToStorageValue();
-            var adminUserIds = await _context.Users
-                .AsNoTracking()
-                .Where(account => account.Role == adminRole && account.IsActive)
-                .Select(account => account.Id)
-                .ToListAsync(cancellationToken);
-
-            if (adminUserIds.Count == 0)
-            {
-                return;
-            }
-
-            var payloadJson = JsonSerializer.Serialize(new
-            {
-                StudentUserId = user.Id,
-                StudentNumber = studentNumber,
-                StudentName = studentDisplayName
-            });
-
-            foreach (var adminUserId in adminUserIds)
-            {
-                await _notificationService.CreateAsync(
-                    adminUserId,
-                    NotificationTypes.Signup,
-                    "New Student Signup",
-                    $"{studentDisplayName} submitted a new signup request.",
-                    NotificationLinks.Enrollments,
-                    payloadJson);
-            }
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Failed to notify admin users about student signup for user {UserId}.", user.Id);
-        }
-    }
-
     private async Task<string> ResolveDisplayNameAsync(User user, CancellationToken cancellationToken = default)
     {
         var studentName = await _context.Students
@@ -566,30 +560,11 @@ public class AuthService : IAuthService
         return user.Email ?? "Student";
     }
 
-    private async Task<string> BuildEmailConfirmationLinkAsync(User user)
-    {
-        var token = await _userManager.GenerateEmailConfirmationTokenAsync(user);
-        return BuildEmailConfirmationLink(user.Id, token);
-    }
-
-    private string BuildEmailConfirmationLink(int userId, string token)
+    private string BuildUserLink(int userId, string token, string path)
     {
         var encodedToken = EncodeToken(token);
         var baseUrl = ResolvePublicBaseUrl().TrimEnd('/');
-        return $"{baseUrl}/confirm-email?userId={userId}&token={encodedToken}";
-    }
-
-    private async Task<string> BuildPasswordResetLinkAsync(User user)
-    {
-        var token = await _userManager.GeneratePasswordResetTokenAsync(user);
-        return BuildPasswordResetLink(user.Id, token);
-    }
-
-    private string BuildPasswordResetLink(int userId, string token)
-    {
-        var encodedToken = EncodeToken(token);
-        var baseUrl = ResolvePublicBaseUrl().TrimEnd('/');
-        return $"{baseUrl}/reset-password?userId={userId}&token={encodedToken}";
+        return $"{baseUrl}/{path}?userId={userId}&token={encodedToken}";
     }
 
     private static string EncodeToken(string token)
@@ -630,39 +605,6 @@ public class AuthService : IAuthService
         return string.IsNullOrWhiteSpace(fullName) ? "Student" : fullName;
     }
 
-    private static User BuildStudentUser(string email)
-    {
-        return new User
-        {
-            UserName = email,
-            Email = email,
-            Role = UserRole.Student.ToStorageValue(),
-            IsActive = true,
-            EmailConfirmed = false
-        };
-    }
-
-    private static Student BuildStudentEntity(RegisterRequest request, int userId, int resolvedYearLevel, string studentNumber)
-    {
-        return new Student
-        {
-            UserId = userId,
-            CourseId = request.CourseId,
-            SectionId = null, // Will be set when enrollment is approved
-            StudentNumber = studentNumber,
-            FirstName = request.FirstName,
-            LastName = request.LastName,
-            MiddleName = request.MiddleName,
-            Birthdate = request.Birthdate,
-            Gender = request.Gender,
-            Address = request.Address,
-            GuardianName = request.GuardianName,
-            GuardianContact = request.GuardianContact,
-            YearLevel = resolvedYearLevel,
-            IsActive = true
-        };
-    }
-
     private async Task<string?> GenerateStudentNumberAsync(CancellationToken cancellationToken = default)
     {
         for (var attempt = 0; attempt < StudentNumberGenerationMaxAttempts; attempt++)
@@ -679,22 +621,6 @@ public class AuthService : IAuthService
         }
 
         return null;
-    }
-
-    private static Enrollment BuildPendingEnrollment(int studentId, int sectionId, int academicYearId)
-    {
-        return new Enrollment
-        {
-            StudentId = studentId,
-            SectionId = sectionId,
-            AcademicYearId = academicYearId,
-            Status = EnrollmentStatus.Pending.ToStorageValue()
-        };
-    }
-
-    private static AuthResponse CreateInvalidEmailConfirmationResponse()
-    {
-        return CreateFailureResponse("Invalid or expired email confirmation link.");
     }
 
     private static AuthResponse CreateFailureResponse(string message)
