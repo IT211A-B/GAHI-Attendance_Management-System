@@ -15,10 +15,6 @@ namespace Attendance_Management_System.Backend.Controllers;
 [Route("")]
 public class AccountController : Controller
 {
-    private const string GenericForgotPasswordNotice = "If an account exists for that email, password reset instructions have been sent. Please check your inbox.";
-    private const string GenericInvalidCredentialsNotice = "Invalid email or password.";
-    private const string GenericLoginUnavailableNotice = "Unable to sign in right now. Please try again shortly.";
-
     private readonly SignInManager<User> _signInManager;
     private readonly UserManager<User> _userManager;
     private readonly IAuthService _authService;
@@ -112,13 +108,13 @@ public class AccountController : Controller
         catch (PostgresException ex) when (ex.SqlState == PostgresErrorCodes.InvalidPassword)
         {
             _logger.LogError(ex, "PostgreSQL authentication failed while processing login.");
-            ModelState.AddModelError(string.Empty, GenericLoginUnavailableNotice);
+            ModelState.AddModelError(string.Empty, "Unable to sign in right now. Please try again shortly.");
             return View(model);
         }
         catch (NpgsqlException ex)
         {
             _logger.LogError(ex, "PostgreSQL connection failure while processing login.");
-            ModelState.AddModelError(string.Empty, GenericLoginUnavailableNotice);
+            ModelState.AddModelError(string.Empty, "Unable to sign in right now. Please try again shortly.");
             return View(model);
         }
 
@@ -133,7 +129,7 @@ public class AccountController : Controller
                 return View(model);
             }
 
-            ModelState.AddModelError(string.Empty, GenericInvalidCredentialsNotice);
+            ModelState.AddModelError(string.Empty, "Invalid email or password.");
             return View(model);
         }
 
@@ -168,7 +164,7 @@ public class AccountController : Controller
             _logger.LogWarning("ForgotPasswordAsync returned non-success for forgot-password request.");
         }
 
-        TempData["AuthSuccess"] = GenericForgotPasswordNotice;
+        TempData["AuthSuccess"] = "If an account exists for that email, password reset instructions have been sent. Please check your inbox.";
         return RedirectToAction(nameof(ForgotPassword));
     }
 
@@ -196,7 +192,6 @@ public class AccountController : Controller
             Email = model.Email.Trim(),
             Password = model.Password,
             ConfirmPassword = model.ConfirmPassword,
-            StudentNumber = model.StudentNumber.Trim(),
             FirstName = model.FirstName.Trim(),
             MiddleName = NormalizeOptional(model.MiddleName),
             LastName = model.LastName.Trim(),

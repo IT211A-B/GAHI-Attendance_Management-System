@@ -16,9 +16,6 @@ public class RegisterRequest
     [Compare("Password", ErrorMessage = "Passwords do not match")]
     public string ConfirmPassword { get; set; } = string.Empty;
 
-    [Required(ErrorMessage = "Student number is required")]
-    public string StudentNumber { get; set; } = string.Empty;
-
     [Required(ErrorMessage = "First name is required")]
     public string FirstName { get; set; } = string.Empty;
 

@@ -19,12 +19,8 @@ namespace Attendance_Management_System.Backend.Services;
 // Handles authentication operations: login, registration, and user profile retrieval
 public class AuthService : IAuthService
 {
-    private const string GenericInvalidCredentialsMessage = "Invalid email or password.";
-    private const string GenericResendVerificationMessage = "If an account exists for that email, a verification link has been sent. Please check your inbox.";
-    private const string GenericForgotPasswordMessage = "If an account exists for that email, password reset instructions have been sent. Please check your inbox.";
-    private const string InvalidEmailConfirmationMessage = "Invalid or expired email confirmation link.";
-    private const string PasswordResetInvalidLinkMessage = "Invalid or expired password reset link.";
-    private const string PasswordResetSuccessMessage = "Password has been reset successfully. You can now sign in.";
+    private const string StudentNumberPrefix = "STD-";
+    private const int StudentNumberGenerationMaxAttempts = 3;
 
     private readonly UserManager<User> _userManager;
     private readonly AppDbContext _context;
@@ -61,7 +57,7 @@ public class AuthService : IAuthService
         // Return generic error to prevent email enumeration attacks
         if (user == null)
         {
-            return CreateFailureResponse(GenericInvalidCredentialsMessage);
+            return CreateFailureResponse("Invalid email or password.");
         }
 
         // Check if account is active
@@ -75,7 +71,7 @@ public class AuthService : IAuthService
 
         if (!isPasswordValid)
         {
-            return CreateFailureResponse(GenericInvalidCredentialsMessage);
+            return CreateFailureResponse("Invalid email or password.");
         }
 
         // Build user DTO with role-specific details
@@ -105,13 +101,13 @@ public class AuthService : IAuthService
             sectionResolution.ResolvedYearLevel,
             cancellationToken);
 
-        if (registrationResult.Error != null || registrationResult.User == null)
+        if (registrationResult.Error != null || registrationResult.User == null || string.IsNullOrWhiteSpace(registrationResult.StudentNumber))
         {
             return registrationResult.Error ?? CreateFailureResponse("Unable to complete registration right now. Please try again.");
         }
 
         var studentDisplayName = BuildDisplayName(request.FirstName, request.MiddleName, request.LastName);
-        await RunPostStudentRegistrationSideEffectsAsync(registrationResult.User, studentDisplayName, request.StudentNumber, cancellationToken);
+        await RunPostStudentRegistrationSideEffectsAsync(registrationResult.User, studentDisplayName, registrationResult.StudentNumber, cancellationToken);
 
         var userDto = await BuildUserDtoAsync(registrationResult.User, cancellationToken);
         return CreateSuccessResponse("Registration successful. Your enrollment is pending approval.", userDto);
@@ -155,7 +151,7 @@ public class AuthService : IAuthService
     {
         if (string.IsNullOrWhiteSpace(email))
         {
-            return CreateSuccessResponse(GenericResendVerificationMessage);
+            return CreateSuccessResponse("If an account exists for that email, a verification link has been sent. Please check your inbox.");
         }
 
         var normalizedEmail = email.Trim();
@@ -163,7 +159,7 @@ public class AuthService : IAuthService
         if (user == null || user.EmailConfirmed || !user.IsActive || string.IsNullOrWhiteSpace(user.Email))
         {
             // Keep the response neutral so callers cannot infer whether an account exists.
-            return CreateSuccessResponse(GenericResendVerificationMessage);
+            return CreateSuccessResponse("If an account exists for that email, a verification link has been sent. Please check your inbox.");
         }
 
         try
@@ -178,14 +174,14 @@ public class AuthService : IAuthService
             _logger.LogWarning(ex, "Failed to resend verification email for user {UserId}.", user.Id);
         }
 
-        return CreateSuccessResponse(GenericResendVerificationMessage);
+        return CreateSuccessResponse("If an account exists for that email, a verification link has been sent. Please check your inbox.");
     }
 
     public async Task<AuthResponse> ForgotPasswordAsync(ForgotPasswordRequest request, CancellationToken cancellationToken = default)
     {
         if (request == null || string.IsNullOrWhiteSpace(request.Email))
         {
-            return CreateSuccessResponse(GenericForgotPasswordMessage);
+            return CreateSuccessResponse("If an account exists for that email, password reset instructions have been sent. Please check your inbox.");
         }
 
         var normalizedEmail = request.Email.Trim();
@@ -193,13 +189,13 @@ public class AuthService : IAuthService
         if (user == null || string.IsNullOrWhiteSpace(user.Email))
         {
             // Keep the response neutral so callers cannot infer whether an account exists.
-            return CreateSuccessResponse(GenericForgotPasswordMessage);
+            return CreateSuccessResponse("If an account exists for that email, password reset instructions have been sent. Please check your inbox.");
         }
 
         if (!user.IsActive)
         {
             _logger.LogInformation("Ignored forgot-password request for inactive user {UserId}.", user.Id);
-            return CreateSuccessResponse(GenericForgotPasswordMessage);
+            return CreateSuccessResponse("If an account exists for that email, password reset instructions have been sent. Please check your inbox.");
         }
 
         try
@@ -214,14 +210,14 @@ public class AuthService : IAuthService
             _logger.LogWarning(ex, "Failed to send password reset email for user {UserId}.", user.Id);
         }
 
-        return CreateSuccessResponse(GenericForgotPasswordMessage);
+        return CreateSuccessResponse("If an account exists for that email, password reset instructions have been sent. Please check your inbox.");
     }
 
     public async Task<AuthResponse> ResetPasswordAsync(ResetPasswordRequest request, CancellationToken cancellationToken = default)
     {
         if (request == null || request.UserId <= 0 || string.IsNullOrWhiteSpace(request.Token))
         {
-            return CreateFailureResponse(PasswordResetInvalidLinkMessage);
+            return CreateFailureResponse("Invalid or expired password reset link.");
         }
 
         if (string.IsNullOrWhiteSpace(request.NewPassword))
@@ -232,19 +228,19 @@ public class AuthService : IAuthService
         var user = await _userManager.FindByIdAsync(request.UserId.ToString());
         if (user == null)
         {
-            return CreateFailureResponse(PasswordResetInvalidLinkMessage);
+            return CreateFailureResponse("Invalid or expired password reset link.");
         }
 
         if (!user.IsActive)
         {
             _logger.LogWarning("Password reset attempted for inactive user {UserId}.", user.Id);
-            return CreateFailureResponse(PasswordResetInvalidLinkMessage);
+            return CreateFailureResponse("Invalid or expired password reset link.");
         }
 
         var decodedToken = DecodeToken(request.Token);
         if (string.IsNullOrWhiteSpace(decodedToken))
         {
-            return CreateFailureResponse(PasswordResetInvalidLinkMessage);
+            return CreateFailureResponse("Invalid or expired password reset link.");
         }
 
         var result = await _userManager.ResetPasswordAsync(user, decodedToken, request.NewPassword);
@@ -253,7 +249,7 @@ public class AuthService : IAuthService
             if (result.Errors.Any(error => string.Equals(error.Code, "InvalidToken", StringComparison.OrdinalIgnoreCase)))
             {
                 // Expired or tampered tokens should read as a generic invalid-link error.
-                return CreateFailureResponse(PasswordResetInvalidLinkMessage);
+                return CreateFailureResponse("Invalid or expired password reset link.");
             }
 
             var errors = string.Join(", ", result.Errors.Select(error => error.Description));
@@ -263,7 +259,7 @@ public class AuthService : IAuthService
                     : $"Unable to reset password: {errors}");
         }
 
-        return CreateSuccessResponse(PasswordResetSuccessMessage);
+        return CreateSuccessResponse("Password has been reset successfully. You can now sign in.");
     }
 
     // Registers a new teacher with auto-generated employee number
@@ -336,14 +332,6 @@ public class AuthService : IAuthService
         if (existingUser != null)
         {
             return CreateFailureResponse("An account with this email already exists.");
-        }
-
-        // Check if student number already exists
-        var existingStudentNumber = await _context.Students
-            .AnyAsync(student => student.StudentNumber == request.StudentNumber, cancellationToken);
-        if (existingStudentNumber)
-        {
-            return CreateFailureResponse("This student number is already registered.");
         }
 
         // Validate CourseId exists and year level is valid for selected stage.
@@ -422,7 +410,7 @@ public class AuthService : IAuthService
         return (autoAssignedSection, resolvedYearLevel, null);
     }
 
-    private async Task<(User? User, AuthResponse? Error)> CreateStudentRegistrationAsync(
+    private async Task<(User? User, string? StudentNumber, AuthResponse? Error)> CreateStudentRegistrationAsync(
         RegisterRequest request,
         Section assignedSection,
         int resolvedYearLevel,
@@ -439,10 +427,18 @@ public class AuthService : IAuthService
             {
                 await transaction.RollbackAsync();
                 var errors = string.Join(", ", userCreateResult.Errors.Select(error => error.Description));
-                return (null, CreateFailureResponse($"Registration failed: {errors}"));
+                return (null, null, CreateFailureResponse($"Registration failed: {errors}"));
             }
 
-            var student = BuildStudentEntity(request, user.Id, resolvedYearLevel);
+            var studentNumber = await GenerateStudentNumberAsync(cancellationToken);
+            if (studentNumber == null)
+            {
+                await transaction.RollbackAsync(cancellationToken);
+                _logger.LogWarning("Unable to generate a unique student number after {AttemptCount} attempts.", StudentNumberGenerationMaxAttempts);
+                return (null, null, CreateFailureResponse("Unable to complete registration right now. Please try again."));
+            }
+
+            var student = BuildStudentEntity(request, user.Id, resolvedYearLevel, studentNumber);
             _context.Students.Add(student);
             await _context.SaveChangesAsync(cancellationToken);
 
@@ -451,12 +447,12 @@ public class AuthService : IAuthService
             await _context.SaveChangesAsync(cancellationToken);
 
             await transaction.CommitAsync(cancellationToken);
-            return (user, null);
+            return (user, studentNumber, null);
         }
         catch
         {
             await transaction.RollbackAsync(cancellationToken);
-            return (null, CreateFailureResponse("Unable to complete registration right now. Please try again."));
+            return (null, null, CreateFailureResponse("Unable to complete registration right now. Please try again."));
         }
     }
 
@@ -678,14 +674,14 @@ public class AuthService : IAuthService
         };
     }
 
-    private static Student BuildStudentEntity(RegisterRequest request, int userId, int resolvedYearLevel)
+    private static Student BuildStudentEntity(RegisterRequest request, int userId, int resolvedYearLevel, string studentNumber)
     {
         return new Student
         {
             UserId = userId,
             CourseId = request.CourseId,
             SectionId = null, // Will be set when enrollment is approved
-            StudentNumber = request.StudentNumber,
+            StudentNumber = studentNumber,
             FirstName = request.FirstName,
             LastName = request.LastName,
             MiddleName = request.MiddleName,
@@ -697,6 +693,24 @@ public class AuthService : IAuthService
             YearLevel = resolvedYearLevel,
             IsActive = true
         };
+    }
+
+    private async Task<string?> GenerateStudentNumberAsync(CancellationToken cancellationToken = default)
+    {
+        for (var attempt = 0; attempt < StudentNumberGenerationMaxAttempts; attempt++)
+        {
+            var candidate = $"{StudentNumberPrefix}{Guid.NewGuid()}";
+            var alreadyExists = await _context.Students
+                .AsNoTracking()
+                .AnyAsync(student => student.StudentNumber == candidate, cancellationToken);
+
+            if (!alreadyExists)
+            {
+                return candidate;
+            }
+        }
+
+        return null;
     }
 
     private static Enrollment BuildPendingEnrollment(int studentId, int sectionId, int academicYearId)
@@ -712,7 +726,7 @@ public class AuthService : IAuthService
 
     private static AuthResponse CreateInvalidEmailConfirmationResponse()
     {
-        return CreateFailureResponse(InvalidEmailConfirmationMessage);
+        return CreateFailureResponse("Invalid or expired email confirmation link.");
     }
 
     private static AuthResponse CreateFailureResponse(string message)

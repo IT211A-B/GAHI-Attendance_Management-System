@@ -348,7 +348,6 @@ public class AuthServiceAccountRecoveryAndEmailConfirmationTests
             Email = "new.student@example.com",
             Password = "Password123!",
             ConfirmPassword = "Password123!",
-            StudentNumber = "2026-TEST-0001",
             FirstName = "Test",
             LastName = "Student",
             Birthdate = new DateOnly(2009, 1, 1),
