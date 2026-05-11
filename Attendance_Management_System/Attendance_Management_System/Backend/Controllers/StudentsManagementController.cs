@@ -1,4 +1,4 @@
-﻿using System.Security.Claims;
+using System.Security.Claims;
 using Attendance_Management_System.Backend.Enums;
 using Attendance_Management_System.Backend.Helpers;
 using Attendance_Management_System.Backend.Interfaces.Services;
@@ -11,7 +11,7 @@ namespace Attendance_Management_System.Backend.Controllers;
 [Authorize(Policy = "AdminOrTeacher")]
 [Route("students")]
 [Route("student")]
-public class StudentsManagementController : AppControllerBase
+public class StudentsManagementController : Controller
 {
     private readonly ISectionsService _sectionsService;
     private readonly IStudentsService _studentsService;
