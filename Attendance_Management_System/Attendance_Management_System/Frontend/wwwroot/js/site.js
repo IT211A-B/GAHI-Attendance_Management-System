@@ -1538,6 +1538,10 @@
 		var countdownTimerId = 0;
 		var feedTimerId = 0;
 
+		function hasQrToast() {
+			return typeof window.amsToast !== "undefined" && window.amsToast.show;
+		}
+
 		function setStatus(message) {
 			statusText.textContent = message;
 		}
@@ -1928,11 +1932,17 @@
 		generateBtn.addEventListener("click", function () {
 			if (!selectedSection || !selectedSubject || !selectedPeriod) {
 				setStatus("Select section, subject, and period before generating QR.");
+				if (hasQrToast()) {
+					window.amsToast.show("warning", "Select section, subject, and period before generating QR.");
+				}
 				return;
 			}
 
 			if (!createSessionUrl) {
 				setStatus("Session endpoint is unavailable.");
+				if (hasQrToast()) {
+					window.amsToast.show("error", "Session endpoint is unavailable.");
+				}
 				return;
 			}
 
@@ -1944,19 +1954,22 @@
 			}).then(function (result) {
 				if (!result.ok || !result.data) {
 					setStatus(result.message || "Unable to create QR session.");
+					if (hasQrToast()) {
+						window.amsToast.show("error", result.message || "Unable to create QR session.");
+					}
 					return;
 				}
 
 				applySession(result.data);
-				setStatus(
-					"Session active for "
-						+ activeSession.sectionName
-						+ " / "
-						+ activeSession.subjectLabel
-						+ " ("
-						+ activeSession.periodLabel
-						+ ")."
-				);
+				var successMessage = "Session active for "
+					+ activeSession.sectionName
+					+ " / "
+					+ activeSession.subjectLabel
+					+ ".";
+				setStatus(successMessage);
+				if (hasQrToast()) {
+					window.amsToast.show("success", "QR session created for " + activeSession.sectionName + " / " + activeSession.subjectLabel + ".");
+				}
 			});
 		});
 
@@ -2013,6 +2026,10 @@
 		var scanner = null;
 		var scannerState = "idle";
 
+		function hasToast() {
+			return typeof window.amsToast !== "undefined" && window.amsToast.show;
+		}
+
 		function setStatus(message) {
 			statusText.textContent = message;
 		}
@@ -2022,6 +2039,16 @@
 			submitResult.classList.remove("result-success", "result-error", "result-warning");
 			if (type) {
 				submitResult.classList.add(type);
+			}
+
+			// Also show a toast for more visible feedback
+			if (message && hasToast()) {
+				var toastType = type === "result-success" ? "success"
+					: type === "result-warning" ? "warning"
+					: type === "result-error" ? "error" : null;
+				if (toastType) {
+					window.amsToast.show(toastType, message);
+				}
 			}
 		}
 
@@ -2165,6 +2192,18 @@
 				stopScanner();
 			}
 		});
+	}
+
+	// ── Global helper: display a toast from a requestApi result ────
+	// Callers: if (doNotShowToast) return; ... or pass { showToast: true }
+	function showApiErrorToast(apiResult) {
+		if (!apiResult || apiResult.ok !== false) {
+			return;
+		}
+
+		if (typeof window.amsToast !== "undefined" && window.amsToast.showApiError) {
+			window.amsToast.showApiError(apiResult);
+		}
 	}
 
 	// Initialize all features when the DOM is fully loaded.
