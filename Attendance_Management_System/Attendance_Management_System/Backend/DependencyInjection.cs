@@ -9,9 +9,13 @@ using Attendance_Management_System.Backend.Services;
 using Attendance_Management_System.Backend.Security;
 using FluentEmail.MailKitSmtp;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using System.Threading.RateLimiting;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Net.Http.Headers;
+using System.Globalization;
+using System.Security.Claims;
 
 namespace Attendance_Management_System.Backend;
 
@@ -109,6 +113,25 @@ public static class DependencyInjection
         services.AddRateLimiter(options =>
         {
             options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+            options.OnRejected = async (context, cancellationToken) =>
+            {
+                if (context.Lease.TryGetMetadata(MetadataName.RetryAfter, out var retryAfter))
+                {
+                    var retryAfterSeconds = Math.Max(1, (int)Math.Ceiling(retryAfter.TotalSeconds));
+                    context.HttpContext.Response.Headers[HeaderNames.RetryAfter] =
+                        retryAfterSeconds.ToString(CultureInfo.InvariantCulture);
+                }
+
+                var problemDetails = new ProblemDetails
+                {
+                    Status = StatusCodes.Status429TooManyRequests,
+                    Title = "Too many requests",
+                    Detail = "Please retry after the indicated delay."
+                };
+
+                context.HttpContext.Response.ContentType = "application/problem+json";
+                await context.HttpContext.Response.WriteAsJsonAsync(problemDetails, cancellationToken);
+            };
 
             options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(httpContext =>
                 RateLimitPartition.GetFixedWindowLimiter(
@@ -150,6 +173,15 @@ public static class DependencyInjection
 
     private static string GetClientKey(HttpContext httpContext)
     {
+        if (httpContext.User?.Identity?.IsAuthenticated == true)
+        {
+            var userId = httpContext.User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (!string.IsNullOrWhiteSpace(userId))
+            {
+                return $"user:{userId}";
+            }
+        }
+
         var remoteIp = httpContext.Connection.RemoteIpAddress?.ToString();
         return string.IsNullOrWhiteSpace(remoteIp) ? "ip:unknown" : $"ip:{remoteIp}";
     }
