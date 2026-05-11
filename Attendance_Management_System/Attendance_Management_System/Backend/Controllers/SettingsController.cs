@@ -1,4 +1,4 @@
-﻿using System.Security.Claims;
+using System.Security.Claims;
 using Attendance_Management_System.Backend.DTOs.Requests;
 using Attendance_Management_System.Backend.Interfaces.Services;
 using Attendance_Management_System.Backend.ViewModels.Settings;
@@ -9,7 +9,7 @@ namespace Attendance_Management_System.Backend.Controllers;
 
 [Authorize]
 [Route("settings")]
-public class SettingsController : AppControllerBase
+public class SettingsController : Controller
 {
     private readonly IUsersService _usersService;
 
