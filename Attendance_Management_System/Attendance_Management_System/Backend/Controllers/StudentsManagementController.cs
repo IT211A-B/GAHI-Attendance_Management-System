@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using Attendance_Management_System.Backend.DTOs.Responses;
 using Attendance_Management_System.Backend.Enums;
 using Attendance_Management_System.Backend.Helpers;
 using Attendance_Management_System.Backend.Interfaces.Services;
@@ -6,7 +7,6 @@ using Attendance_Management_System.Backend.ViewModels.Students;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
-using Attendance_Management_System.Backend.DTOs.Responses;
 
 namespace Attendance_Management_System.Backend.Controllers;
 
@@ -20,7 +20,10 @@ public class StudentsManagementController : Controller
     private readonly ITeachersService _teachersService;
     private readonly ILogger<StudentsManagementController> _logger;
 
-    public StudentsManagementController(ISectionsService sectionsService, IStudentsService studentsService, ITeachersService teachersService,
+    public StudentsManagementController(
+        ISectionsService sectionsService,
+        IStudentsService studentsService,
+        ITeachersService teachersService,
         ILogger<StudentsManagementController> logger)
     {
         _sectionsService = sectionsService;
@@ -32,29 +35,34 @@ public class StudentsManagementController : Controller
     [HttpGet("")]
     public async Task<IActionResult> Index([FromQuery] int? sectionId)
     {
-        if (!TryGetCurrentUserContext(out var userId, out var role))
-        {
+        var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        var role = User.FindFirstValue(ClaimTypes.Role) ?? string.Empty;
+        if (!int.TryParse(userIdClaim, out var userId))
             return Challenge();
-        }
 
         var isTeacher = role.IsRole(UserRole.Teacher);
         var viewModel = new StudentsIndexViewModel
         {
-            SelectedSectionId = sectionId,
             IsTeacher = isTeacher
         };
 
-        var sectionsResult = isTeacher
-            ? await ExecuteServiceCallAsync(() => _sectionsService.GetSectionsByTeacherUserIdAsync(userId))
-            : await ExecuteServiceCallAsync(() => _sectionsService.GetAllSectionsAsync());
+        List<SectionDto> sections;
 
-        if (!sectionsResult.Success || sectionsResult.Data is null)
+        try
         {
-            viewModel.ErrorMessage = sectionsResult.Error?.Message ?? "Unable to load sections right now.";
+            sections = isTeacher
+                ? await _sectionsService.GetSectionsByTeacherUserIdAsync(userId)
+                : await _sectionsService.GetAllSectionsAsync();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to load sections for students view.");
+            viewModel.ErrorMessage = "Unable to load sections right now.";
             return View(viewModel);
         }
 
-        viewModel.Sections = sectionsResult.Data
+        viewModel.IsCurrentTeacherAssignedToSelectedSection = isTeacher;
+        viewModel.Sections = sections
             .OrderBy(s => s.Name)
             .Select(section => new StudentsSectionOptionViewModel
             {
@@ -63,51 +71,40 @@ public class StudentsManagementController : Controller
             })
             .ToList();
 
-        if (isTeacher && !viewModel.Sections.Any())
+        if (!sectionId.HasValue)
+            return View(viewModel);
+
+        viewModel.SelectedSectionId = sectionId;
+        var selectedSection = sections.FirstOrDefault(s => s.Id == sectionId.Value);
+        if (selectedSection is null)
         {
-            viewModel.ErrorMessage = "You are not assigned to any section yet.";
-            viewModel.SelectedSectionId = null;
+            viewModel.ErrorMessage = "The selected section was not found.";
             return View(viewModel);
         }
 
-        if (sectionId is null)
+        List<StudentBasicProfileDto> students;
+
+        try
         {
+            students = await _studentsService.GetStudentsBySectionAsync(sectionId.Value, userId, role);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to load students for section {SectionId}.", sectionId.Value);
+            viewModel.ErrorMessage = "Unable to load students for the selected section.";
             return View(viewModel);
         }
 
-        if (!viewModel.Sections.Any(section => section.Id == sectionId.Value))
-        {
-            viewModel.SelectedSectionId = null;
-            viewModel.ErrorMessage = isTeacher
-                ? "You can only view students in sections assigned to you."
-                : "Selected section is not available.";
-            return View(viewModel);
-        }
-
-        viewModel.IsCurrentTeacherAssignedToSelectedSection = isTeacher;
-
-        var studentsResult = await ExecuteServiceCallAsync(() => _studentsService.GetStudentsBySectionAsync(sectionId.Value, userId, role));
-
-        if (!studentsResult.Success || studentsResult.Data is null)
-        {
-            viewModel.ErrorMessage = studentsResult.Error?.Message ?? "Unable to load students for the selected section.";
-            return View(viewModel);
-        }
-
-        viewModel.Students = studentsResult.Data
+        viewModel.Students = students
             .OrderBy(s => s.LastName)
             .ThenBy(s => s.FirstName)
             .Select(student => new StudentListItemViewModel
             {
                 Id = student.Id,
-                StudentNumber = student.StudentNumber,
-                FullName = string.Join(" ", new[] { student.FirstName, student.MiddleName, student.LastName }
-                    .Where(part => !string.IsNullOrWhiteSpace(part))),
-                YearLevel = student.YearLevel,
-                CourseText = string.IsNullOrWhiteSpace(student.CourseCode) && string.IsNullOrWhiteSpace(student.CourseName)
-                    ? "-"
-                    : $"{student.CourseCode} {student.CourseName}".Trim(),
-                SectionName = string.IsNullOrWhiteSpace(student.SectionName) ? "-" : student.SectionName
+                StudentNumber = student.StudentNumber ?? "-",
+                FullName = student.FullName ?? "-",
+                Email = student.Email ?? "-",
+                Status = student.Status
             })
             .ToList();
 
@@ -119,49 +116,40 @@ public class StudentsManagementController : Controller
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> SelfUnassign(int id)
     {
-        if (!TryGetCurrentUserContext(out var userId, out _))
-        {
-            return Challenge();
-        }
-
-        var teacherResult = await ExecuteServiceCallAsync(() => _teachersService.GetTeacherByUserIdAsync(userId));
-        if (!teacherResult.Success || teacherResult.Data is null)
-        {
-            TempData["StudentsError"] = teacherResult.Error?.Message ?? "Teacher profile not found for the current account.";
-            return RedirectToAction(nameof(Index), new { sectionId = id });
-        }
-
-        // Self-unassign also removes schedules owned by this teacher in the section.
-        var removeResult = await ExecuteServiceCallAsync(() => _sectionsService.RemoveTeacherFromSectionAsync(
-            id,
-            teacherResult.Data.Id,
-            isAdmin: true,
-            removeOwnedSchedules: true));
-        if (!removeResult.Success)
-        {
-            TempData["StudentsError"] = removeResult.Error?.Message ?? "Unable to unassign from this section right now.";
-            return RedirectToAction(nameof(Index), new { sectionId = id });
-        }
-
-        TempData["StudentsSuccess"] = "You are no longer assigned to this section and your schedules were removed.";
-        return RedirectToAction(nameof(Index));
-    }
-
-    private bool TryGetCurrentUserContext(out int userId, out string role)
-    {
-        userId = 0;
-        role = User.FindFirstValue(ClaimTypes.Role) ?? string.Empty;
-
         var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
-        if (!int.TryParse(userIdClaim, out userId) || string.IsNullOrWhiteSpace(role))
+        if (!int.TryParse(userIdClaim, out var userId))
+            return Challenge();
+
+        TeacherDto? teacher;
+
+        try
         {
-            return false;
+            teacher = await _teachersService.GetTeacherByUserIdAsync(userId);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to resolve teacher profile for user {UserId}.", userId);
+            TempData["StudentsError"] = "Teacher profile not found for the current account.";
+            return RedirectToAction(nameof(Index), new { sectionId = id });
         }
 
-        return true;
+        if (teacher is null)
+        {
+            TempData["StudentsError"] = "Teacher profile not found for the current account.";
+            return RedirectToAction(nameof(Index), new { sectionId = id });
+        }
+
+        try
+        {
+            await _sectionsService.RemoveTeacherFromSectionAsync(id, teacher.Id, isAdmin: true, removeOwnedSchedules: true);
+            TempData["StudentsSuccess"] = "You have been unassigned from this section.";
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to self-unassign teacher {TeacherId} from section {SectionId}.", teacher.Id, id);
+            TempData["StudentsError"] = "Unable to unassign from this section right now.";
+        }
+
+        return RedirectToAction(nameof(Index), new { sectionId = id });
     }
 }
-
-
-
-
