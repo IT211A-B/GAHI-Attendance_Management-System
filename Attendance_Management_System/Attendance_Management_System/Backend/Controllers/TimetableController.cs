@@ -16,15 +16,18 @@ public class TimetableController : Controller
     private readonly ISectionPageService _sectionPageService;
     private readonly ISectionsService _sectionsService;
     private readonly ISchedulesService _schedulesService;
+    private readonly ILogger<TimetableController> _logger;
 
     public TimetableController(
         ISectionPageService sectionPageService,
         ISectionsService sectionsService,
-        ISchedulesService schedulesService)
+        ISchedulesService schedulesService,
+        ILogger<TimetableController> logger)
     {
         _sectionPageService = sectionPageService;
         _sectionsService = sectionsService;
         _schedulesService = schedulesService;
+        _logger = logger;
     }
 
     [HttpGet("")]
@@ -330,4 +333,5 @@ public class TimetableController : Controller
         return (true, userId, role, role.IsRole(UserRole.Admin));
     }
 }
+
 
