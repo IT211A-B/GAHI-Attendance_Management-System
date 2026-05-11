@@ -1,10 +1,10 @@
 using System.Security.Claims;
+using Attendance_Management_System.Backend.DTOs.Responses;
 using Attendance_Management_System.Backend.Interfaces.Services;
-using Attendance_Management_System.Backend.ViewModels.TeacherHistory;
+using Attendance_Management_System.Backend.ViewModels.Teachers;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
-using Attendance_Management_System.Backend.DTOs.Responses;
 
 namespace Attendance_Management_System.Backend.Controllers;
 
@@ -15,96 +15,87 @@ public class TeacherHistoryManagementController : Controller
     private readonly ITeacherHistoryService _teacherHistoryService;
     private readonly ILogger<TeacherHistoryManagementController> _logger;
 
-    public TeacherHistoryManagementController(ITeacherHistoryService teacherHistoryService)
+    public TeacherHistoryManagementController(ITeacherHistoryService teacherHistoryService, ILogger<TeacherHistoryManagementController> logger)
     {
         _teacherHistoryService = teacherHistoryService;
         _logger = logger;
     }
 
     [HttpGet("")]
-    public async Task<IActionResult> Index([FromQuery] int? scheduleId, [FromQuery] DateOnly? date)
+    public async Task<IActionResult> Index([FromQuery] int? scheduleId, [FromQuery] DateOnly? selectedDate)
     {
-        var userId = GetCurrentUserId();
-        if (userId is null)
-        {
+        var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (!int.TryParse(userIdClaim, out var userId))
             return Challenge();
-        }
 
-        var selectedDate = date ?? DateOnly.FromDateTime(DateTime.Today);
+        var actualDate = selectedDate ?? DateOnly.FromDateTime(DateTime.Today);
         var viewModel = new TeacherHistoryIndexViewModel
         {
             SelectedScheduleId = scheduleId,
-            SelectedDate = selectedDate
+            SelectedDate = actualDate
         };
 
-        var schedulesResult = await ExecuteServiceCallAsync(() => _teacherHistoryService.GetTeacherSchedulesAsync(userId.Value));
+        List<ScheduleDto> teacherSchedules;
 
-        if (!schedulesResult.Success || schedulesResult.Data is null)
+        try
         {
-            viewModel.ErrorMessage = schedulesResult.Error?.Message ?? "Unable to load your assigned schedules right now.";
+            teacherSchedules = await _teacherHistoryService.GetTeacherSchedulesAsync(userId);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to load teacher schedules for user {UserId}.", userId);
+            viewModel.ErrorMessage = "Unable to load your schedules right now.";
             return View(viewModel);
         }
 
-        viewModel.Schedules = schedulesResult.Data
-            .OrderBy(s => s.DayOfWeek)
-            .ThenBy(s => s.StartTime)
+        viewModel.Schedules = teacherSchedules
             .Select(schedule => new TeacherScheduleOptionViewModel
             {
                 Id = schedule.Id,
-                Label = $"{schedule.SectionName} | {schedule.SubjectName} | {schedule.DayName} {schedule.StartTime}-{schedule.EndTime}"
+                SectionName = schedule.SectionName,
+                SubjectName = schedule.SubjectName,
+                DayName = schedule.DayName,
+                TimeRange = $"{schedule.StartTime} - {schedule.EndTime}"
             })
             .ToList();
 
-        if (scheduleId is null)
+        if (!scheduleId.HasValue || !viewModel.Schedules.Any(s => s.Id == scheduleId.Value))
         {
             return View(viewModel);
         }
 
-        var historyResult = await ExecuteServiceCallAsync(() => _teacherHistoryService.GetScheduleHistoryAsync(scheduleId.Value, userId.Value, selectedDate));
-        if (!historyResult.Success || historyResult.Data is null)
+        viewModel.SelectedScheduleId = scheduleId;
+
+        List<ScheduleHistoryDto> history;
+
+        try
         {
-            viewModel.ErrorMessage = historyResult.Error?.Message ?? "Unable to load schedule history right now.";
+            history = await _teacherHistoryService.GetScheduleHistoryAsync(scheduleId.Value, userId, actualDate);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to load schedule history for schedule {ScheduleId}.", scheduleId.Value);
+            viewModel.ErrorMessage = "Unable to load schedule history right now.";
             return View(viewModel);
         }
 
-        viewModel.ScheduleDetails = new TeacherScheduleDetailsViewModel
-        {
-            SubjectName = historyResult.Data.Schedule.SubjectName,
-            Section = historyResult.Data.Schedule.Section,
-            Classroom = historyResult.Data.Schedule.Classroom,
-            Day = historyResult.Data.Schedule.Day,
-            StartTime = historyResult.Data.Schedule.StartTime,
-            EndTime = historyResult.Data.Schedule.EndTime
-        };
-
-        viewModel.TotalStudents = historyResult.Data.Summary.TotalStudents;
-        viewModel.PresentCount = historyResult.Data.Summary.PresentCount;
-        viewModel.LateCount = historyResult.Data.Summary.LateCount;
-        viewModel.AbsentCount = historyResult.Data.Summary.AbsentCount;
-        viewModel.UnmarkedCount = historyResult.Data.Summary.UnmarkedCount;
-
-        viewModel.Records = historyResult.Data.Records
-            .OrderBy(r => r.StudentName)
-            .Select(record => new TeacherAttendanceRecordViewModel
+        viewModel.History = history
+            .OrderByDescending(h => h.Date)
+            .ThenBy(h => h.StudentName)
+            .Select(entry => new ScheduleHistoryItemViewModel
             {
-                StudentId = record.StudentId,
-                StudentName = string.IsNullOrWhiteSpace(record.StudentName) ? "-" : record.StudentName,
-                TimeInText = record.TimeIn?.ToString("HH:mm") ?? "-",
-                TimeOutText = record.TimeOut?.ToString("HH:mm") ?? "-",
-                Remarks = string.IsNullOrWhiteSpace(record.Remarks) ? record.StatusLabel : record.Remarks
+                Date = entry.Date,
+                StudentName = entry.StudentName,
+                AttendanceStatus = entry.AttendanceStatus,
+                IsPresent = entry.IsPresent,
+                IsLate = entry.IsLate,
+                IsAbsent = entry.IsAbsent,
+                IsUnmarked = entry.IsUnmarked,
+                TimeIn = entry.TimeIn,
+                Remarks = entry.Remarks
             })
             .ToList();
 
         return View(viewModel);
     }
-
-    private int? GetCurrentUserId()
-    {
-        var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
-        return int.TryParse(userIdClaim, out var userId) ? userId : null;
-    }
 }
-
-
-
-
