@@ -8,78 +8,56 @@ using Microsoft.Extensions.Logging;
 
 namespace Attendance_Management_System.Backend.Controllers;
 
-[Authorize(Policy = "AdminOnly")]
+[Authorize(Policy = "AdminOrTeacher")]
 [Route("subjects")]
 public class SubjectsManagementController : Controller
 {
     private readonly ISubjectsService _subjectsService;
+    private readonly ICoursesService _coursesService;
     private readonly ILogger<SubjectsManagementController> _logger;
 
-    public SubjectsManagementController(ISubjectsService subjectsService, ILogger<SubjectsManagementController> logger)
+    public SubjectsManagementController(ISubjectsService subjectsService, ICoursesService coursesService, ILogger<SubjectsManagementController> logger)
     {
         _subjectsService = subjectsService;
+        _coursesService = coursesService;
         _logger = logger;
     }
 
     [HttpGet("")]
     public async Task<IActionResult> Index()
     {
-        SubjectsIndexViewModel viewModel;
-
-        try
-        {
-            var subjects = await _subjectsService.GetAllSubjectsAsync();
-            viewModel = new SubjectsIndexViewModel
-            {
-                Subjects = subjects
-                    .OrderBy(s => s.Code)
-                    .Select(s => new SubjectListItemViewModel
-                    {
-                        Id = s.Id,
-                        Code = s.Code,
-                        Name = s.Name,
-                        IsActive = s.IsActive
-                    })
-                    .ToList()
-            };
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to load subjects.");
-            viewModel = new SubjectsIndexViewModel
-            {
-                ErrorMessage = "Unable to load subjects right now."
-            };
-        }
-
+        var viewModel = await BuildIndexViewModelAsync();
         return View(viewModel);
     }
 
     [HttpPost("create")]
+    [Authorize(Policy = "AdminOrTeacher")]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Create([Bind(Prefix = "CreateForm")] CreateSubjectFormViewModel form)
     {
+        var viewModel = await BuildIndexViewModelAsync();
+        viewModel.CreateForm = form;
+
         if (!ModelState.IsValid)
         {
-            TempData["SubjectsError"] = "Please provide valid subject details.";
-            return RedirectToAction(nameof(Index));
+            return View(nameof(Index), viewModel);
         }
 
         try
         {
             await _subjectsService.CreateSubjectAsync(new CreateSubjectRequest
             {
-                Code = form.Code.Trim(),
                 Name = form.Name.Trim(),
-                Department = form.Department?.Trim(),
+                Code = form.Code.Trim(),
+                CourseId = form.CourseId,
                 Units = form.Units
             });
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to create subject.");
-            TempData["SubjectsError"] = "Unable to create subject right now.";
-            return RedirectToAction(nameof(Index));
+            ModelState.AddModelError("CreateForm.CourseId", "Unable to create subject right now.");
+            return View(nameof(Index), viewModel);
         }
 
         TempData["SubjectsSuccess"] = "Subject created successfully.";
@@ -87,6 +65,7 @@ public class SubjectsManagementController : Controller
     }
 
     [HttpPost("{id:int}/update")]
+    [Authorize(Policy = "AdminOrTeacher")]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Update(int id, [Bind(Prefix = "UpdateForm")] UpdateSubjectFormViewModel form)
     {
@@ -100,9 +79,9 @@ public class SubjectsManagementController : Controller
         {
             await _subjectsService.UpdateSubjectAsync(id, new UpdateSubjectRequest
             {
-                Code = form.Code.Trim(),
                 Name = form.Name.Trim(),
-                Department = form.Department?.Trim(),
+                Code = form.Code.Trim(),
+                CourseId = form.CourseId,
                 Units = form.Units
             });
         }
@@ -118,6 +97,7 @@ public class SubjectsManagementController : Controller
     }
 
     [HttpPost("{id:int}/delete")]
+    [Authorize(Policy = "AdminOrTeacher")]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Delete(int id, int? replacementSubjectId)
     {
@@ -134,5 +114,75 @@ public class SubjectsManagementController : Controller
 
         TempData["SubjectsSuccess"] = "Subject deleted successfully.";
         return RedirectToAction(nameof(Index));
+    }
+
+    private async Task<SubjectsIndexViewModel> BuildIndexViewModelAsync()
+    {
+        var viewModel = new SubjectsIndexViewModel();
+
+        List<CourseDto> courses;
+
+        try
+        {
+            courses = await _coursesService.GetAllCoursesAsync();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to load courses for subjects view.");
+            viewModel.ErrorMessage = "Unable to load courses right now.";
+            return viewModel;
+        }
+
+        viewModel.Courses = courses
+            .OrderBy(course => course.Name)
+            .Select(course => new SubjectCourseOptionViewModel
+            {
+                Id = course.Id,
+                Label = BuildCourseOptionLabel(course.Code, course.Name)
+            })
+            .ToList();
+
+        var courseLabelsById = viewModel.Courses
+            .GroupBy(course => course.Id)
+            .ToDictionary(group => group.Key, group => group.First().Label);
+
+        List<SubjectDto> subjects;
+
+        try
+        {
+            subjects = await _subjectsService.GetAllSubjectsAsync();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to load subjects.");
+            viewModel.ErrorMessage = "Unable to load subjects right now.";
+            return viewModel;
+        }
+
+        viewModel.Subjects = subjects
+            .OrderBy(s => s.Name)
+            .ThenBy(s => s.Code)
+            .Select(subject => new SubjectListItemViewModel
+            {
+                Id = subject.Id,
+                Name = subject.Name,
+                Code = subject.Code,
+                CourseId = subject.CourseId,
+                CourseLabel = courseLabelsById.TryGetValue(subject.CourseId, out var label)
+                    ? label
+                    : string.IsNullOrWhiteSpace(subject.CourseName) ? "-" : subject.CourseName,
+                Units = subject.Units
+            })
+            .ToList();
+
+        return viewModel;
+    }
+
+    private static string BuildCourseOptionLabel(string? code, string? name)
+    {
+        var courseName = string.IsNullOrWhiteSpace(name) ? "Unnamed course" : name.Trim();
+        return string.IsNullOrWhiteSpace(code)
+            ? courseName
+            : $"{code.Trim()} - {courseName}";
     }
 }
