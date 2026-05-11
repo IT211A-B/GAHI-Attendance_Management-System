@@ -13,13 +13,13 @@ namespace Attendance_Management_System.Backend.Controllers;
 public class SectionAttendanceController : Controller
 {
     private readonly ISectionPageService _sectionPageService;
-    private readonly ILogger<SectionAttendanceController> _logger;
     private readonly IAttendanceService _attendanceService;
     private readonly ILogger<SectionAttendanceController> _logger;
 
     public SectionAttendanceController(
         ISectionPageService sectionPageService,
-        IAttendanceService attendanceService)
+        IAttendanceService attendanceService,
+        ILogger<SectionAttendanceController> logger)
     {
         _sectionPageService = sectionPageService;
         _attendanceService = attendanceService;
@@ -30,17 +30,18 @@ public class SectionAttendanceController : Controller
     public async Task<IActionResult> Index([FromQuery] int? sectionId, [FromQuery] int? scheduleId, [FromQuery] DateOnly? attendanceDate)
     {
         var context = GetUserContext();
-        if (!context.IsValid)
-        {
-            return Challenge();
-        }
+        if (!context.IsValid) return Challenge();
 
-        var viewModel = await _sectionPageService.BuildSectionAttendanceIndexViewModelAsync(
-            context.UserId,
-            context.Role,
-            sectionId,
-            scheduleId,
-            attendanceDate);
+        SectionAttendanceIndexViewModel viewModel;
+        try
+        {
+            viewModel = await _sectionPageService.BuildSectionAttendanceIndexViewModelAsync(context.UserId, context.Role, sectionId, scheduleId, attendanceDate);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to load section attendance index view.");
+            viewModel = new SectionAttendanceIndexViewModel { ErrorMessage = "Unable to load attendance data right now." };
+        }
         return View(viewModel);
     }
 
@@ -49,62 +50,14 @@ public class SectionAttendanceController : Controller
     public async Task<IActionResult> MarkSectionAttendance([FromForm] SectionMarkAttendanceFormViewModel form)
     {
         var context = GetUserContext();
-        if (!context.IsValid)
-        {
-            return Challenge();
-        }
-
-        if (!ModelState.IsValid)
-        {
-            TempData["SectionAttendanceError"] = "Please provide valid attendance details.";
-            return RedirectToAction(nameof(Index), new
-            {
-                sectionId = form.SectionId,
-                scheduleId = form.ScheduleId,
-                attendanceDate = form.Date.ToString("yyyy-MM-dd")
-            });
-        }
-
+        if (!context.IsValid) return Challenge();
+        if (!ModelState.IsValid) { TempData["SectionAttendanceError"] = "Please provide valid attendance details."; return RedirectToAction(nameof(Index), new { sectionId = form.SectionId, scheduleId = form.ScheduleId, attendanceDate = form.Date.ToString("yyyy-MM-dd") }); }
         var teacherContextResult = await _sectionPageService.BuildTeacherContextAsync(context.UserId, context.Role);
-        if (!teacherContextResult.Success)
-        {
-            TempData["SectionAttendanceError"] = teacherContextResult.Error ?? "Unable to identify teacher context.";
-            return RedirectToAction(nameof(Index), new
-            {
-                sectionId = form.SectionId,
-                scheduleId = form.ScheduleId,
-                attendanceDate = form.Date.ToString("yyyy-MM-dd")
-            });
-        }
-
-        var result = await ExecuteServiceCallAsync(() => _attendanceService.MarkAttendanceAsync(new MarkAttendanceRequest
-        {
-            SectionId = form.SectionId,
-            ScheduleId = form.ScheduleId,
-            StudentId = form.StudentId,
-            Date = form.Date,
-            TimeIn = form.TimeIn,
-            Remarks = NormalizeOptional(form.Remarks)
-        }, teacherContextResult.Context));
-
-        if (!result.Success)
-        {
-            TempData["SectionAttendanceError"] = result.Error?.Message ?? "Unable to mark attendance right now.";
-            return RedirectToAction(nameof(Index), new
-            {
-                sectionId = form.SectionId,
-                scheduleId = form.ScheduleId,
-                attendanceDate = form.Date.ToString("yyyy-MM-dd")
-            });
-        }
-
+        if (!teacherContextResult.Success) { TempData["SectionAttendanceError"] = teacherContextResult.Error ?? "Unable to identify teacher context."; return RedirectToAction(nameof(Index), new { sectionId = form.SectionId, scheduleId = form.ScheduleId, attendanceDate = form.Date.ToString("yyyy-MM-dd") }); }
+        try { await _attendanceService.MarkAttendanceAsync(new MarkAttendanceRequest { SectionId = form.SectionId, ScheduleId = form.ScheduleId, StudentId = form.StudentId, Date = form.Date, TimeIn = form.TimeIn, Remarks = NormalizeOptional(form.Remarks) }, teacherContextResult.Context); }
+        catch (Exception ex) { _logger.LogError(ex, "Failed to mark attendance for student {StudentId}.", form.StudentId); TempData["SectionAttendanceError"] = "Unable to mark attendance right now."; return RedirectToAction(nameof(Index), new { sectionId = form.SectionId, scheduleId = form.ScheduleId, attendanceDate = form.Date.ToString("yyyy-MM-dd") }); }
         TempData["SectionAttendanceSuccess"] = "Attendance marked successfully.";
-        return RedirectToAction(nameof(Index), new
-        {
-            sectionId = form.SectionId,
-            scheduleId = form.ScheduleId,
-            attendanceDate = form.Date.ToString("yyyy-MM-dd")
-        });
+        return RedirectToAction(nameof(Index), new { sectionId = form.SectionId, scheduleId = form.ScheduleId, attendanceDate = form.Date.ToString("yyyy-MM-dd") });
     }
 
     private static string? NormalizeOptional(string? value)
@@ -115,17 +68,10 @@ public class SectionAttendanceController : Controller
 
     private (bool IsValid, int UserId, string Role) GetUserContext()
     {
-        var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        var idClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
         var role = User.FindFirstValue(ClaimTypes.Role) ?? string.Empty;
-
-        if (!int.TryParse(userIdClaim, out var userId) || string.IsNullOrWhiteSpace(role))
-        {
+        if (!int.TryParse(idClaim, out var uid) || string.IsNullOrWhiteSpace(role))
             return (false, 0, string.Empty);
-        }
-
-        return (true, userId, role);
+        return (true, uid, role);
     }
 }
-
-
-
