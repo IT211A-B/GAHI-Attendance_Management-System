@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using Attendance_Management_System.Backend.DTOs.Requests;
+using Attendance_Management_System.Backend.DTOs.Responses;
 using Attendance_Management_System.Backend.Enums;
 using Attendance_Management_System.Backend.Helpers;
 using Attendance_Management_System.Backend.Interfaces.Services;
@@ -7,7 +8,6 @@ using Attendance_Management_System.Backend.ViewModels.Schedules;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
-using Attendance_Management_System.Backend.DTOs.Responses;
 
 namespace Attendance_Management_System.Backend.Controllers;
 
@@ -18,7 +18,7 @@ public class ScheduleManagementController : Controller
     private readonly ISchedulesService _schedulesService;
     private readonly ILogger<ScheduleManagementController> _logger;
 
-    public ScheduleManagementController(ISchedulesService schedulesService)
+    public ScheduleManagementController(ISchedulesService schedulesService, ILogger<ScheduleManagementController> logger)
     {
         _schedulesService = schedulesService;
         _logger = logger;
@@ -56,20 +56,23 @@ public class ScheduleManagementController : Controller
             return View(nameof(Index), viewModel);
         }
 
-        var result = await ExecuteServiceCallAsync(() => _schedulesService.CreateScheduleAsync(new CreateScheduleRequest
+        try
         {
-            SectionId = form.SectionId,
-            SubjectId = form.SubjectId,
-            DayOfWeek = form.DayOfWeek,
-            StartTime = form.StartTime,
-            EndTime = form.EndTime,
-            EffectiveFrom = form.EffectiveFrom,
-            EffectiveTo = form.EffectiveTo
-        }, context.UserId));
-
-        if (!result.Success)
+            await _schedulesService.CreateScheduleAsync(new CreateScheduleRequest
+            {
+                SectionId = form.SectionId,
+                SubjectId = form.SubjectId,
+                DayOfWeek = form.DayOfWeek,
+                StartTime = form.StartTime,
+                EndTime = form.EndTime,
+                EffectiveFrom = form.EffectiveFrom,
+                EffectiveTo = form.EffectiveTo
+            }, context.UserId);
+        }
+        catch (Exception ex)
         {
-            ModelState.AddModelError("CreateForm.SectionId", result.Error?.Message ?? "Unable to create schedule right now.");
+            _logger.LogError(ex, "Failed to create schedule for user {UserId}.", context.UserId);
+            ModelState.AddModelError("CreateForm.SectionId", "Unable to create schedule right now.");
             return View(nameof(Index), viewModel);
         }
 
@@ -94,19 +97,22 @@ public class ScheduleManagementController : Controller
             return RedirectToAction(nameof(Index));
         }
 
-        var result = await ExecuteServiceCallAsync(() => _schedulesService.UpdateScheduleAsync(id, new UpdateScheduleRequest
+        try
         {
-            SubjectId = form.SubjectId,
-            DayOfWeek = form.DayOfWeek,
-            StartTime = form.StartTime,
-            EndTime = form.EndTime,
-            EffectiveFrom = form.EffectiveFrom,
-            EffectiveTo = form.EffectiveTo
-        }, context.UserId));
-
-        if (!result.Success)
+            await _schedulesService.UpdateScheduleAsync(id, new UpdateScheduleRequest
+            {
+                SubjectId = form.SubjectId,
+                DayOfWeek = form.DayOfWeek,
+                StartTime = form.StartTime,
+                EndTime = form.EndTime,
+                EffectiveFrom = form.EffectiveFrom,
+                EffectiveTo = form.EffectiveTo
+            }, context.UserId);
+        }
+        catch (Exception ex)
         {
-            TempData["SchedulesError"] = result.Error?.Message ?? "Unable to update schedule right now.";
+            _logger.LogError(ex, "Failed to update schedule {ScheduleId}.", id);
+            TempData["SchedulesError"] = "Unable to update schedule right now.";
             return RedirectToAction(nameof(Index));
         }
 
@@ -125,11 +131,14 @@ public class ScheduleManagementController : Controller
             return Challenge();
         }
 
-        var result = await ExecuteServiceCallAsync(() => _schedulesService.DeleteScheduleAsync(id, context.UserId, context.IsAdmin));
-
-        if (!result.Success)
+        try
         {
-            TempData["SchedulesError"] = result.Error?.Message ?? "Unable to delete schedule right now.";
+            await _schedulesService.DeleteScheduleAsync(id, context.UserId, context.IsAdmin);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to delete schedule {ScheduleId}.", id);
+            TempData["SchedulesError"] = "Unable to delete schedule right now.";
             return RedirectToAction(nameof(Index));
         }
 
@@ -139,16 +148,22 @@ public class ScheduleManagementController : Controller
 
     private async Task<SchedulesIndexViewModel> BuildIndexViewModelAsync(int userId, string role)
     {
-        var result = await ExecuteServiceCallAsync(() => _schedulesService.GetSchedulesAsync(userId, role));
-        var viewModel = new SchedulesIndexViewModel();
+        List<ScheduleDto> schedules;
 
-        if (!result.Success || result.Data is null)
+        try
         {
-            viewModel.ErrorMessage = result.Error?.Message ?? "Unable to load schedules right now.";
-            return viewModel;
+            schedules = await _schedulesService.GetSchedulesAsync(userId, role);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to load schedules for user {UserId}.", userId);
+            var errorViewModel = new SchedulesIndexViewModel();
+            errorViewModel.ErrorMessage = "Unable to load schedules right now.";
+            return errorViewModel;
         }
 
-        viewModel.Schedules = result.Data
+        var viewModel = new SchedulesIndexViewModel();
+        viewModel.Schedules = schedules
             .OrderBy(s => s.DayOfWeek)
             .ThenBy(s => s.StartTime)
             .ThenBy(s => s.SectionName)
@@ -180,10 +195,3 @@ public class ScheduleManagementController : Controller
         return (true, userId, role, role.IsRole(UserRole.Admin));
     }
 }
-
-
-
-
-
-
-
