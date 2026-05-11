@@ -13,10 +13,12 @@ namespace Attendance_Management_System.Backend.Controllers;
 public class SettingsController : Controller
 {
     private readonly IUsersService _usersService;
+    private readonly ILogger<SettingsController> _logger;
 
     public SettingsController(IUsersService usersService)
     {
         _usersService = usersService;
+        _logger = logger;
     }
 
     [HttpGet("")]
@@ -155,5 +157,6 @@ public class SettingsController : Controller
         return string.IsNullOrWhiteSpace(trimmed) ? null : trimmed;
     }
 }
+
 
 
