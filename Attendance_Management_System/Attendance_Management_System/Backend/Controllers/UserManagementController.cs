@@ -3,6 +3,7 @@ using Attendance_Management_System.Backend.Interfaces.Services;
 using Attendance_Management_System.Backend.ViewModels.Users;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
 
 namespace Attendance_Management_System.Backend.Controllers;
 
@@ -99,3 +100,4 @@ public class UserManagementController : Controller
         return viewModel;
     }
 }
+
