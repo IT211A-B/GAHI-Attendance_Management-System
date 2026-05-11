@@ -15,10 +15,12 @@ namespace Attendance_Management_System.Backend.Controllers;
 public class ScheduleManagementController : Controller
 {
     private readonly ISchedulesService _schedulesService;
+    private readonly ILogger<ScheduleManagementController> _logger;
 
     public ScheduleManagementController(ISchedulesService schedulesService)
     {
         _schedulesService = schedulesService;
+        _logger = logger;
     }
 
     [HttpGet("")]
@@ -177,4 +179,5 @@ public class ScheduleManagementController : Controller
         return (true, userId, role, role.IsRole(UserRole.Admin));
     }
 }
+
 
