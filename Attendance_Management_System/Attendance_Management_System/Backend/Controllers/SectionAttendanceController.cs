@@ -9,7 +9,7 @@ namespace Attendance_Management_System.Backend.Controllers;
 
 [Authorize(Policy = "AdminOrTeacher")]
 [Route("attendance/checklist")]
-public class SectionAttendanceController : AppControllerBase
+public class SectionAttendanceController : Controller
 {
     private readonly ISectionPageService _sectionPageService;
     private readonly IAttendanceService _attendanceService;
