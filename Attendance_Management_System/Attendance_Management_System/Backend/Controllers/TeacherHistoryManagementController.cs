@@ -4,6 +4,7 @@ using Attendance_Management_System.Backend.ViewModels.TeacherHistory;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
+using Attendance_Management_System.Backend.DTOs.Responses;
 
 namespace Attendance_Management_System.Backend.Controllers;
 
@@ -103,6 +104,7 @@ public class TeacherHistoryManagementController : Controller
         return int.TryParse(userIdClaim, out var userId) ? userId : null;
     }
 }
+
 
 
 
