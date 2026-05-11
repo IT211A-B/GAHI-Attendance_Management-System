@@ -15,13 +15,13 @@ namespace Attendance_Management_System.Backend.Controllers;
 public class SectionManagementController : Controller
 {
     private readonly ISectionsService _sectionsService;
-    private readonly ILogger<SectionManagementController> _logger;
     private readonly ISectionPageService _sectionPageService;
     private readonly ILogger<SectionManagementController> _logger;
 
     public SectionManagementController(
         ISectionsService sectionsService,
-        ISectionPageService sectionPageService)
+        ISectionPageService sectionPageService,
+        ILogger<SectionManagementController> logger)
     {
         _sectionsService = sectionsService;
         _sectionPageService = sectionPageService;
@@ -37,7 +37,21 @@ public class SectionManagementController : Controller
             return Challenge();
         }
 
-        var viewModel = await _sectionPageService.BuildSectionManagementIndexViewModelAsync(context.UserId, context.Role);
+        SectionManagementIndexViewModel viewModel;
+
+        try
+        {
+            viewModel = await _sectionPageService.BuildSectionManagementIndexViewModelAsync(context.UserId, context.Role);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to load section management index view.");
+            viewModel = new SectionManagementIndexViewModel
+            {
+                ErrorMessage = "Unable to load sections right now."
+            };
+        }
+
         return View(viewModel);
     }
 
@@ -60,19 +74,22 @@ public class SectionManagementController : Controller
             return View(nameof(Index), viewModel);
         }
 
-        var result = await ExecuteServiceCallAsync(() => _sectionsService.CreateSectionAsync(new CreateSectionRequest
+        try
         {
-            Name = form.Name.Trim(),
-            YearLevel = form.YearLevel,
-            AcademicYearId = form.AcademicYearId,
-            CourseId = form.CourseId,
-            SubjectId = form.SubjectId,
-            ClassroomId = form.ClassroomId
-        }));
-
-        if (!result.Success)
+            await _sectionsService.CreateSectionAsync(new CreateSectionRequest
+            {
+                Name = form.Name.Trim(),
+                YearLevel = form.YearLevel,
+                AcademicYearId = form.AcademicYearId,
+                CourseId = form.CourseId,
+                SubjectId = form.SubjectId,
+                ClassroomId = form.ClassroomId
+            });
+        }
+        catch (Exception ex)
         {
-            ModelState.AddModelError("CreateForm.Name", result.Error?.Message ?? "Unable to create section right now.");
+            _logger.LogError(ex, "Failed to create section.");
+            ModelState.AddModelError("CreateForm.Name", "Unable to create section right now.");
             return View(nameof(Index), viewModel);
         }
 
@@ -91,15 +108,18 @@ public class SectionManagementController : Controller
             return RedirectToAction(nameof(Index));
         }
 
-        var result = await ExecuteServiceCallAsync(() => _sectionsService.UpdateSectionAsync(id, new UpdateSectionRequest
+        try
         {
-            Name = form.Name.Trim(),
-            YearLevel = form.YearLevel
-        }));
-
-        if (!result.Success)
+            await _sectionsService.UpdateSectionAsync(id, new UpdateSectionRequest
+            {
+                Name = form.Name.Trim(),
+                YearLevel = form.YearLevel
+            });
+        }
+        catch (Exception ex)
         {
-            TempData["SectionsError"] = result.Error?.Message ?? "Unable to update section right now.";
+            _logger.LogError(ex, "Failed to update section {SectionId}.", id);
+            TempData["SectionsError"] = "Unable to update section right now.";
             return RedirectToAction(nameof(Index));
         }
 
@@ -112,11 +132,14 @@ public class SectionManagementController : Controller
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Delete(int id)
     {
-        var result = await ExecuteServiceCallAsync(() => _sectionsService.DeleteSectionAsync(id));
-
-        if (!result.Success)
+        try
         {
-            TempData["SectionsError"] = result.Error?.Message ?? "Unable to delete section right now.";
+            await _sectionsService.DeleteSectionAsync(id);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to delete section {SectionId}.", id);
+            TempData["SectionsError"] = "Unable to delete section right now.";
             return RedirectToAction(nameof(Index));
         }
 
@@ -135,14 +158,17 @@ public class SectionManagementController : Controller
             return RedirectToAction(nameof(Index));
         }
 
-        var result = await ExecuteServiceCallAsync(() => _sectionsService.AssignTeacherToSectionAsync(id, new AssignTeacherRequest
+        try
         {
-            TeacherId = form.TeacherId
-        }));
-
-        if (!result.Success)
+            await _sectionsService.AssignTeacherToSectionAsync(id, new AssignTeacherRequest
+            {
+                TeacherId = form.TeacherId
+            });
+        }
+        catch (Exception ex)
         {
-            TempData["SectionsError"] = result.Error?.Message ?? "Unable to assign teacher right now.";
+            _logger.LogError(ex, "Failed to assign teacher {TeacherId} to section {SectionId}.", form.TeacherId, id);
+            TempData["SectionsError"] = "Unable to assign teacher right now.";
             return RedirectToAction(nameof(Index));
         }
 
@@ -158,11 +184,14 @@ public class SectionManagementController : Controller
         var role = User.FindFirstValue(ClaimTypes.Role) ?? string.Empty;
         var isAdmin = role.IsRole(UserRole.Admin);
 
-        var result = await ExecuteServiceCallAsync(() => _sectionsService.RemoveTeacherFromSectionAsync(id, teacherId, isAdmin));
-
-        if (!result.Success)
+        try
         {
-            TempData["SectionsError"] = result.Error?.Message ?? "Unable to remove teacher assignment right now.";
+            await _sectionsService.RemoveTeacherFromSectionAsync(id, teacherId, isAdmin);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to remove teacher {TeacherId} from section {SectionId}.", teacherId, id);
+            TempData["SectionsError"] = "Unable to remove teacher assignment right now.";
             return RedirectToAction(nameof(Index));
         }
 
@@ -183,5 +212,3 @@ public class SectionManagementController : Controller
         return (true, userId, role);
     }
 }
-
-
