@@ -1,4 +1,4 @@
-﻿using Attendance_Management_System.Backend.DTOs.Requests;
+using Attendance_Management_System.Backend.DTOs.Requests;
 using Attendance_Management_System.Backend.DTOs.Responses;
 using Attendance_Management_System.Backend.Interfaces.Services;
 using Attendance_Management_System.Backend.ViewModels.Subjects;
@@ -9,7 +9,7 @@ namespace Attendance_Management_System.Backend.Controllers;
 
 [Authorize(Policy = "AdminOrTeacher")]
 [Route("subjects")]
-public class SubjectsManagementController : AppControllerBase
+public class SubjectsManagementController : Controller
 {
     private readonly ISubjectsService _subjectsService;
     private readonly ICoursesService _coursesService;
