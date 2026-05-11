@@ -8,7 +8,7 @@ namespace Attendance_Management_System.Backend.Controllers;
 
 [Authorize(Policy = "AdminOnly")]
 [Route("teachers")]
-public class TeacherManagementController : AppControllerBase
+public class TeacherManagementController : Controller
 {
     private readonly IAuthService _authService;
     private readonly ITeachersService _teachersService;
