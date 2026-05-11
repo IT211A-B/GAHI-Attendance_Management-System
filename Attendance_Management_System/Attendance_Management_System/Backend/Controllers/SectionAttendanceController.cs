@@ -13,7 +13,9 @@ namespace Attendance_Management_System.Backend.Controllers;
 public class SectionAttendanceController : Controller
 {
     private readonly ISectionPageService _sectionPageService;
+    private readonly ILogger<SectionAttendanceController> _logger;
     private readonly IAttendanceService _attendanceService;
+    private readonly ILogger<SectionAttendanceController> _logger;
 
     public SectionAttendanceController(
         ISectionPageService sectionPageService,
@@ -21,6 +23,7 @@ public class SectionAttendanceController : Controller
     {
         _sectionPageService = sectionPageService;
         _attendanceService = attendanceService;
+        _logger = logger;
     }
 
     [HttpGet("")]
@@ -123,4 +126,5 @@ public class SectionAttendanceController : Controller
         return (true, userId, role);
     }
 }
+
 
