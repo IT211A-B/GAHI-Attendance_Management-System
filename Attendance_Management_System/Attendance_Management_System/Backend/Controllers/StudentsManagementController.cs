@@ -17,12 +17,15 @@ public class StudentsManagementController : Controller
     private readonly ISectionsService _sectionsService;
     private readonly IStudentsService _studentsService;
     private readonly ITeachersService _teachersService;
+    private readonly ILogger<StudentsManagementController> _logger;
 
-    public StudentsManagementController(ISectionsService sectionsService, IStudentsService studentsService, ITeachersService teachersService)
+    public StudentsManagementController(ISectionsService sectionsService, IStudentsService studentsService, ITeachersService teachersService,
+        ILogger<StudentsManagementController> logger)
     {
         _sectionsService = sectionsService;
         _studentsService = studentsService;
         _teachersService = teachersService;
+        _logger = logger;
     }
 
     [HttpGet("")]
@@ -157,5 +160,6 @@ public class StudentsManagementController : Controller
         return true;
     }
 }
+
 
 
