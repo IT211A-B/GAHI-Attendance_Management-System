@@ -72,8 +72,41 @@ public static class DependencyInjection
 
         services.ConfigureApplicationCookie(options =>
         {
+            var cookieSettings = configuration.GetSection(CookieSettings.SectionName).Get<CookieSettings>()
+                                 ?? new CookieSettings();
+
             options.LoginPath = "/login";
             options.AccessDeniedPath = "/login";
+
+            options.ExpireTimeSpan = TimeSpan.FromHours(cookieSettings.ExpirationHours);
+            options.SlidingExpiration = cookieSettings.SlidingExpiration;
+            options.Cookie.HttpOnly = cookieSettings.HttpOnly;
+            options.Cookie.SameSite = ParseSameSite(cookieSettings.SameSite);
+            options.Cookie.SecurePolicy = ParseSecurePolicy(cookieSettings.SecurePolicy);
+
+            options.Events.OnRedirectToLogin = context =>
+            {
+                if (IsQrApiRequest(context.Request))
+                {
+                    context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+                    return Task.CompletedTask;
+                }
+
+                context.Response.Redirect(context.RedirectUri);
+                return Task.CompletedTask;
+            };
+
+            options.Events.OnRedirectToAccessDenied = context =>
+            {
+                if (IsQrApiRequest(context.Request))
+                {
+                    context.Response.StatusCode = StatusCodes.Status403Forbidden;
+                    return Task.CompletedTask;
+                }
+
+                context.Response.Redirect(context.RedirectUri);
+                return Task.CompletedTask;
+            };
         });
 
         services.AddScoped<IAuthService, AuthService>();
@@ -184,5 +217,25 @@ public static class DependencyInjection
 
         var remoteIp = httpContext.Connection.RemoteIpAddress?.ToString();
         return string.IsNullOrWhiteSpace(remoteIp) ? "ip:unknown" : $"ip:{remoteIp}";
+    }
+
+    private static Microsoft.AspNetCore.Http.SameSiteMode ParseSameSite(string? sameSite)
+    {
+        return Enum.TryParse<Microsoft.AspNetCore.Http.SameSiteMode>(sameSite, ignoreCase: true, out var parsed)
+            ? parsed
+            : Microsoft.AspNetCore.Http.SameSiteMode.Lax;
+    }
+
+    private static CookieSecurePolicy ParseSecurePolicy(string? securePolicy)
+    {
+        return Enum.TryParse<CookieSecurePolicy>(securePolicy, ignoreCase: true, out var parsed)
+            ? parsed
+            : CookieSecurePolicy.SameAsRequest;
+    }
+
+    private static bool IsQrApiRequest(HttpRequest request)
+    {
+        return request.Path.StartsWithSegments("/attendance/qr", out var remaining)
+            && remaining.HasValue;
     }
 }
