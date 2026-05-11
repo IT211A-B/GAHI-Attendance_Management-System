@@ -11,7 +11,7 @@ namespace Attendance_Management_System.Backend.Controllers;
 
 [Authorize(Policy = "AdminOrTeacher")]
 [Route("sections")]
-public class SectionManagementController : AppControllerBase
+public class SectionManagementController : Controller
 {
     private readonly ISectionsService _sectionsService;
     private readonly ISectionPageService _sectionPageService;
