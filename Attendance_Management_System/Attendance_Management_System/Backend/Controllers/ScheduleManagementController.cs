@@ -11,7 +11,7 @@ namespace Attendance_Management_System.Backend.Controllers;
 
 [Authorize(Policy = "AdminOrTeacher")]
 [Route("schedules")]
-public class ScheduleManagementController : AppControllerBase
+public class ScheduleManagementController : Controller
 {
     private readonly ISchedulesService _schedulesService;
 
