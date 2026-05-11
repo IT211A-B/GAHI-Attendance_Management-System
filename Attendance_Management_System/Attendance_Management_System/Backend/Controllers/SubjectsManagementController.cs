@@ -14,11 +14,14 @@ public class SubjectsManagementController : Controller
 {
     private readonly ISubjectsService _subjectsService;
     private readonly ICoursesService _coursesService;
+    private readonly ILogger<SubjectsManagementController> _logger;
 
-    public SubjectsManagementController(ISubjectsService subjectsService, ICoursesService coursesService)
+    public SubjectsManagementController(ISubjectsService subjectsService, ICoursesService coursesService,
+        ILogger<SubjectsManagementController> logger)
     {
         _subjectsService = subjectsService;
         _coursesService = coursesService;
+        _logger = logger;
     }
 
     [HttpGet("")]
@@ -169,5 +172,6 @@ public class SubjectsManagementController : Controller
             : $"{code.Trim()} - {courseName}";
     }
 }
+
 
 
