@@ -3,6 +3,7 @@ using Attendance_Management_System.Backend.Interfaces.Services;
 using Attendance_Management_System.Backend.ViewModels.Teachers;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
 
 namespace Attendance_Management_System.Backend.Controllers;
 
@@ -120,3 +121,4 @@ public class TeacherManagementController : Controller
         return string.IsNullOrWhiteSpace(trimmed) ? null : trimmed;
     }
 }
+
