@@ -6,6 +6,7 @@ using Attendance_Management_System.Backend.ViewModels.Reports;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
+using Attendance_Management_System.Backend.DTOs.Responses;
 
 namespace Attendance_Management_System.Backend.Controllers;
 
@@ -158,6 +159,7 @@ public class ReportsController : Controller
         return View(model);
     }
 }
+
 
 
 
