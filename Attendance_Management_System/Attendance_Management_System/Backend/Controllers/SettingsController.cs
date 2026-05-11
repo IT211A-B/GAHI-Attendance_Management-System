@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using Attendance_Management_System.Backend.DTOs.Requests;
 using Attendance_Management_System.Backend.Interfaces.Services;
+using Attendance_Management_System.Backend.ViewModels.Settings;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
@@ -24,84 +25,91 @@ public class SettingsController : Controller
     public async Task<IActionResult> Index()
     {
         var userId = GetCurrentUserId();
-        if (userId is null) return Challenge();
+        if (userId is null)
+        {
+            return Challenge();
+        }
 
-        try
-        {
-            var user = await _usersService.GetUserByIdAsync(userId.Value);
-            var viewModel = new ViewModels.Settings.SettingsIndexViewModel
-            {
-                FirstName = user.FirstName,
-                MiddleName = user.MiddleName,
-                LastName = user.LastName,
-                Email = user.Email
-            };
-            return View(viewModel);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to load settings for user {UserId}.", userId.Value);
-            TempData["SettingsError"] = "Unable to load profile settings right now.";
-            return View(new ViewModels.Settings.SettingsIndexViewModel());
-        }
+        var model = await BuildSettingsViewModelAsync(userId.Value);
+        return View(model);
     }
 
     [HttpPost("profile")]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> UpdateProfile([FromForm] DTOs.Requests.UpdateProfileRequest request)
+    public async Task<IActionResult> UpdateProfile([Bind(Prefix = "ProfileForm")] UpdateProfileFormViewModel form)
     {
         var userId = GetCurrentUserId();
-        if (userId is null) return Challenge();
+        if (userId is null)
+        {
+            return Challenge();
+        }
+
+        var model = await BuildSettingsViewModelAsync(userId.Value);
+        model.ProfileForm = form;
 
         if (!ModelState.IsValid)
         {
-            TempData["SettingsError"] = "Please provide valid profile details.";
-            return RedirectToAction(nameof(Index));
+            return View(nameof(Index), model);
         }
+
+        var request = new UpdateProfileRequest
+        {
+            FirstName = NormalizeOptional(form.FirstName),
+            MiddleName = NormalizeOptional(form.MiddleName),
+            LastName = NormalizeOptional(form.LastName)
+        };
 
         try
         {
             await _usersService.UpdateProfileAsync(userId.Value, request);
-            TempData["SettingsSuccess"] = "Profile updated successfully.";
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to update profile for user {UserId}.", userId.Value);
-            TempData["SettingsError"] = "Unable to update profile right now.";
+            ModelState.AddModelError("ProfileForm.FirstName", "Unable to update profile right now.");
+            return View(nameof(Index), model);
         }
 
+        TempData["SettingsSuccess"] = "Profile updated successfully.";
         return RedirectToAction(nameof(Index));
     }
 
     [HttpPost("password")]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> UpdatePassword([FromForm] UpdatePasswordRequest request)
+    public async Task<IActionResult> ChangePassword([Bind(Prefix = "PasswordForm")] ChangePasswordFormViewModel form)
     {
         var userId = GetCurrentUserId();
-        if (userId is null) return Challenge();
+        if (userId is null)
+        {
+            return Challenge();
+        }
+
+        var model = await BuildSettingsViewModelAsync(userId.Value);
+        model.PasswordForm = form;
 
         if (!ModelState.IsValid)
         {
-            TempData["SettingsError"] = "Please provide valid password details.";
-            return RedirectToAction(nameof(Index));
+            return View(nameof(Index), model);
         }
+
+        var request = new UpdateProfileRequest
+        {
+            CurrentPassword = form.CurrentPassword,
+            NewPassword = form.NewPassword
+        };
 
         try
         {
-            await _usersService.UpdateProfileAsync(userId.Value, new UpdateProfileRequest
-            {
-                FirstName = request.FirstName,
-                MiddleName = request.MiddleName,
-                LastName = request.LastName
-            });
-            TempData["SettingsSuccess"] = "Profile updated successfully.";
+            await _usersService.UpdateProfileAsync(userId.Value, request);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to update profile for user {UserId}.", userId.Value);
-            TempData["SettingsError"] = "Unable to update profile right now.";
+            _logger.LogError(ex, "Failed to change password for user {UserId}.", userId.Value);
+            ModelState.AddModelError("PasswordForm.CurrentPassword", "Unable to change password right now.");
+            return View(nameof(Index), model);
         }
 
+        TempData["SettingsSuccess"] = "Password changed successfully.";
         return RedirectToAction(nameof(Index));
     }
 
@@ -109,5 +117,52 @@ public class SettingsController : Controller
     {
         var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
         return int.TryParse(userIdClaim, out var userId) ? userId : null;
+    }
+
+    private async Task<SettingsIndexViewModel> BuildSettingsViewModelAsync(int userId)
+    {
+        var fallbackFullName = User.FindFirstValue("FullName") ?? User.Identity?.Name ?? "-";
+        var viewModel = new SettingsIndexViewModel
+        {
+            Username = User.Identity?.Name ?? "-",
+            Email = User.FindFirstValue(ClaimTypes.Email) ?? "-",
+            FullName = fallbackFullName,
+            Role = User.FindFirstValue(ClaimTypes.Role) ?? "-"
+        };
+
+        try
+        {
+            var user = await _usersService.GetUserByIdAsync(userId);
+
+            viewModel.Email = string.IsNullOrWhiteSpace(user.Email) ? viewModel.Email : user.Email;
+            viewModel.FullName = BuildFullName(user.FirstName, user.MiddleName, user.LastName, fallbackFullName);
+
+            viewModel.ProfileForm = new UpdateProfileFormViewModel
+            {
+                FirstName = user.FirstName,
+                MiddleName = user.MiddleName,
+                LastName = user.LastName
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to load user profile for settings.");
+        }
+
+        return viewModel;
+    }
+
+    private static string BuildFullName(string? firstName, string? middleName, string? lastName, string fallback)
+    {
+        var fullName = string.Join(" ", new[] { firstName, middleName, lastName }
+            .Where(part => !string.IsNullOrWhiteSpace(part)));
+
+        return string.IsNullOrWhiteSpace(fullName) ? fallback : fullName;
+    }
+
+    private static string? NormalizeOptional(string? value)
+    {
+        var trimmed = value?.Trim();
+        return string.IsNullOrWhiteSpace(trimmed) ? null : trimmed;
     }
 }
