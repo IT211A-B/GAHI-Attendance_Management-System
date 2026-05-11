@@ -1,4 +1,4 @@
-﻿using System.Security.Claims;
+using System.Security.Claims;
 using Attendance_Management_System.Backend.Interfaces.Services;
 using Attendance_Management_System.Backend.ViewModels.TeacherHistory;
 using Microsoft.AspNetCore.Authorization;
@@ -8,7 +8,7 @@ namespace Attendance_Management_System.Backend.Controllers;
 
 [Authorize(Policy = "TeacherOnly")]
 [Route("teacher-history")]
-public class TeacherHistoryManagementController : AppControllerBase
+public class TeacherHistoryManagementController : Controller
 {
     private readonly ITeacherHistoryService _teacherHistoryService;
 
