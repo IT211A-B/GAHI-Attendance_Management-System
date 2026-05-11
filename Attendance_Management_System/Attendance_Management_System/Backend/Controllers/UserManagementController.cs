@@ -8,7 +8,7 @@ namespace Attendance_Management_System.Backend.Controllers;
 
 [Authorize(Policy = "AdminOnly")]
 [Route("users")]
-public class UserManagementController : AppControllerBase
+public class UserManagementController : Controller
 {
     private readonly IUsersService _usersService;
 
