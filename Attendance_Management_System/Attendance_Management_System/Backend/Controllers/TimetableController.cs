@@ -10,7 +10,7 @@ namespace Attendance_Management_System.Backend.Controllers;
 
 [Authorize(Policy = "AdminOrTeacher")]
 [Route("timetable")]
-public class TimetableController : AppControllerBase
+public class TimetableController : Controller
 {
     private readonly ISectionPageService _sectionPageService;
     private readonly ISectionsService _sectionsService;
