@@ -12,7 +12,7 @@ namespace Attendance_Management_System.Backend.Controllers;
 
 [Authorize]
 [Route("enrollments")]
-public class EnrollmentsController : AppControllerBase
+public class EnrollmentsController : Controller
 {
     private const int DefaultPageSize = 20;
 
