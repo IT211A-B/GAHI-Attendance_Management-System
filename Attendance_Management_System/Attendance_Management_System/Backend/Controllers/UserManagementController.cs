@@ -1,4 +1,5 @@
 using Attendance_Management_System.Backend.DTOs.Requests;
+using Attendance_Management_System.Backend.DTOs.Responses;
 using Attendance_Management_System.Backend.Interfaces.Services;
 using Attendance_Management_System.Backend.ViewModels.Users;
 using Microsoft.AspNetCore.Authorization;
@@ -23,46 +24,28 @@ public class UserManagementController : Controller
     [HttpGet("")]
     public async Task<IActionResult> Index()
     {
-        UserIndexViewModel viewModel;
-
-        try
-        {
-            var users = await _usersService.GetAllUsersAsync();
-            viewModel = new UserIndexViewModel
-            {
-                Users = users
-                    .Select(u => new UserListItemViewModel
-                    {
-                        Id = u.Id,
-                        Email = u.Email,
-                        FullName = u.FullName,
-                        Role = u.Role,
-                        IsActive = u.IsActive
-                    })
-                    .ToList()
-            };
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to load users.");
-            viewModel = new UserIndexViewModel
-            {
-                ErrorMessage = "Unable to load users right now."
-            };
-        }
-
+        var viewModel = await BuildIndexViewModelAsync();
         return View(viewModel);
     }
 
     [HttpPost("create")]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> Create([FromForm] CreateUserRequest request)
+    public async Task<IActionResult> Create([Bind(Prefix = "CreateForm")] CreateUserFormViewModel form)
     {
+        var viewModel = await BuildIndexViewModelAsync();
+        viewModel.CreateForm = form;
+
         if (!ModelState.IsValid)
         {
-            TempData["UsersError"] = "Please provide valid user details.";
-            return RedirectToAction(nameof(Index));
+            return View(nameof(Index), viewModel);
         }
+
+        var request = new CreateUserRequest
+        {
+            Email = form.Email.Trim(),
+            Password = form.Password,
+            Role = form.Role.Trim().ToLowerInvariant()
+        };
 
         try
         {
@@ -71,17 +54,17 @@ public class UserManagementController : Controller
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to create user.");
-            TempData["UsersError"] = "Unable to create user right now.";
-            return RedirectToAction(nameof(Index));
+            ModelState.AddModelError("CreateForm.Email", "Unable to create user right now.");
+            return View(nameof(Index), viewModel);
         }
 
         TempData["UsersSuccess"] = "User created successfully.";
         return RedirectToAction(nameof(Index));
     }
 
-    [HttpPost("{id:int}/toggle-status")]
+    [HttpPost("{id:int}/status")]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> ToggleStatus(int id, bool isActive)
+    public async Task<IActionResult> SetStatus(int id, bool isActive)
     {
         try
         {
@@ -89,14 +72,46 @@ public class UserManagementController : Controller
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to toggle status for user {UserId}.", id);
-            TempData["UsersError"] = $"Unable to {(isActive ? "activate" : "deactivate")} user right now.";
+            _logger.LogError(ex, "Failed to set status for user {UserId}.", id);
+            TempData["UsersError"] = "Unable to update user status.";
             return RedirectToAction(nameof(Index));
         }
 
         TempData["UsersSuccess"] = isActive
             ? "User activated successfully."
             : "User deactivated successfully.";
+
         return RedirectToAction(nameof(Index));
+    }
+
+    private async Task<UsersIndexViewModel> BuildIndexViewModelAsync()
+    {
+        var viewModel = new UsersIndexViewModel();
+
+        List<UserDto> users;
+
+        try
+        {
+            users = await _usersService.GetAllUsersAsync();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to load users.");
+            viewModel.ErrorMessage = "Unable to load users right now.";
+            return viewModel;
+        }
+
+        viewModel.Users = users
+            .OrderBy(u => u.Email)
+            .Select(user => new UserListItemViewModel
+            {
+                Id = user.Id,
+                Email = user.Email,
+                Role = user.Role,
+                IsActive = user.IsActive
+            })
+            .ToList();
+
+        return viewModel;
     }
 }
