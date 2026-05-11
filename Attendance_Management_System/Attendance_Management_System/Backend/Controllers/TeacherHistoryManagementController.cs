@@ -12,10 +12,12 @@ namespace Attendance_Management_System.Backend.Controllers;
 public class TeacherHistoryManagementController : Controller
 {
     private readonly ITeacherHistoryService _teacherHistoryService;
+    private readonly ILogger<TeacherHistoryManagementController> _logger;
 
     public TeacherHistoryManagementController(ITeacherHistoryService teacherHistoryService)
     {
         _teacherHistoryService = teacherHistoryService;
+        _logger = logger;
     }
 
     [HttpGet("")]
@@ -101,5 +103,6 @@ public class TeacherHistoryManagementController : Controller
         return int.TryParse(userIdClaim, out var userId) ? userId : null;
     }
 }
+
 
 
