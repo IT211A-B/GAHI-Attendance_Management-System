@@ -10,7 +10,7 @@ namespace Attendance_Management_System.Backend.Controllers;
 
 [Authorize(Policy = "AdminOrTeacher")]
 [Route("reports")]
-public class ReportsController : AppControllerBase
+public class ReportsController : Controller
 {
     private readonly ISectionsService _sectionsService;
     private readonly ISchedulesService _schedulesService;
