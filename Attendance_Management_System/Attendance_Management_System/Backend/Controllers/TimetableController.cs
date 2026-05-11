@@ -6,6 +6,8 @@ using Attendance_Management_System.Backend.Interfaces.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
+using Attendance_Management_System.Backend.ViewModels.Sections;
+using Attendance_Management_System.Backend.DTOs.Responses;
 
 namespace Attendance_Management_System.Backend.Controllers;
 
@@ -333,5 +335,6 @@ public class TimetableController : Controller
         return (true, userId, role, role.IsRole(UserRole.Admin));
     }
 }
+
 
 
