@@ -14,8 +14,11 @@ namespace Attendance_Management_System.Backend.Controllers;
 public class ReportsController : Controller
 {
     private readonly ISectionsService _sectionsService;
+    private readonly ILogger<ReportsController> _logger;
     private readonly ISchedulesService _schedulesService;
+    private readonly ILogger<ReportsController> _logger;
     private readonly IAttendanceService _attendanceService;
+    private readonly ILogger<ReportsController> _logger;
 
     public ReportsController(
         ISectionsService sectionsService,
@@ -25,6 +28,7 @@ public class ReportsController : Controller
         _sectionsService = sectionsService;
         _schedulesService = schedulesService;
         _attendanceService = attendanceService;
+        _logger = logger;
     }
 
     [HttpGet("")]
@@ -154,5 +158,6 @@ public class ReportsController : Controller
         return View(model);
     }
 }
+
 
 
