@@ -12,12 +12,15 @@ namespace Attendance_Management_System.Backend.Controllers;
 public class TeacherManagementController : Controller
 {
     private readonly IAuthService _authService;
+    private readonly ILogger<TeacherManagementController> _logger;
     private readonly ITeachersService _teachersService;
+    private readonly ILogger<TeacherManagementController> _logger;
 
     public TeacherManagementController(IAuthService authService, ITeachersService teachersService)
     {
         _authService = authService;
         _teachersService = teachersService;
+        _logger = logger;
     }
 
     [HttpGet("")]
@@ -121,4 +124,5 @@ public class TeacherManagementController : Controller
         return string.IsNullOrWhiteSpace(trimmed) ? null : trimmed;
     }
 }
+
 
