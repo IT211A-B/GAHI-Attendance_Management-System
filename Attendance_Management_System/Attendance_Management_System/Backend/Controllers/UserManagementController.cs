@@ -12,10 +12,12 @@ namespace Attendance_Management_System.Backend.Controllers;
 public class UserManagementController : Controller
 {
     private readonly IUsersService _usersService;
+    private readonly ILogger<UserManagementController> _logger;
 
     public UserManagementController(IUsersService usersService)
     {
         _usersService = usersService;
+        _logger = logger;
     }
 
     [HttpGet("")]
@@ -100,4 +102,5 @@ public class UserManagementController : Controller
         return viewModel;
     }
 }
+
 
