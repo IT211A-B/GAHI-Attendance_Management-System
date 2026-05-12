@@ -8,9 +8,12 @@ using Attendance_Management_System.Backend.Persistence;
 using Attendance_Management_System.Backend.Services;
 using Attendance_Management_System.Backend.Security;
 using FluentEmail.MailKitSmtp;
+using MailKit.Security;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.Extensions.Options;
 using System.Threading.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Net.Http.Headers;
@@ -35,25 +38,45 @@ public static class DependencyInjection
 
         var emailSettingsSection = configuration.GetSection(EmailSettings.SectionName);
         services.Configure<EmailSettings>(emailSettingsSection);
+        services.AddSingleton<IValidateOptions<EmailSettings>, EmailSettingsValidator>();
 
         var emailSettings = emailSettingsSection.Get<EmailSettings>() ?? new EmailSettings();
+        var smtpUser = emailSettings.Username?.Trim() ?? string.Empty;
+        var smtpPassword = emailSettings.Password ?? string.Empty;
 
         services
-            .AddFluentEmail(emailSettings.FromAddress, emailSettings.FromName)
+            .AddFluentEmail(ResolveEmailFromAddress(emailSettings), ResolveEmailFromName(emailSettings))
             .AddMailKitSender(new SmtpClientOptions
             {
-                Server = emailSettings.Host,
-                Port = emailSettings.Port,
-                User = emailSettings.Username,
-                Password = emailSettings.Password,
-                RequiresAuthentication = !string.IsNullOrWhiteSpace(emailSettings.Username)
-                    && !string.IsNullOrWhiteSpace(emailSettings.Password),
+                Server = ResolveSmtpHost(emailSettings),
+                Port = ResolveSmtpPort(emailSettings),
+                User = smtpUser,
+                Password = smtpPassword,
+                RequiresAuthentication = !string.IsNullOrWhiteSpace(smtpUser)
+                    && !string.IsNullOrWhiteSpace(smtpPassword),
                 UsePickupDirectory = false,
+                SocketOptions = emailSettings.UseSsl
+                    ? SecureSocketOptions.SslOnConnect
+                    : SecureSocketOptions.StartTls,
                 UseSsl = emailSettings.UseSsl
             });
 
         services.Configure<EnrollmentSettings>(configuration.GetSection(EnrollmentSettings.SectionName));
         services.Configure<RateLimitingSettings>(configuration.GetSection(RateLimitingSettings.SectionName));
+
+        if (environment.IsProduction())
+        {
+            var keyPathSetting = configuration["DataProtection:KeyPath"];
+            if (!string.IsNullOrWhiteSpace(keyPathSetting))
+            {
+                var keyPath = Path.IsPathRooted(keyPathSetting)
+                    ? keyPathSetting
+                    : Path.Combine(AppContext.BaseDirectory, keyPathSetting);
+                Directory.CreateDirectory(keyPath);
+                services.AddDataProtection()
+                    .PersistKeysToFileSystem(new DirectoryInfo(keyPath));
+            }
+        }
 
         var rateLimitingSettings = configuration.GetSection(RateLimitingSettings.SectionName).Get<RateLimitingSettings>()
             ?? RateLimitingSettings.Default;
@@ -66,6 +89,9 @@ public static class DependencyInjection
             options.Password.RequireNonAlphanumeric = false;
             options.Password.RequiredLength = 8;
             options.SignIn.RequireConfirmedEmail = true;
+            options.Lockout.AllowedForNewUsers = true;
+            options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(15);
+            options.Lockout.MaxFailedAccessAttempts = 5;
         })
             .AddEntityFrameworkStores<AppDbContext>()
             .AddDefaultTokenProviders();
@@ -204,6 +230,39 @@ public static class DependencyInjection
             QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
             AutoReplenishment = true
         };
+    }
+
+    private static string ResolveSmtpHost(EmailSettings emailSettings)
+    {
+        return string.IsNullOrWhiteSpace(emailSettings.Host)
+            ? "smtp.gmail.com"
+            : emailSettings.Host.Trim();
+    }
+
+    private static int ResolveSmtpPort(EmailSettings emailSettings)
+    {
+        return emailSettings.Port > 0 ? emailSettings.Port : 587;
+    }
+
+    private static string ResolveEmailFromAddress(EmailSettings emailSettings)
+    {
+        var configuredFromAddress = emailSettings.FromAddress?.Trim() ?? string.Empty;
+        var username = emailSettings.Username?.Trim() ?? string.Empty;
+
+        if (string.IsNullOrWhiteSpace(configuredFromAddress)
+            || string.Equals(configuredFromAddress, "noreply@example.com", StringComparison.OrdinalIgnoreCase))
+        {
+            return string.IsNullOrWhiteSpace(username) ? "noreply@example.com" : username;
+        }
+
+        return configuredFromAddress;
+    }
+
+    private static string ResolveEmailFromName(EmailSettings emailSettings)
+    {
+        return string.IsNullOrWhiteSpace(emailSettings.FromName)
+            ? "Don Bosco Attendance"
+            : emailSettings.FromName.Trim();
     }
 
     private static string GetClientKey(HttpContext httpContext)
