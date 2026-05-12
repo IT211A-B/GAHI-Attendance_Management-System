@@ -21,7 +21,7 @@ namespace Attendance_Management_System.Backend;
 
 public static class DependencyInjection
 {
-    public static IServiceCollection AddBackend(this IServiceCollection services, IConfiguration configuration)
+    public static IServiceCollection AddBackend(this IServiceCollection services, IConfiguration configuration, IHostEnvironment environment)
     {
         var connectionString = configuration.GetConnectionString("Default");
 
