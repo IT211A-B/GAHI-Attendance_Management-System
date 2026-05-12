@@ -31,14 +31,11 @@ Set these in the Render service before first successful boot:
 - EmailSettings__PublicBaseUrl: your Render URL or custom HTTPS domain
 - AttendanceQrSettings__SigningKey: long random secret value
 
-Mail settings (required by current app config/binding):
-- EmailSettings__Host
-- EmailSettings__Port
-- EmailSettings__Username
-- EmailSettings__Password
-- EmailSettings__FromAddress
-- EmailSettings__FromName
-- EmailSettings__UseSsl
+Mail settings:
+- EmailSettings__Username: Gmail address used to send email
+- EmailSettings__Password: Gmail app password
+
+The blueprint/app defaults Gmail SMTP to `smtp.gmail.com`, port `587`, STARTTLS mode, and uses `EmailSettings__Username` as the From address unless you override it.
 
 Recommended production cookie override:
 - CookieSettings__SecurePolicy=Always
@@ -67,3 +64,27 @@ After deploy, confirm:
 - Rotate AttendanceQrSettings__SigningKey periodically.
 - Restrict CORS/origins if you split frontend later.
 - Add managed backups/alerts in Supabase and Render.
+
+## 7) Change default seeded passwords
+
+Seed data includes default credentials intended for local testing only. After the first production deploy:
+
+- Log in as an admin and rotate every seeded account password.
+- Remove or disable seeded accounts if they are not needed in production.
+
+## 8) Monitoring and alerting
+
+- Enable Render health check alerts and uptime monitoring.
+- Configure Supabase alerts for CPU, storage, and connection limits.
+- Consider adding centralized error tracking (Sentry, Application Insights) and log retention.
+
+## 9) Backups
+
+- Enable scheduled Supabase backups (daily recommended).
+- Export critical data periodically and verify restore procedures.
+
+## 10) SSL/TLS
+
+- Enforce HTTPS-only access in production.
+- Render auto-provisions SSL for onrender.com domains.
+- For custom domains, verify DNS setup and certificate provisioning before go-live.

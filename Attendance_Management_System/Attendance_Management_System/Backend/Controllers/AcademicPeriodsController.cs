@@ -57,7 +57,7 @@ public class AcademicPeriodsController : Controller
 
     [HttpPost("{id:int}/update")]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> Update(int id, [Bind(Prefix = "UpdateForm")] UpdateAcademicPeriodFormViewModel form)
+    public async Task<IActionResult> Update(int id, UpdateAcademicPeriodFormViewModel form)
     {
         if (!ModelState.IsValid)
         {

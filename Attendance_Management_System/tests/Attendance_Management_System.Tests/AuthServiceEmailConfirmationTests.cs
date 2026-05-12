@@ -495,6 +495,7 @@ public class AuthServiceEmailConfirmationTests
             accountEmailServiceMock.Object,
             notificationServiceMock.Object,
             Options.Create(emailSettings ?? new EmailSettings { PublicBaseUrl = "https://localhost:7050" }),
+            new HttpContextAccessor(),
             NullLogger<AuthService>.Instance);
     }
 

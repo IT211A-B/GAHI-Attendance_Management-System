@@ -7,6 +7,7 @@ using Attendance_Management_System.Backend.Enums;
 using Attendance_Management_System.Backend.Helpers;
 using Attendance_Management_System.Backend.Interfaces.Services;
 using Attendance_Management_System.Backend.Persistence;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.EntityFrameworkCore;
@@ -28,6 +29,7 @@ public class AuthService : IAuthService
     private readonly IAccountEmailService _accountEmailService;
     private readonly INotificationService _notificationService;
     private readonly EmailSettings _emailSettings;
+    private readonly IHttpContextAccessor _httpContextAccessor;
     private readonly ILogger<AuthService> _logger;
 
     public AuthService(
@@ -37,6 +39,7 @@ public class AuthService : IAuthService
         IAccountEmailService accountEmailService,
         INotificationService notificationService,
         IOptions<EmailSettings> emailSettings,
+        IHttpContextAccessor httpContextAccessor,
         ILogger<AuthService> logger)
     {
         _userManager = userManager;
@@ -45,6 +48,7 @@ public class AuthService : IAuthService
         _accountEmailService = accountEmailService;
         _notificationService = notificationService;
         _emailSettings = emailSettings.Value;
+        _httpContextAccessor = httpContextAccessor;
         _logger = logger;
     }
 
@@ -126,73 +130,85 @@ public class AuthService : IAuthService
 
         User? user = null;
         string? studentNumber = null;
+        AuthResponse? registrationFailure = null;
 
-        await using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
-        try
+        var executionStrategy = _context.Database.CreateExecutionStrategy();
+        await executionStrategy.ExecuteAsync(async () =>
         {
-            user = new User
+            await using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
+            try
             {
-                UserName = request.Email,
-                Email = request.Email,
-                Role = UserRole.Student.ToStorageValue(),
-                IsActive = true,
-                EmailConfirmed = false
-            };
+                user = new User
+                {
+                    UserName = request.Email,
+                    Email = request.Email,
+                    Role = UserRole.Student.ToStorageValue(),
+                    IsActive = true,
+                    EmailConfirmed = false
+                };
 
-            var userCreateResult = await _userManager.CreateAsync(user, request.Password);
-            if (!userCreateResult.Succeeded)
+                var userCreateResult = await _userManager.CreateAsync(user, request.Password);
+                if (!userCreateResult.Succeeded)
+                {
+                    await transaction.RollbackAsync(cancellationToken);
+                    var errors = string.Join(", ", userCreateResult.Errors.Select(error => error.Description));
+                    registrationFailure = CreateFailureResponse($"Registration failed: {errors}");
+                    return;
+                }
+
+                studentNumber = await GenerateStudentNumberAsync(cancellationToken);
+                if (studentNumber == null)
+                {
+                    await transaction.RollbackAsync(cancellationToken);
+                    _logger.LogWarning("Unable to generate a unique student number after {AttemptCount} attempts.", StudentNumberGenerationMaxAttempts);
+                    registrationFailure = CreateFailureResponse("Unable to complete registration right now. Please try again.");
+                    return;
+                }
+
+                var student = new Student
+                {
+                    UserId = user.Id,
+                    CourseId = request.CourseId,
+                    SectionId = null,
+                    StudentNumber = studentNumber,
+                    FirstName = request.FirstName,
+                    LastName = request.LastName,
+                    MiddleName = request.MiddleName,
+                    Birthdate = request.Birthdate,
+                    Gender = request.Gender,
+                    Address = request.Address,
+                    GuardianName = request.GuardianName,
+                    GuardianContact = request.GuardianContact,
+                    YearLevel = resolvedYearLevel,
+                    IsActive = true
+                };
+
+                _context.Students.Add(student);
+                await _context.SaveChangesAsync(cancellationToken);
+
+                var enrollment = new Enrollment
+                {
+                    StudentId = student.Id,
+                    SectionId = assignedSection.Id,
+                    AcademicYearId = request.AcademicYearId,
+                    Status = EnrollmentStatus.Pending.ToStorageValue()
+                };
+
+                _context.Enrollments.Add(enrollment);
+                await _context.SaveChangesAsync(cancellationToken);
+
+                await transaction.CommitAsync(cancellationToken);
+            }
+            catch
             {
                 await transaction.RollbackAsync(cancellationToken);
-                var errors = string.Join(", ", userCreateResult.Errors.Select(error => error.Description));
-                return CreateFailureResponse($"Registration failed: {errors}");
+                registrationFailure = CreateFailureResponse("Unable to complete registration right now. Please try again.");
             }
+        });
 
-            studentNumber = await GenerateStudentNumberAsync(cancellationToken);
-            if (studentNumber == null)
-            {
-                await transaction.RollbackAsync(cancellationToken);
-                _logger.LogWarning("Unable to generate a unique student number after {AttemptCount} attempts.", StudentNumberGenerationMaxAttempts);
-                return CreateFailureResponse("Unable to complete registration right now. Please try again.");
-            }
-
-            var student = new Student
-            {
-                UserId = user.Id,
-                CourseId = request.CourseId,
-                SectionId = null,
-                StudentNumber = studentNumber,
-                FirstName = request.FirstName,
-                LastName = request.LastName,
-                MiddleName = request.MiddleName,
-                Birthdate = request.Birthdate,
-                Gender = request.Gender,
-                Address = request.Address,
-                GuardianName = request.GuardianName,
-                GuardianContact = request.GuardianContact,
-                YearLevel = resolvedYearLevel,
-                IsActive = true
-            };
-
-            _context.Students.Add(student);
-            await _context.SaveChangesAsync(cancellationToken);
-
-            var enrollment = new Enrollment
-            {
-                StudentId = student.Id,
-                SectionId = assignedSection.Id,
-                AcademicYearId = request.AcademicYearId,
-                Status = EnrollmentStatus.Pending.ToStorageValue()
-            };
-
-            _context.Enrollments.Add(enrollment);
-            await _context.SaveChangesAsync(cancellationToken);
-
-            await transaction.CommitAsync(cancellationToken);
-        }
-        catch
+        if (registrationFailure != null)
         {
-            await transaction.RollbackAsync(cancellationToken);
-            return CreateFailureResponse("Unable to complete registration right now. Please try again.");
+            return registrationFailure;
         }
 
         if (user == null || string.IsNullOrWhiteSpace(studentNumber))
@@ -289,6 +305,7 @@ public class AuthService : IAuthService
         var user = await _userManager.FindByEmailAsync(normalizedEmail);
         if (user == null || string.IsNullOrWhiteSpace(user.Email))
         {
+            _logger.LogInformation("Ignored forgot-password request for unknown email {Email}.", normalizedEmail);
             // Keep the response neutral so callers cannot infer whether an account exists.
             return CreateSuccessResponse(responseMessage);
         }
@@ -309,7 +326,8 @@ public class AuthService : IAuthService
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Failed to send password reset email for user {UserId}.", user.Id);
+            _logger.LogError(ex, "Failed to send password reset email for user {UserId}.", user.Id);
+            return CreateFailureResponse("Unable to send password reset email right now. Please try again later.");
         }
 
         return CreateSuccessResponse(responseMessage);
@@ -574,12 +592,47 @@ public class AuthService : IAuthService
 
     private string ResolvePublicBaseUrl()
     {
-        if (string.IsNullOrWhiteSpace(_emailSettings.PublicBaseUrl))
+        var configuredBaseUrl = _emailSettings.PublicBaseUrl?.Trim();
+        if (!string.IsNullOrWhiteSpace(configuredBaseUrl) && !IsLoopbackBaseUrl(configuredBaseUrl))
         {
-            throw new InvalidOperationException($"{EmailSettings.SectionName}:{nameof(EmailSettings.PublicBaseUrl)} is not configured.");
+            return configuredBaseUrl;
         }
 
-        return _emailSettings.PublicBaseUrl.Trim();
+        var requestOrigin = ResolveRequestOrigin();
+        if (!string.IsNullOrWhiteSpace(requestOrigin))
+        {
+            return requestOrigin;
+        }
+
+        if (!string.IsNullOrWhiteSpace(configuredBaseUrl))
+        {
+            return configuredBaseUrl;
+        }
+
+        throw new InvalidOperationException($"{EmailSettings.SectionName}:{nameof(EmailSettings.PublicBaseUrl)} is not configured.");
+    }
+
+    private string? ResolveRequestOrigin()
+    {
+        var request = _httpContextAccessor.HttpContext?.Request;
+        if (request == null || !request.Host.HasValue)
+        {
+            return null;
+        }
+
+        var scheme = request.Scheme;
+        if (!string.Equals(scheme, Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase)
+            && !string.Equals(scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        return $"{scheme}://{request.Host.Value.TrimEnd('/')}";
+    }
+
+    private static bool IsLoopbackBaseUrl(string baseUrl)
+    {
+        return Uri.TryCreate(baseUrl, UriKind.Absolute, out var uri) && uri.IsLoopback;
     }
 
     private static string? DecodeToken(string token)

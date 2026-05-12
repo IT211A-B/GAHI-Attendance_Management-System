@@ -9,6 +9,19 @@ on:
 jobs:
   build-test-publish:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: attendance_db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
 
     steps:
       - name: Checkout
@@ -27,11 +40,28 @@ jobs:
       - name: Build (Release)
         run: dotnet build Attendance_Management_System/Attendance_Management_System.slnx --configuration Release --no-restore
 
+      - name: Docker Build
+        run: docker build -t attendance-system-ci .
+
       - name: Test
         run: dotnet test Attendance_Management_System/tests/Attendance_Management_System.Tests/Attendance_Management_System.Tests.csproj --configuration Release --no-restore --logger "trx;LogFileName=test-results.trx"
 
       - name: Publish Web App
         run: dotnet publish Attendance_Management_System/Attendance_Management_System/Attendance_Management_System.csproj --configuration Release --no-build --output ./publish
+
+      - name: Smoke Test Health Endpoint
+        env:
+          ASPNETCORE_ENVIRONMENT: Production
+          ConnectionStrings__Default: Host=localhost;Port=5432;Database=attendance_db;Username=postgres;Password=postgres
+        run: |
+          dotnet run --project Attendance_Management_System/Attendance_Management_System/Attendance_Management_System.csproj --configuration Release --no-build --urls http://0.0.0.0:5080 &
+          for i in {1..30}; do
+            if curl -fsS http://localhost:5080/health; then
+              exit 0
+            fi
+            sleep 2
+          done
+          exit 1
 
       - name: Upload Published Artifact
         uses: actions/upload-artifact@v4

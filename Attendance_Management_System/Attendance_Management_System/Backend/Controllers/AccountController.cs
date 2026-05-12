@@ -150,6 +150,8 @@ public class AccountController : Controller
         if (!result.Success)
         {
             _logger.LogWarning("ForgotPasswordAsync returned non-success for forgot-password request.");
+            ModelState.AddModelError(string.Empty, result.Message ?? "Unable to send password reset email right now.");
+            return View(model);
         }
 
         TempData["AuthSuccess"] = "If an account exists for that email, password reset instructions have been sent. Please check your inbox.";
