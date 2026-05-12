@@ -50,7 +50,7 @@ builder.Services.Configure<RazorViewEngineOptions>(options =>
 });
 
 // Register all backend services (database, auth, repositories, services)
-builder.Services.AddBackend(builder.Configuration);
+builder.Services.AddBackend(builder.Configuration, builder.Environment);
 
 // Register API explorer and Swagger generation for MVC controller endpoints
 builder.Services.AddEndpointsApiExplorer();
