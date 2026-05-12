@@ -62,15 +62,37 @@ Seed runs only when there are no users yet.
 
 - Admin:
   - Email: `admin@dbtc-cebu.edu.ph`
-  - Password: `Admin123!`
 - Teacher (seeded set):
   - Example email: `it.faculty@dbtc-cebu.edu.ph`
-  - Password: `Teacher123!`
 - Student pattern:
   - Email: `student01@dbtc-cebu.edu.ph` (and more)
-  - Password: `Student123!`
+
+Default seed passwords are intended for local testing only. For production deployments, rotate or replace all seeded credentials immediately.
 
 Seed implementation is in [Attendance_Management_System/Attendance_Management_System/Backend/Data/SeedData.cs](Attendance_Management_System/Attendance_Management_System/Backend/Data/SeedData.cs).
+
+## Production Deployment
+
+See [DEPLOY_SUPABASE_RENDER.md](DEPLOY_SUPABASE_RENDER.md) for the end-to-end Render + Supabase flow.
+
+Environment variables (set in Render or your container runtime):
+
+| Variable | Purpose |
+| --- | --- |
+| `ASPNETCORE_ENVIRONMENT` | Set to `Production` in hosted environments. |
+| `ConnectionStrings__Default` | PostgreSQL connection string (Supabase or managed Postgres). |
+| `EmailSettings__PublicBaseUrl` | Public HTTPS base URL used in email links. |
+| `EmailSettings__Username` | SMTP username. For Gmail, use the sending Gmail address. |
+| `EmailSettings__Password` | SMTP password. For Gmail, use an app password. |
+| `EmailSettings__Host` | Optional SMTP host. Defaults to `smtp.gmail.com`. |
+| `EmailSettings__Port` | Optional SMTP port. Defaults to `587`. |
+| `EmailSettings__FromAddress` | Optional from address. Defaults to `EmailSettings__Username`. |
+| `EmailSettings__FromName` | Optional from display name. Defaults to `Don Bosco Attendance`. |
+| `EmailSettings__UseSsl` | Optional SMTP SSL toggle. Defaults to `false` for Gmail port 587 STARTTLS. |
+| `AttendanceQrSettings__SigningKey` | Secret key for QR signing. |
+| `CookieSettings__SecurePolicy` | Set to `Always` for production cookies. |
+| `Logging__LogLevel__Default` | Default log level (recommended `Warning` for production). |
+| `DataProtection__KeyPath` | Optional key storage path for cookie encryption keys. |
 
 ## Testing
 
