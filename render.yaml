@@ -9,23 +9,27 @@ services:
     envVars:
       - key: ASPNETCORE_ENVIRONMENT
         value: Production
+      - key: DOTNET_RUNNING_IN_CONTAINER
+        value: true
+      - key: Logging__LogLevel__Default
+        value: Warning
+      - key: CookieSettings__SecurePolicy
+        value: Always
       - key: ConnectionStrings__Default
         sync: false
       - key: EmailSettings__PublicBaseUrl
-        sync: false
+        value: https://donbosco-attendance-management-system.onrender.com
       - key: AttendanceQrSettings__SigningKey
         sync: false
       - key: EmailSettings__Host
-        sync: false
+        value: smtp.gmail.com
       - key: EmailSettings__Port
-        sync: false
+        value: 587
       - key: EmailSettings__Username
         sync: false
       - key: EmailSettings__Password
         sync: false
-      - key: EmailSettings__FromAddress
-        sync: false
       - key: EmailSettings__FromName
-        sync: false
+        value: Don Bosco Attendance
       - key: EmailSettings__UseSsl
-        sync: false
+        value: false
