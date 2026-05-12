@@ -22,10 +22,6 @@ public class StudentSignupViewModel
     [Display(Name = "Confirm password")]
     public string ConfirmPassword { get; set; } = string.Empty;
 
-    [Required(ErrorMessage = "Student number is required")]
-    [Display(Name = "Student number")]
-    public string StudentNumber { get; set; } = string.Empty;
-
     [Required(ErrorMessage = "First name is required")]
     [Display(Name = "First name")]
     public string FirstName { get; set; } = string.Empty;

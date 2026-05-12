@@ -1,20 +1,24 @@
 using Attendance_Management_System.Backend.DTOs.Requests;
+using Attendance_Management_System.Backend.DTOs.Responses;
 using Attendance_Management_System.Backend.Interfaces.Services;
 using Attendance_Management_System.Backend.ViewModels.Users;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
 
 namespace Attendance_Management_System.Backend.Controllers;
 
 [Authorize(Policy = "AdminOnly")]
 [Route("users")]
-public class UserManagementController : AppControllerBase
+public class UserManagementController : Controller
 {
     private readonly IUsersService _usersService;
+    private readonly ILogger<UserManagementController> _logger;
 
-    public UserManagementController(IUsersService usersService)
+    public UserManagementController(IUsersService usersService, ILogger<UserManagementController> logger)
     {
         _usersService = usersService;
+        _logger = logger;
     }
 
     [HttpGet("")]
@@ -43,10 +47,14 @@ public class UserManagementController : AppControllerBase
             Role = form.Role.Trim().ToLowerInvariant()
         };
 
-        var result = await ExecuteServiceCallAsync(() => _usersService.CreateUserAsync(request));
-        if (!result.Success)
+        try
         {
-            ModelState.AddModelError("CreateForm.Email", result.Error?.Message ?? "Unable to create user right now.");
+            await _usersService.CreateUserAsync(request);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to create user.");
+            ModelState.AddModelError("CreateForm.Email", "Unable to create user right now.");
             return View(nameof(Index), viewModel);
         }
 
@@ -58,11 +66,14 @@ public class UserManagementController : AppControllerBase
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> SetStatus(int id, bool isActive)
     {
-        var result = await ExecuteServiceCallAsync(() => _usersService.UpdateUserAsync(id, new UpdateUserRequest { IsActive = isActive }));
-
-        if (!result.Success)
+        try
         {
-            TempData["UsersError"] = result.Error?.Message ?? "Unable to update user status.";
+            await _usersService.UpdateUserAsync(id, new UpdateUserRequest { IsActive = isActive });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to set status for user {UserId}.", id);
+            TempData["UsersError"] = "Unable to update user status.";
             return RedirectToAction(nameof(Index));
         }
 
@@ -75,17 +86,22 @@ public class UserManagementController : AppControllerBase
 
     private async Task<UsersIndexViewModel> BuildIndexViewModelAsync()
     {
-        var result = await ExecuteServiceCallAsync(() => _usersService.GetAllUsersAsync());
-
         var viewModel = new UsersIndexViewModel();
 
-        if (!result.Success || result.Data is null)
+        List<UserDto> users;
+
+        try
         {
-            viewModel.ErrorMessage = result.Error?.Message ?? "Unable to load users right now.";
+            users = await _usersService.GetAllUsersAsync();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to load users.");
+            viewModel.ErrorMessage = "Unable to load users right now.";
             return viewModel;
         }
 
-        viewModel.Users = result.Data
+        viewModel.Users = users
             .OrderBy(u => u.Email)
             .Select(user => new UserListItemViewModel
             {

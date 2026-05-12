@@ -1,21 +1,24 @@
-﻿using System.Security.Claims;
+using System.Security.Claims;
 using Attendance_Management_System.Backend.DTOs.Requests;
 using Attendance_Management_System.Backend.Interfaces.Services;
 using Attendance_Management_System.Backend.ViewModels.Settings;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
 
 namespace Attendance_Management_System.Backend.Controllers;
 
 [Authorize]
 [Route("settings")]
-public class SettingsController : AppControllerBase
+public class SettingsController : Controller
 {
     private readonly IUsersService _usersService;
+    private readonly ILogger<SettingsController> _logger;
 
-    public SettingsController(IUsersService usersService)
+    public SettingsController(IUsersService usersService, ILogger<SettingsController> logger)
     {
         _usersService = usersService;
+        _logger = logger;
     }
 
     [HttpGet("")]
@@ -56,10 +59,14 @@ public class SettingsController : AppControllerBase
             LastName = NormalizeOptional(form.LastName)
         };
 
-        var result = await ExecuteServiceCallAsync(() => _usersService.UpdateProfileAsync(userId.Value, request));
-        if (!result.Success)
+        try
         {
-            ModelState.AddModelError("ProfileForm.FirstName", result.Error?.Message ?? "Unable to update profile right now.");
+            await _usersService.UpdateProfileAsync(userId.Value, request);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to update profile for user {UserId}.", userId.Value);
+            ModelState.AddModelError("ProfileForm.FirstName", "Unable to update profile right now.");
             return View(nameof(Index), model);
         }
 
@@ -91,10 +98,14 @@ public class SettingsController : AppControllerBase
             NewPassword = form.NewPassword
         };
 
-        var result = await ExecuteServiceCallAsync(() => _usersService.UpdateProfileAsync(userId.Value, request));
-        if (!result.Success)
+        try
         {
-            ModelState.AddModelError("PasswordForm.CurrentPassword", result.Error?.Message ?? "Unable to change password right now.");
+            await _usersService.UpdateProfileAsync(userId.Value, request);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to change password for user {UserId}.", userId.Value);
+            ModelState.AddModelError("PasswordForm.CurrentPassword", "Unable to change password right now.");
             return View(nameof(Index), model);
         }
 
@@ -119,23 +130,24 @@ public class SettingsController : AppControllerBase
             Role = User.FindFirstValue(ClaimTypes.Role) ?? "-"
         };
 
-        var userResult = await ExecuteServiceCallAsync(() => _usersService.GetUserByIdAsync(userId));
-        if (!userResult.Success || userResult.Data is null)
+        try
         {
-            return viewModel;
+            var user = await _usersService.GetUserByIdAsync(userId);
+
+            viewModel.Email = string.IsNullOrWhiteSpace(user.Email) ? viewModel.Email : user.Email;
+            viewModel.FullName = BuildFullName(user.FirstName, user.MiddleName, user.LastName, fallbackFullName);
+
+            viewModel.ProfileForm = new UpdateProfileFormViewModel
+            {
+                FirstName = user.FirstName,
+                MiddleName = user.MiddleName,
+                LastName = user.LastName
+            };
         }
-
-        var user = userResult.Data;
-
-        viewModel.Email = string.IsNullOrWhiteSpace(user.Email) ? viewModel.Email : user.Email;
-        viewModel.FullName = BuildFullName(user.FirstName, user.MiddleName, user.LastName, fallbackFullName);
-
-        viewModel.ProfileForm = new UpdateProfileFormViewModel
+        catch (Exception ex)
         {
-            FirstName = user.FirstName,
-            MiddleName = user.MiddleName,
-            LastName = user.LastName
-        };
+            _logger.LogError(ex, "Failed to load user profile for settings.");
+        }
 
         return viewModel;
     }
@@ -154,4 +166,3 @@ public class SettingsController : AppControllerBase
         return string.IsNullOrWhiteSpace(trimmed) ? null : trimmed;
     }
 }
-

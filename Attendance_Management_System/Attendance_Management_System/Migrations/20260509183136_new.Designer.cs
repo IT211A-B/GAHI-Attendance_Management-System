@@ -3,6 +3,7 @@ using System;
 using Attendance_Management_System.Backend.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Attendance_Management_System.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260509183136_new")]
+    partial class @new
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -440,6 +443,9 @@ namespace Attendance_Management_System.Migrations
                     b.Property<int>("SectionId")
                         .HasColumnType("integer");
 
+                    b.Property<int?>("SectionId1")
+                        .HasColumnType("integer");
+
                     b.Property<string>("Status")
                         .IsRequired()
                         .ValueGeneratedOnAdd()
@@ -462,6 +468,8 @@ namespace Attendance_Management_System.Migrations
                     b.HasIndex("ProcessedBy");
 
                     b.HasIndex("SectionId");
+
+                    b.HasIndex("SectionId1");
 
                     b.HasIndex("StudentId");
 
@@ -632,9 +640,19 @@ namespace Attendance_Management_System.Migrations
                     b.Property<DateTimeOffset>("AssignedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<int?>("SectionId1")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("TeacherId1")
+                        .HasColumnType("integer");
+
                     b.HasKey("SectionId", "TeacherId");
 
+                    b.HasIndex("SectionId1");
+
                     b.HasIndex("TeacherId");
+
+                    b.HasIndex("TeacherId1");
 
                     b.ToTable("SectionTeachers");
                 });
@@ -1186,10 +1204,14 @@ namespace Attendance_Management_System.Migrations
                         .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("Attendance_Management_System.Backend.Entities.Section", "Section")
-                        .WithMany("Enrollments")
+                        .WithMany()
                         .HasForeignKey("SectionId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+
+                    b.HasOne("Attendance_Management_System.Backend.Entities.Section", null)
+                        .WithMany("Enrollments")
+                        .HasForeignKey("SectionId1");
 
                     b.HasOne("Attendance_Management_System.Backend.Entities.Student", "Student")
                         .WithMany()
@@ -1281,16 +1303,24 @@ namespace Attendance_Management_System.Migrations
             modelBuilder.Entity("Attendance_Management_System.Backend.Entities.SectionTeacher", b =>
                 {
                     b.HasOne("Attendance_Management_System.Backend.Entities.Section", "Section")
-                        .WithMany("SectionTeachers")
+                        .WithMany()
                         .HasForeignKey("SectionId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("Attendance_Management_System.Backend.Entities.Teacher", "Teacher")
+                    b.HasOne("Attendance_Management_System.Backend.Entities.Section", null)
                         .WithMany("SectionTeachers")
+                        .HasForeignKey("SectionId1");
+
+                    b.HasOne("Attendance_Management_System.Backend.Entities.Teacher", "Teacher")
+                        .WithMany()
                         .HasForeignKey("TeacherId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+
+                    b.HasOne("Attendance_Management_System.Backend.Entities.Teacher", null)
+                        .WithMany("SectionTeachers")
+                        .HasForeignKey("TeacherId1");
 
                     b.Navigation("Section");
 

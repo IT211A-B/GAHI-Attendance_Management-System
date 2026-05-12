@@ -22,7 +22,6 @@ public class AttendanceQrService : IAttendanceQrService
     private const int DefaultSuggestionTake = 8;
     private const int MaxSuggestionTake = 20;
     private const int MaxLiveFeedItems = 200;
-    private const string UnknownStudentName = "Unknown student";
 
     private static readonly string[] DayNames = { "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday" };
 
@@ -735,7 +734,7 @@ public class AttendanceQrService : IAttendanceQrService
             .Where(part => !string.IsNullOrWhiteSpace(part))
             .Select(part => part!.Trim()));
 
-        return string.IsNullOrWhiteSpace(fullName) ? UnknownStudentName : fullName;
+        return string.IsNullOrWhiteSpace(fullName) ? "Unknown student" : fullName;
     }
 
     private static string BuildPeriodLabel(int dayOfWeek, TimeOnly startTime, TimeOnly endTime)

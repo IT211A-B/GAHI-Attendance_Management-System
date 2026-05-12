@@ -15,6 +15,7 @@
           asp-append-version="true" />
     <script type="importmap"></script>
     <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/toast.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/Attendance_Management_System.styles.css" asp-append-version="true" />
 </head>
 
@@ -174,6 +175,9 @@
         </div>
     </div>
 
+    @* Toast notification container - renders TempData messages from server *@
+    <partial name="_Toast" />
+
     @if (User.Identity?.IsAuthenticated == true)
     {
         <div id="predefined-chat-widget" class="chat-widget" data-user-role="@currentUserRole" data-chat-api-url=""
@@ -226,6 +230,7 @@
     <script src="https://cdn.jsdelivr.net/npm/animejs@3.2.2/lib/anime.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/8.0.7/signalr.min.js"></script>
     <script src="~/js/site.js" asp-append-version="true"></script>
+    <script src="~/js/toast.js" asp-append-version="true"></script>
     @await RenderSectionAsync("Scripts", required: false)
 </body>
 

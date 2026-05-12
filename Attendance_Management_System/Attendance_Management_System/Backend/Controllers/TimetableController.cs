@@ -1,29 +1,35 @@
 using System.Security.Claims;
 using Attendance_Management_System.Backend.DTOs.Requests;
+using Attendance_Management_System.Backend.DTOs.Responses;
 using Attendance_Management_System.Backend.Enums;
 using Attendance_Management_System.Backend.Helpers;
 using Attendance_Management_System.Backend.Interfaces.Services;
+using Attendance_Management_System.Backend.ViewModels.Sections;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
 
 namespace Attendance_Management_System.Backend.Controllers;
 
 [Authorize(Policy = "AdminOrTeacher")]
 [Route("timetable")]
-public class TimetableController : AppControllerBase
+public class TimetableController : Controller
 {
     private readonly ISectionPageService _sectionPageService;
     private readonly ISectionsService _sectionsService;
     private readonly ISchedulesService _schedulesService;
+    private readonly ILogger<TimetableController> _logger;
 
     public TimetableController(
         ISectionPageService sectionPageService,
         ISectionsService sectionsService,
-        ISchedulesService schedulesService)
+        ISchedulesService schedulesService,
+        ILogger<TimetableController> logger)
     {
         _sectionPageService = sectionPageService;
         _sectionsService = sectionsService;
         _schedulesService = schedulesService;
+        _logger = logger;
     }
 
     [HttpGet("")]
@@ -35,7 +41,21 @@ public class TimetableController : AppControllerBase
             return Challenge();
         }
 
-        var viewModel = await _sectionPageService.BuildTimetableIndexViewModelAsync(context.UserId, context.Role, sectionId);
+        TimetableIndexViewModel viewModel;
+
+        try
+        {
+            viewModel = await _sectionPageService.BuildTimetableIndexViewModelAsync(context.UserId, context.Role, sectionId);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to load timetable index view.");
+            viewModel = new TimetableIndexViewModel
+            {
+                ErrorMessage = "Unable to load timetable data right now."
+            };
+        }
+
         return View(viewModel);
     }
 
@@ -59,22 +79,36 @@ public class TimetableController : AppControllerBase
 
         var teacherId = teacherContext.Context.TeacherId.Value;
 
-        var sectionTeachersResult = await ExecuteServiceCallAsync(() => _sectionsService.GetSectionTeachersAsync(id));
-        if (sectionTeachersResult.Success && sectionTeachersResult.Data is not null
-            && sectionTeachersResult.Data.Any(assignment => assignment.TeacherId == teacherId))
+        List<SectionTeacherDto> sectionTeachers;
+
+        try
+        {
+            sectionTeachers = await _sectionsService.GetSectionTeachersAsync(id);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to load section teachers for section {SectionId}.", id);
+            TempData["TimetableError"] = "Unable to load section teacher assignments right now.";
+            return RedirectToAction(nameof(Index), new { sectionId = selectedSectionId ?? id });
+        }
+
+        if (sectionTeachers.Any(assignment => assignment.TeacherId == teacherId))
         {
             TempData["TimetableSuccess"] = "You are already assigned to this section.";
             return RedirectToAction(nameof(Index), new { sectionId = selectedSectionId ?? id });
         }
 
-        var assignResult = await ExecuteServiceCallAsync(() => _sectionsService.AssignTeacherToSectionAsync(id, new AssignTeacherRequest
+        try
         {
-            TeacherId = teacherId
-        }));
-
-        if (!assignResult.Success)
+            await _sectionsService.AssignTeacherToSectionAsync(id, new AssignTeacherRequest
+            {
+                TeacherId = teacherId
+            });
+        }
+        catch (Exception ex)
         {
-            TempData["TimetableError"] = assignResult.Error?.Message ?? "Unable to self-assign to this section right now.";
+            _logger.LogError(ex, "Failed to self-assign teacher {TeacherId} to section {SectionId}.", teacherId, id);
+            TempData["TimetableError"] = "Unable to self-assign to this section right now.";
             return RedirectToAction(nameof(Index), new { sectionId = selectedSectionId ?? id });
         }
 
@@ -102,27 +136,37 @@ public class TimetableController : AppControllerBase
 
         var teacherId = teacherContext.Context.TeacherId.Value;
 
-        var sectionTeachersResult = await ExecuteServiceCallAsync(() => _sectionsService.GetSectionTeachersAsync(id));
-        if (!sectionTeachersResult.Success || sectionTeachersResult.Data is null)
+        List<SectionTeacherDto> sectionTeachers;
+
+        try
         {
-            TempData["TimetableError"] = sectionTeachersResult.Error?.Message ?? "Unable to load section teacher assignments right now.";
+            sectionTeachers = await _sectionsService.GetSectionTeachersAsync(id);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to load section teachers for section {SectionId}.", id);
+            TempData["TimetableError"] = "Unable to load section teacher assignments right now.";
             return RedirectToAction(nameof(Index), new { sectionId = selectedSectionId ?? id });
         }
 
-        if (!sectionTeachersResult.Data.Any(assignment => assignment.TeacherId == teacherId))
+        if (!sectionTeachers.Any(assignment => assignment.TeacherId == teacherId))
         {
             TempData["TimetableSuccess"] = "You are not assigned to this section.";
             return RedirectToAction(nameof(Index), new { sectionId = selectedSectionId ?? id });
         }
 
-        var removeResult = await ExecuteServiceCallAsync(() => _sectionsService.RemoveTeacherFromSectionAsync(
-            id,
-            teacherId,
-            isAdmin: true,
-            removeOwnedSchedules: true));
-        if (!removeResult.Success)
+        try
         {
-            TempData["TimetableError"] = removeResult.Error?.Message ?? "Unable to unassign from this section right now.";
+            await _sectionsService.RemoveTeacherFromSectionAsync(
+                id,
+                teacherId,
+                isAdmin: true,
+                removeOwnedSchedules: true);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to self-unassign teacher {TeacherId} from section {SectionId}.", teacherId, id);
+            TempData["TimetableError"] = "Unable to unassign from this section right now.";
             return RedirectToAction(nameof(Index), new { sectionId = selectedSectionId ?? id });
         }
 
@@ -160,19 +204,22 @@ public class TimetableController : AppControllerBase
             return RedirectToAction(nameof(Index), new { sectionId = selectedSectionId ?? sectionId });
         }
 
-        var result = await ExecuteServiceCallAsync(() => _schedulesService.CreateScheduleAsync(new CreateScheduleRequest
+        try
         {
-            SectionId = sectionId,
-            SubjectId = subjectId,
-            DayOfWeek = dayOfWeek,
-            StartTime = startTime,
-            EndTime = endTime,
-            EffectiveFrom = DateOnly.FromDateTime(DateTime.Today)
-        }, context.UserId));
-
-        if (!result.Success)
+            await _schedulesService.CreateScheduleAsync(new CreateScheduleRequest
+            {
+                SectionId = sectionId,
+                SubjectId = subjectId,
+                DayOfWeek = dayOfWeek,
+                StartTime = startTime,
+                EndTime = endTime,
+                EffectiveFrom = DateOnly.FromDateTime(DateTime.Today)
+            }, context.UserId);
+        }
+        catch (Exception ex)
         {
-            TempData["TimetableError"] = result.Error?.Message ?? "Unable to add the timetable slot right now.";
+            _logger.LogError(ex, "Failed to add timetable slot for section {SectionId}.", sectionId);
+            TempData["TimetableError"] = "Unable to add the timetable slot right now.";
             return RedirectToAction(nameof(Index), new { sectionId = selectedSectionId ?? sectionId });
         }
 
@@ -222,23 +269,28 @@ public class TimetableController : AppControllerBase
             return RedirectToAction(nameof(Index), new { sectionId = selectedSectionId ?? sectionId });
         }
 
-        var result = await ExecuteServiceCallAsync(() => _schedulesService.CreateScheduleRangeAsync(new CreateScheduleRangeRequest
-        {
-            SectionId = sectionId,
-            SubjectId = subjectId,
-            DaysOfWeek = normalizedDays,
-            StartTime = startTime,
-            EndTime = endTime,
-            EffectiveFrom = DateOnly.FromDateTime(DateTime.Today)
-        }, context.UserId));
+        List<ScheduleDto> createdSlots;
 
-        if (!result.Success)
+        try
         {
-            TempData["TimetableError"] = result.Error?.Message ?? "Unable to add timetable slots right now.";
+            createdSlots = await _schedulesService.CreateScheduleRangeAsync(new CreateScheduleRangeRequest
+            {
+                SectionId = sectionId,
+                SubjectId = subjectId,
+                DaysOfWeek = normalizedDays,
+                StartTime = startTime,
+                EndTime = endTime,
+                EffectiveFrom = DateOnly.FromDateTime(DateTime.Today)
+            }, context.UserId);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to add timetable slot range for section {SectionId}.", sectionId);
+            TempData["TimetableError"] = "Unable to add timetable slots right now.";
             return RedirectToAction(nameof(Index), new { sectionId = selectedSectionId ?? sectionId });
         }
 
-        var createdCount = result.Data?.Count ?? normalizedDays.Count;
+        var createdCount = createdSlots.Count;
         TempData["TimetableSuccess"] = createdCount == 1
             ? "Timetable slot added successfully."
             : $"Timetable slots added successfully ({createdCount} days).";
@@ -275,17 +327,20 @@ public class TimetableController : AppControllerBase
             return RedirectToAction(nameof(Index), new { sectionId = selectedSectionId });
         }
 
-        var result = await ExecuteServiceCallAsync(() => _schedulesService.UpdateScheduleAsync(scheduleId, new UpdateScheduleRequest
+        try
         {
-            SubjectId = subjectId,
-            DayOfWeek = dayOfWeek,
-            StartTime = startTime,
-            EndTime = endTime
-        }, context.UserId));
-
-        if (!result.Success)
+            await _schedulesService.UpdateScheduleAsync(scheduleId, new UpdateScheduleRequest
+            {
+                SubjectId = subjectId,
+                DayOfWeek = dayOfWeek,
+                StartTime = startTime,
+                EndTime = endTime
+            }, context.UserId);
+        }
+        catch (Exception ex)
         {
-            TempData["TimetableError"] = result.Error?.Message ?? "Unable to update the timetable slot right now.";
+            _logger.LogError(ex, "Failed to update timetable slot {ScheduleId}.", scheduleId);
+            TempData["TimetableError"] = "Unable to update the timetable slot right now.";
             return RedirectToAction(nameof(Index), new { sectionId = selectedSectionId });
         }
 
@@ -304,11 +359,14 @@ public class TimetableController : AppControllerBase
             return Challenge();
         }
 
-        var result = await ExecuteServiceCallAsync(() => _schedulesService.DeleteScheduleAsync(scheduleId, context.UserId, isAdmin: false));
-
-        if (!result.Success)
+        try
         {
-            TempData["TimetableError"] = result.Error?.Message ?? "Unable to delete the timetable slot right now.";
+            await _schedulesService.DeleteScheduleAsync(scheduleId, context.UserId, isAdmin: false);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to delete timetable slot {ScheduleId}.", scheduleId);
+            TempData["TimetableError"] = "Unable to delete the timetable slot right now.";
             return RedirectToAction(nameof(Index), new { sectionId = selectedSectionId });
         }
 

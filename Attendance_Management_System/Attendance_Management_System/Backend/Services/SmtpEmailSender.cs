@@ -1,25 +1,18 @@
-using Attendance_Management_System.Backend.Configuration;
 using Attendance_Management_System.Backend.Interfaces.Services;
-using MailKit.Net.Smtp;
-using MimeKit;
-using MimeKit.Text;
-using Microsoft.Extensions.Options;
-
+using FluentEmail.Core;
+ 
 namespace Attendance_Management_System.Backend.Services;
 
 public class SmtpEmailSender : IEmailSender
 {
-    private readonly EmailSettings _emailSettings;
-    private readonly IHostEnvironment _hostEnvironment;
+    private readonly IFluentEmailFactory _fluentEmailFactory;
     private readonly ILogger<SmtpEmailSender> _logger;
 
     public SmtpEmailSender(
-        IOptions<EmailSettings> emailSettings,
-        IHostEnvironment hostEnvironment,
+        IFluentEmailFactory fluentEmailFactory,
         ILogger<SmtpEmailSender> logger)
     {
-        _emailSettings = emailSettings.Value;
-        _hostEnvironment = hostEnvironment;
+        _fluentEmailFactory = fluentEmailFactory;
         _logger = logger;
     }
 
@@ -27,19 +20,28 @@ public class SmtpEmailSender : IEmailSender
     {
         EnsureRecipientAddress(toAddress);
 
-        if (!IsSmtpConfigured())
-        {
-            if (_hostEnvironment.IsDevelopment())
-            {
-                LogEmail(toAddress, subject, htmlBody);
-                return;
-            }
+        var sendResponse = await _fluentEmailFactory
+            .Create()
+            .To(toAddress)
+            .Subject(subject ?? string.Empty)
+            .Body(htmlBody ?? string.Empty, isHtml: true)
+            .SendAsync();
 
-            throw new InvalidOperationException("EmailSettings are not fully configured for SMTP delivery.");
+        if (sendResponse.Successful)
+        {
+            return;
         }
 
-        var message = BuildMessage(toAddress, subject, htmlBody);
-        await SendViaSmtpAsync(message);
+        var deliveryErrors = sendResponse.ErrorMessages is { Count: > 0 }
+            ? string.Join("; ", sendResponse.ErrorMessages)
+            : "Unknown email delivery failure.";
+
+        _logger.LogError(
+            "Email delivery failed for {Recipient}. Errors: {Errors}",
+            toAddress,
+            deliveryErrors);
+
+        throw new InvalidOperationException($"Email delivery failed for '{toAddress}'.");
     }
 
     private static void EnsureRecipientAddress(string toAddress)
@@ -48,58 +50,5 @@ public class SmtpEmailSender : IEmailSender
         {
             throw new ArgumentException("Recipient email address is required.", nameof(toAddress));
         }
-    }
-
-    private MimeMessage BuildMessage(string toAddress, string subject, string htmlBody)
-    {
-        var message = new MimeMessage();
-        message.From.Add(new MailboxAddress(_emailSettings.FromName, _emailSettings.FromAddress));
-        message.To.Add(MailboxAddress.Parse(toAddress));
-        message.Subject = subject;
-        message.Body = new TextPart(TextFormat.Html)
-        {
-            Text = htmlBody
-        };
-
-        return message;
-    }
-
-    private async Task SendViaSmtpAsync(MimeMessage message)
-    {
-        using var client = new SmtpClient();
-        await client.ConnectAsync(_emailSettings.Host, _emailSettings.Port, _emailSettings.UseSsl);
-        await TryAuthenticateAsync(client);
-        await client.SendAsync(message);
-        await client.DisconnectAsync(true);
-    }
-
-    private async Task TryAuthenticateAsync(SmtpClient client)
-    {
-        if (string.IsNullOrWhiteSpace(_emailSettings.Username) || string.IsNullOrWhiteSpace(_emailSettings.Password))
-        {
-            return;
-        }
-
-        await client.AuthenticateAsync(_emailSettings.Username, _emailSettings.Password);
-    }
-
-    private bool IsSmtpConfigured()
-    {
-        if (string.IsNullOrWhiteSpace(_emailSettings.Host)
-            || string.Equals(_emailSettings.Host.Trim(), "smtp.example.com", StringComparison.OrdinalIgnoreCase)
-            || _emailSettings.Port <= 0)
-        {
-            return false;
-        }
-
-        return !string.IsNullOrWhiteSpace(_emailSettings.FromAddress);
-    }
-
-    private void LogEmail(string toAddress, string subject, string htmlBody)
-    {
-        _logger.LogInformation(
-            "DEV EMAIL FALLBACK\nSubjectLength: {SubjectLength}\nBodyLength: {BodyLength}",
-            subject?.Length ?? 0,
-            htmlBody?.Length ?? 0);
     }
 }

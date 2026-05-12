@@ -1,22 +1,26 @@
 using Attendance_Management_System.Backend.DTOs.Requests;
+using Attendance_Management_System.Backend.DTOs.Responses;
 using Attendance_Management_System.Backend.Interfaces.Services;
 using Attendance_Management_System.Backend.ViewModels.Teachers;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
 
 namespace Attendance_Management_System.Backend.Controllers;
 
 [Authorize(Policy = "AdminOnly")]
 [Route("teachers")]
-public class TeacherManagementController : AppControllerBase
+public class TeacherManagementController : Controller
 {
     private readonly IAuthService _authService;
     private readonly ITeachersService _teachersService;
+    private readonly ILogger<TeacherManagementController> _logger;
 
-    public TeacherManagementController(IAuthService authService, ITeachersService teachersService)
+    public TeacherManagementController(IAuthService authService, ITeachersService teachersService, ILogger<TeacherManagementController> logger)
     {
         _authService = authService;
         _teachersService = teachersService;
+        _logger = logger;
     }
 
     [HttpGet("")]
@@ -65,13 +69,17 @@ public class TeacherManagementController : AppControllerBase
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> SetStatus(int id, bool isActive)
     {
-        var result = isActive
-            ? await ExecuteServiceCallAsync(() => _teachersService.ActivateTeacherAsync(id))
-            : await ExecuteServiceCallAsync(() => _teachersService.DeactivateTeacherAsync(id));
-
-        if (!result.Success)
+        try
         {
-            TempData["TeachersError"] = result.Error?.Message ?? "Unable to update teacher status.";
+            if (isActive)
+                await _teachersService.ActivateTeacherAsync(id);
+            else
+                await _teachersService.DeactivateTeacherAsync(id);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to set status for teacher {TeacherId}.", id);
+            TempData["TeachersError"] = "Unable to update teacher status.";
             return RedirectToAction(nameof(Index));
         }
 
@@ -84,17 +92,22 @@ public class TeacherManagementController : AppControllerBase
 
     private async Task<TeachersIndexViewModel> BuildIndexViewModelAsync()
     {
-        var result = await ExecuteServiceCallAsync(() => _teachersService.GetAllTeachersWithSectionsAsync());
-
         var viewModel = new TeachersIndexViewModel();
 
-        if (!result.Success || result.Data is null)
+        List<TeacherListDto> teachers;
+
+        try
         {
-            viewModel.ErrorMessage = result.Error?.Message ?? "Unable to load teachers right now.";
+            teachers = await _teachersService.GetAllTeachersWithSectionsAsync();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to load teachers.");
+            viewModel.ErrorMessage = "Unable to load teachers right now.";
             return viewModel;
         }
 
-        viewModel.Teachers = result.Data
+        viewModel.Teachers = teachers
             .OrderBy(t => t.LastName)
             .ThenBy(t => t.FirstName)
             .Select(teacher => new TeacherListItemViewModel

@@ -143,12 +143,12 @@ public class AppDbContext : IdentityDbContext<User, IdentityRole<int>, int>
             entity.HasKey(st => new { st.SectionId, st.TeacherId });
 
             entity.HasOne(st => st.Section)
-                .WithMany()
+                .WithMany(s => s.SectionTeachers)
                 .HasForeignKey(st => st.SectionId)
                 .OnDelete(DeleteBehavior.Restrict);
 
             entity.HasOne(st => st.Teacher)
-                .WithMany()
+                .WithMany(t => t.SectionTeachers)
                 .HasForeignKey(st => st.TeacherId)
                 .OnDelete(DeleteBehavior.Restrict);
         });
@@ -289,7 +289,7 @@ public class AppDbContext : IdentityDbContext<User, IdentityRole<int>, int>
                 .OnDelete(DeleteBehavior.Restrict);
 
             entity.HasOne(e => e.Section)
-                .WithMany()
+                .WithMany(s => s.Enrollments)
                 .HasForeignKey(e => e.SectionId)
                 .OnDelete(DeleteBehavior.Restrict);
 

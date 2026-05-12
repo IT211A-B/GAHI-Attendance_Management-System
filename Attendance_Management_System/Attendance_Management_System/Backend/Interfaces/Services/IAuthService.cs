@@ -5,7 +5,6 @@ namespace Attendance_Management_System.Backend.Interfaces.Services;
 
 public interface IAuthService
 {
-    Task<AuthResponse> LoginAsync(LoginRequest request, CancellationToken cancellationToken = default);
     Task<AuthResponse> RegisterStudentAsync(RegisterRequest request, CancellationToken cancellationToken = default);
     Task<AuthResponse> RegisterTeacherAsync(TeacherRegisterRequest request, CancellationToken cancellationToken = default);
     Task<AuthResponse> ConfirmEmailAsync(int userId, string token, CancellationToken cancellationToken = default);

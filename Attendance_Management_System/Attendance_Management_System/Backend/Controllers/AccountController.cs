@@ -15,8 +15,6 @@ namespace Attendance_Management_System.Backend.Controllers;
 [Route("")]
 public class AccountController : Controller
 {
-    private const string GenericForgotPasswordNotice = "If an account exists for that email, password reset instructions have been sent. Please check your inbox.";
-
     private readonly SignInManager<User> _signInManager;
     private readonly UserManager<User> _userManager;
     private readonly IAuthService _authService;
@@ -98,33 +96,16 @@ public class AccountController : Controller
             return View(model);
         }
 
-        Microsoft.AspNetCore.Identity.SignInResult result;
         try
         {
-            result = await _signInManager.PasswordSignInAsync(
-                model.Email,
-                model.Password,
-                model.RememberMe,
-                lockoutOnFailure: false);
-        }
-        catch (PostgresException ex) when (ex.SqlState == PostgresErrorCodes.InvalidPassword)
-        {
-            _logger.LogError(ex, "PostgreSQL authentication failed while processing login.");
-            ModelState.AddModelError(string.Empty, "Login is temporarily unavailable due to a database configuration issue.");
-            return View(model);
-        }
-        catch (NpgsqlException ex)
-        {
-            _logger.LogError(ex, "PostgreSQL connection failure while processing login.");
-            ModelState.AddModelError(string.Empty, "Login is temporarily unavailable. Please try again later.");
-            return View(model);
-        }
+            var result = await _signInManager.PasswordSignInAsync(model.Email, model.Password, model.RememberMe, lockoutOnFailure: false);
+            if (result.Succeeded)
+            {
+                return RedirectToAction("Index", "Dashboard");
+            }
 
-        if (!result.Succeeded)
-        {
             if (result.IsNotAllowed)
             {
-                // A blocked sign-in here usually means the account exists but email verification is still pending.
                 ViewData["EmailVerificationRequired"] = true;
                 ViewData["EmailVerificationAddress"] = model.Email;
                 ModelState.AddModelError(string.Empty, "Please verify your email before signing in. You can request a new verification link below.");
@@ -134,13 +115,18 @@ public class AccountController : Controller
             ModelState.AddModelError(string.Empty, "Invalid email or password.");
             return View(model);
         }
-
-        if (!string.IsNullOrWhiteSpace(model.ReturnUrl) && Url.IsLocalUrl(model.ReturnUrl))
+        catch (PostgresException ex) when (ex.SqlState == PostgresErrorCodes.InvalidPassword)
         {
-            return Redirect(model.ReturnUrl);
+            _logger.LogError(ex, "PostgreSQL authentication failed while attempting to sign in user {Email}.", model.Email);
+            ModelState.AddModelError(string.Empty, "Unable to sign in right now. Please try again shortly.");
+            return View(model);
         }
-
-        return RedirectToAction("Index", "Dashboard");
+        catch (NpgsqlException ex)
+        {
+            _logger.LogError(ex, "PostgreSQL connection failure while attempting to sign in user {Email}.", model.Email);
+            ModelState.AddModelError(string.Empty, "Unable to sign in right now. Please try again shortly.");
+            return View(model);
+        }
     }
 
     [HttpPost("forgot-password")]
@@ -166,7 +152,7 @@ public class AccountController : Controller
             _logger.LogWarning("ForgotPasswordAsync returned non-success for forgot-password request.");
         }
 
-        TempData["AuthSuccess"] = GenericForgotPasswordNotice;
+        TempData["AuthSuccess"] = "If an account exists for that email, password reset instructions have been sent. Please check your inbox.";
         return RedirectToAction(nameof(ForgotPassword));
     }
 
@@ -176,12 +162,6 @@ public class AccountController : Controller
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Signup(StudentSignupViewModel model)
     {
-        if (User.Identity?.IsAuthenticated == true)
-        {
-            return RedirectToAction("Index", "Dashboard");
-        }
-
-        // Rebuild the options before validation runs so any errors can re-render the same choices.
         await PopulateSignupOptionsAsync(model);
 
         if (!ModelState.IsValid)
@@ -194,7 +174,6 @@ public class AccountController : Controller
             Email = model.Email.Trim(),
             Password = model.Password,
             ConfirmPassword = model.ConfirmPassword,
-            StudentNumber = model.StudentNumber.Trim(),
             FirstName = model.FirstName.Trim(),
             MiddleName = NormalizeOptional(model.MiddleName),
             LastName = model.LastName.Trim(),

@@ -1,27 +1,35 @@
-﻿using System.Security.Claims;
+using System.Security.Claims;
+using Attendance_Management_System.Backend.DTOs.Responses;
 using Attendance_Management_System.Backend.Enums;
 using Attendance_Management_System.Backend.Helpers;
 using Attendance_Management_System.Backend.Interfaces.Services;
 using Attendance_Management_System.Backend.ViewModels.Students;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
 
 namespace Attendance_Management_System.Backend.Controllers;
 
 [Authorize(Policy = "AdminOrTeacher")]
 [Route("students")]
 [Route("student")]
-public class StudentsManagementController : AppControllerBase
+public class StudentsManagementController : Controller
 {
     private readonly ISectionsService _sectionsService;
     private readonly IStudentsService _studentsService;
     private readonly ITeachersService _teachersService;
+    private readonly ILogger<StudentsManagementController> _logger;
 
-    public StudentsManagementController(ISectionsService sectionsService, IStudentsService studentsService, ITeachersService teachersService)
+    public StudentsManagementController(
+        ISectionsService sectionsService,
+        IStudentsService studentsService,
+        ITeachersService teachersService,
+        ILogger<StudentsManagementController> logger)
     {
         _sectionsService = sectionsService;
         _studentsService = studentsService;
         _teachersService = teachersService;
+        _logger = logger;
     }
 
     [HttpGet("")]
@@ -39,17 +47,22 @@ public class StudentsManagementController : AppControllerBase
             IsTeacher = isTeacher
         };
 
-        var sectionsResult = isTeacher
-            ? await ExecuteServiceCallAsync(() => _sectionsService.GetSectionsByTeacherUserIdAsync(userId))
-            : await ExecuteServiceCallAsync(() => _sectionsService.GetAllSectionsAsync());
+        List<SectionDto> sections;
 
-        if (!sectionsResult.Success || sectionsResult.Data is null)
+        try
         {
-            viewModel.ErrorMessage = sectionsResult.Error?.Message ?? "Unable to load sections right now.";
+            sections = isTeacher
+                ? await _sectionsService.GetSectionsByTeacherUserIdAsync(userId)
+                : await _sectionsService.GetAllSectionsAsync();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to load sections for students view.");
+            viewModel.ErrorMessage = "Unable to load sections right now.";
             return View(viewModel);
         }
 
-        viewModel.Sections = sectionsResult.Data
+        viewModel.Sections = sections
             .OrderBy(s => s.Name)
             .Select(section => new StudentsSectionOptionViewModel
             {
@@ -81,15 +94,20 @@ public class StudentsManagementController : AppControllerBase
 
         viewModel.IsCurrentTeacherAssignedToSelectedSection = isTeacher;
 
-        var studentsResult = await ExecuteServiceCallAsync(() => _studentsService.GetStudentsBySectionAsync(sectionId.Value, userId, role));
+        List<StudentBasicProfileDto> students;
 
-        if (!studentsResult.Success || studentsResult.Data is null)
+        try
         {
-            viewModel.ErrorMessage = studentsResult.Error?.Message ?? "Unable to load students for the selected section.";
+            students = await _studentsService.GetStudentsBySectionAsync(sectionId.Value, userId, role);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to load students for section {SectionId}.", sectionId.Value);
+            viewModel.ErrorMessage = "Unable to load students for the selected section.";
             return View(viewModel);
         }
 
-        viewModel.Students = studentsResult.Data
+        viewModel.Students = students
             .OrderBy(s => s.LastName)
             .ThenBy(s => s.FirstName)
             .Select(student => new StudentListItemViewModel
@@ -119,22 +137,37 @@ public class StudentsManagementController : AppControllerBase
             return Challenge();
         }
 
-        var teacherResult = await ExecuteServiceCallAsync(() => _teachersService.GetTeacherByUserIdAsync(userId));
-        if (!teacherResult.Success || teacherResult.Data is null)
+        TeacherDto teacher;
+
+        try
         {
-            TempData["StudentsError"] = teacherResult.Error?.Message ?? "Teacher profile not found for the current account.";
+            teacher = await _teachersService.GetTeacherByUserIdAsync(userId);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to resolve teacher profile for user {UserId}.", userId);
+            TempData["StudentsError"] = "Teacher profile not found for the current account.";
             return RedirectToAction(nameof(Index), new { sectionId = id });
         }
 
-        // Self-unassign also removes schedules owned by this teacher in the section.
-        var removeResult = await ExecuteServiceCallAsync(() => _sectionsService.RemoveTeacherFromSectionAsync(
-            id,
-            teacherResult.Data.Id,
-            isAdmin: true,
-            removeOwnedSchedules: true));
-        if (!removeResult.Success)
+        if (teacher is null)
         {
-            TempData["StudentsError"] = removeResult.Error?.Message ?? "Unable to unassign from this section right now.";
+            TempData["StudentsError"] = "Teacher profile not found for the current account.";
+            return RedirectToAction(nameof(Index), new { sectionId = id });
+        }
+
+        try
+        {
+            await _sectionsService.RemoveTeacherFromSectionAsync(
+                id,
+                teacher.Id,
+                isAdmin: true,
+                removeOwnedSchedules: true);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to self-unassign teacher {TeacherId} from section {SectionId}.", teacher.Id, id);
+            TempData["StudentsError"] = "Unable to unassign from this section right now.";
             return RedirectToAction(nameof(Index), new { sectionId = id });
         }
 
@@ -156,4 +189,3 @@ public class StudentsManagementController : AppControllerBase
         return true;
     }
 }
-

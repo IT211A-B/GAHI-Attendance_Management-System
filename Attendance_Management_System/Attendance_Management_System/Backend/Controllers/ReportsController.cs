@@ -1,29 +1,34 @@
-﻿using System.Security.Claims;
+using System.Security.Claims;
+using Attendance_Management_System.Backend.DTOs.Responses;
 using Attendance_Management_System.Backend.Enums;
 using Attendance_Management_System.Backend.Helpers;
 using Attendance_Management_System.Backend.Interfaces.Services;
 using Attendance_Management_System.Backend.ViewModels.Reports;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
 
 namespace Attendance_Management_System.Backend.Controllers;
 
 [Authorize(Policy = "AdminOrTeacher")]
 [Route("reports")]
-public class ReportsController : AppControllerBase
+public class ReportsController : Controller
 {
     private readonly ISectionsService _sectionsService;
     private readonly ISchedulesService _schedulesService;
     private readonly IAttendanceService _attendanceService;
+    private readonly ILogger<ReportsController> _logger;
 
     public ReportsController(
         ISectionsService sectionsService,
         ISchedulesService schedulesService,
-        IAttendanceService attendanceService)
+        IAttendanceService attendanceService,
+        ILogger<ReportsController> logger)
     {
         _sectionsService = sectionsService;
         _schedulesService = schedulesService;
         _attendanceService = attendanceService;
+        _logger = logger;
     }
 
     [HttpGet("")]
@@ -44,14 +49,20 @@ public class ReportsController : AppControllerBase
             SelectedDate = selectedDate
         };
 
-        var schedulesResult = await ExecuteServiceCallAsync(() => _schedulesService.GetSchedulesAsync(userId, role));
-        if (!schedulesResult.Success || schedulesResult.Data is null)
+        List<ScheduleDto> schedules;
+
+        try
         {
-            model.ErrorMessage = schedulesResult.Error?.Message ?? "Unable to load schedules.";
+            schedules = await _schedulesService.GetSchedulesAsync(userId, role);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to load schedules for reports view.");
+            model.ErrorMessage = "Unable to load schedules.";
             return View(model);
         }
 
-        var accessibleSchedules = schedulesResult.Data
+        var accessibleSchedules = schedules
             .Where(schedule => !role.IsRole(UserRole.Teacher) || schedule.IsMine)
             .OrderBy(schedule => schedule.DayOfWeek)
             .ThenBy(schedule => schedule.StartTime)
@@ -59,14 +70,20 @@ public class ReportsController : AppControllerBase
 
         if (role.IsRole(UserRole.Admin))
         {
-            var sectionsResult = await ExecuteServiceCallAsync(() => _sectionsService.GetAllSectionsAsync());
-            if (!sectionsResult.Success || sectionsResult.Data is null)
+            List<SectionDto> sections;
+
+            try
             {
-                model.ErrorMessage = sectionsResult.Error?.Message ?? "Unable to load sections.";
+                sections = await _sectionsService.GetAllSectionsAsync();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to load sections for reports view.");
+                model.ErrorMessage = "Unable to load sections.";
                 return View(model);
             }
 
-            model.Sections = sectionsResult.Data
+            model.Sections = sections
                 .OrderBy(section => section.Name)
                 .Select(section => new ReportsSectionOptionViewModel
                 {
@@ -124,23 +141,29 @@ public class ReportsController : AppControllerBase
             return View(model);
         }
 
-        var summaryResult = await ExecuteServiceCallAsync(() => _attendanceService.GetSectionAttendanceAsync(
-            sectionId.Value,
-            selectedDate,
-            scheduleId.Value,
-            userId,
-            role));
-        if (!summaryResult.Success || summaryResult.Data is null)
+        AttendanceSummaryDto summary;
+
+        try
         {
-            model.ErrorMessage = summaryResult.Error?.Message ?? "Unable to load report data.";
+            summary = await _attendanceService.GetSectionAttendanceAsync(
+                sectionId.Value,
+                selectedDate,
+                scheduleId.Value,
+                userId,
+                role);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to load attendance summary for reports view.");
+            model.ErrorMessage = "Unable to load report data.";
             return View(model);
         }
 
-        model.TotalStudents = summaryResult.Data.TotalStudents;
-        model.PresentCount = summaryResult.Data.PresentCount;
-        model.LateCount = summaryResult.Data.LateCount;
-        model.AbsentCount = summaryResult.Data.AbsentCount;
-        model.UnmarkedCount = summaryResult.Data.UnmarkedCount;
+        model.TotalStudents = summary.TotalStudents;
+        model.PresentCount = summary.PresentCount;
+        model.LateCount = summary.LateCount;
+        model.AbsentCount = summary.AbsentCount;
+        model.UnmarkedCount = summary.UnmarkedCount;
 
         if (model.TotalStudents > 0)
         {
@@ -153,4 +176,3 @@ public class ReportsController : AppControllerBase
         return View(model);
     }
 }
-

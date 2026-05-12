@@ -1,4 +1,5 @@
 using System.Text;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 
 namespace Attendance_Management_System.Tests;
 
@@ -345,7 +346,6 @@ public class AuthServiceEmailConfirmationTests
             Email = "new.student@example.com",
             Password = "Password123!",
             ConfirmPassword = "Password123!",
-            StudentNumber = "2026-TEST-0001",
             FirstName = "Test",
             LastName = "Student",
             Birthdate = new DateOnly(2009, 1, 1),
@@ -362,6 +362,121 @@ public class AuthServiceEmailConfirmationTests
 
         Assert.False(result.Success);
         Assert.Equal("Year level 4 is not valid for TVET. Allowed range is 1-2.", result.Message);
+    }
+
+    [Fact]
+    public async Task RegisterStudentAsync_GeneratesUniqueStudentNumbers_WhenRegistrationSucceeds()
+    {
+        await using var context = CreateContext();
+        var userManager = CreateUserManager();
+        var accountEmailServiceMock = new Mock<IAccountEmailService>(MockBehavior.Strict);
+
+        context.Courses.Add(new Course
+        {
+            Id = 901,
+            Name = "Diploma in Mechanical Technology",
+            Code = "DMT",
+            EducationLevel = EducationLevel.Tvet
+        });
+
+        context.AcademicYears.Add(new AcademicYear
+        {
+            Id = 101,
+            YearLabel = "2026-2027",
+            StartDate = new DateOnly(2026, 6, 1),
+            EndDate = new DateOnly(2027, 3, 31),
+            IsActive = true
+        });
+
+        context.Sections.Add(new Section
+        {
+            Id = 701,
+            Name = "DMT-1A",
+            CourseId = 901,
+            AcademicYearId = 101,
+            YearLevel = 1,
+            SubjectId = 1,
+            ClassroomId = 1
+        });
+
+        await context.SaveChangesAsync();
+
+        userManager.FindByEmailHandler = _ => Task.FromResult<User?>(null);
+        userManager.GenerateTokenHandler = _ => Task.FromResult("registration-token");
+
+        accountEmailServiceMock
+            .Setup(service => service.SendSignupAcknowledgmentAsync(It.IsAny<string>(), It.IsAny<string>()))
+            .Returns(Task.CompletedTask);
+
+        accountEmailServiceMock
+            .Setup(service => service.SendVerificationEmailAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()))
+            .Returns(Task.CompletedTask);
+
+        var service = CreateService(context, userManager, accountEmailServiceMock);
+
+        var firstResult = await service.RegisterStudentAsync(new RegisterRequest
+        {
+            Email = "new.student1@example.com",
+            Password = "Password123!",
+            ConfirmPassword = "Password123!",
+            FirstName = "Test",
+            LastName = "Student",
+            Birthdate = new DateOnly(2009, 1, 1),
+            Gender = "M",
+            Address = "Cebu City",
+            GuardianName = "Parent One",
+            GuardianContact = "09123456780",
+            CourseId = 901,
+            YearLevel = 1,
+            SectionId = 701,
+            AcademicYearId = 101
+        });
+
+        var secondResult = await service.RegisterStudentAsync(new RegisterRequest
+        {
+            Email = "new.student2@example.com",
+            Password = "Password123!",
+            ConfirmPassword = "Password123!",
+            FirstName = "Test",
+            LastName = "Student",
+            Birthdate = new DateOnly(2009, 2, 1),
+            Gender = "F",
+            Address = "Cebu City",
+            GuardianName = "Parent Two",
+            GuardianContact = "09123456781",
+            CourseId = 901,
+            YearLevel = 1,
+            SectionId = 701,
+            AcademicYearId = 101
+        });
+
+        Assert.True(firstResult.Success);
+        Assert.True(secondResult.Success);
+        Assert.NotNull(firstResult.User);
+        Assert.NotNull(secondResult.User);
+        Assert.NotNull(firstResult.User!.StudentNumber);
+        Assert.NotNull(secondResult.User!.StudentNumber);
+
+        Assert.StartsWith("STD-", firstResult.User.StudentNumber);
+        Assert.StartsWith("STD-", secondResult.User.StudentNumber);
+        Assert.True(Guid.TryParse(firstResult.User.StudentNumber["STD-".Length..], out _));
+        Assert.True(Guid.TryParse(secondResult.User.StudentNumber["STD-".Length..], out _));
+        Assert.NotEqual(firstResult.User.StudentNumber, secondResult.User.StudentNumber);
+
+        var storedNumbers = await context.Students
+            .AsNoTracking()
+            .Select(student => student.StudentNumber)
+            .ToListAsync();
+
+        Assert.Equal(2, storedNumbers.Count);
+        Assert.Equal(2, storedNumbers.Distinct().Count());
+
+        accountEmailServiceMock.Verify(
+            service => service.SendSignupAcknowledgmentAsync(It.IsAny<string>(), It.IsAny<string>()),
+            Times.Exactly(2));
+        accountEmailServiceMock.Verify(
+            service => service.SendVerificationEmailAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()),
+            Times.Exactly(2));
     }
 
     private static AuthService CreateService(
@@ -387,6 +502,7 @@ public class AuthServiceEmailConfirmationTests
     {
         var options = new DbContextOptionsBuilder<AppDbContext>()
             .UseInMemoryDatabase(Guid.NewGuid().ToString("N"))
+            .ConfigureWarnings(warnings => warnings.Ignore(InMemoryEventId.TransactionIgnoredWarning))
             .Options;
 
         return new AppDbContext(options);
@@ -399,6 +515,9 @@ public class AuthServiceEmailConfirmationTests
 
     private sealed class FakeUserManager : UserManager<User>
     {
+        public Func<User, string, Task<IdentityResult>> CreateUserHandler { get; set; } =
+            (_, _) => Task.FromResult(IdentityResult.Success);
+
         public Func<string, Task<User?>> FindByEmailHandler { get; set; } = _ => Task.FromResult<User?>(null);
 
         public Func<string, Task<User?>> FindByIdHandler { get; set; } = _ => Task.FromResult<User?>(null);
@@ -416,6 +535,8 @@ public class AuthServiceEmailConfirmationTests
         public int ConfirmEmailCallCount { get; private set; }
 
         public int ResetPasswordCallCount { get; private set; }
+
+        public int CreateUserCallCount { get; private set; }
 
         public string? LastConfirmedToken { get; private set; }
 
@@ -440,6 +561,18 @@ public class AuthServiceEmailConfirmationTests
         public override Task<User?> FindByEmailAsync(string email)
         {
             return FindByEmailHandler(email);
+        }
+
+        public override Task<IdentityResult> CreateAsync(User user, string password)
+        {
+            CreateUserCallCount++;
+
+            if (user.Id <= 0)
+            {
+                user.Id = 1000 + CreateUserCallCount;
+            }
+
+            return CreateUserHandler(user, password);
         }
 
         public override Task<User?> FindByIdAsync(string userId)

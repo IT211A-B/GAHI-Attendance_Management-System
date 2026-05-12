@@ -7,60 +7,55 @@ using Attendance_Management_System.Backend.Interfaces.Services;
 using Attendance_Management_System.Backend.Persistence;
 using Attendance_Management_System.Backend.Services;
 using Attendance_Management_System.Backend.Security;
-using System.Globalization;
-using System.Security.Claims;
-using System.Threading.RateLimiting;
+using FluentEmail.MailKitSmtp;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
+using System.Threading.RateLimiting;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Options;
+using Microsoft.Net.Http.Headers;
+using System.Globalization;
+using System.Security.Claims;
 
 namespace Attendance_Management_System.Backend;
 
-// Extension class for registering all backend services and configurations
 public static class DependencyInjection
 {
-    // Registers all backend dependencies (database, auth, services, repositories)
     public static IServiceCollection AddBackend(this IServiceCollection services, IConfiguration configuration)
     {
-        // Get database connection string from configuration
         var connectionString = configuration.GetConnectionString("Default");
 
-        // Configure PostgreSQL database context
         services.AddDbContext<AppDbContext>(options =>
             options.UseNpgsql(connectionString));
 
-        // Bind cookie settings from configuration to strongly-typed class
-        services.Configure<CookieSettings>(configuration.GetSection(CookieSettings.SectionName));
-
-        // Bind enrollment settings from configuration to strongly-typed class
-        services.Configure<EnrollmentSettings>(configuration.GetSection(EnrollmentSettings.SectionName));
-
-        // Bind attendance settings from configuration to strongly-typed class
         services.Configure<AttendanceSettings>(configuration.GetSection(AttendanceSettings.SectionName));
-
-        // Bind QR attendance settings from configuration to strongly-typed class
         services.Configure<AttendanceQrSettings>(configuration.GetSection(AttendanceQrSettings.SectionName));
 
-        // Bind and validate email settings on startup so generated links always use a safe public origin.
-        services.AddSingleton<IValidateOptions<EmailSettings>, EmailSettingsValidator>();
-        services.AddOptions<EmailSettings>()
-            .Bind(configuration.GetSection(EmailSettings.SectionName))
-            .ValidateOnStart();
+        var emailSettingsSection = configuration.GetSection(EmailSettings.SectionName);
+        services.Configure<EmailSettings>(emailSettingsSection);
 
-        // Bind rate limiting settings from configuration to strongly-typed class
+        var emailSettings = emailSettingsSection.Get<EmailSettings>() ?? new EmailSettings();
+
+        services
+            .AddFluentEmail(emailSettings.FromAddress, emailSettings.FromName)
+            .AddMailKitSender(new SmtpClientOptions
+            {
+                Server = emailSettings.Host,
+                Port = emailSettings.Port,
+                User = emailSettings.Username,
+                Password = emailSettings.Password,
+                RequiresAuthentication = !string.IsNullOrWhiteSpace(emailSettings.Username)
+                    && !string.IsNullOrWhiteSpace(emailSettings.Password),
+                UsePickupDirectory = false,
+                UseSsl = emailSettings.UseSsl
+            });
+
+        services.Configure<EnrollmentSettings>(configuration.GetSection(EnrollmentSettings.SectionName));
         services.Configure<RateLimitingSettings>(configuration.GetSection(RateLimitingSettings.SectionName));
 
-        var configuredRateLimiting = configuration
-            .GetSection(RateLimitingSettings.SectionName)
-            .Get<RateLimitingSettings>();
-        // Bad rate-limit config should not block startup; safe defaults keep the app usable.
-        var rateLimitingSettings = configuredRateLimiting?.IsValid() == true
-            ? configuredRateLimiting
-            : RateLimitingSettings.Default;
+        var rateLimitingSettings = configuration.GetSection(RateLimitingSettings.SectionName).Get<RateLimitingSettings>()
+            ?? RateLimitingSettings.Default;
 
-        // Configure ASP.NET Core Identity with password requirements
         services.AddIdentity<User, IdentityRole<int>>(options =>
         {
             options.Password.RequireDigit = true;
@@ -75,7 +70,6 @@ public static class DependencyInjection
 
         services.AddSignalR();
 
-        // Configure Identity cookie authentication
         services.ConfigureApplicationCookie(options =>
         {
             var cookieSettings = configuration.GetSection(CookieSettings.SectionName).Get<CookieSettings>()
@@ -115,7 +109,6 @@ public static class DependencyInjection
             };
         });
 
-        // Register application services for business logic
         services.AddScoped<IAuthService, AuthService>();
         services.AddScoped<IDashboardService, DashboardService>();
         services.AddScoped<ISectionPageService, SectionPageService>();
@@ -139,10 +132,8 @@ public static class DependencyInjection
         services.AddScoped<IEmailSender, SmtpEmailSender>();
         services.AddScoped<IAccountEmailService, AccountEmailService>();
 
-        // Add custom claims factory to include User.Role as ClaimTypes.Role
         services.AddScoped<IUserClaimsPrincipalFactory<User>, UserClaimsPrincipalFactory>();
 
-        // Define role-based authorization policies for access control
         services.AddAuthorization(options =>
         {
             options.AddPolicy("AdminOnly", policy => policy.RequireRole(UserRole.Admin.ToStorageValue()));
@@ -155,42 +146,29 @@ public static class DependencyInjection
         services.AddRateLimiter(options =>
         {
             options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
-
             options.OnRejected = async (context, cancellationToken) =>
             {
-                var retryAfterSeconds = 0;
                 if (context.Lease.TryGetMetadata(MetadataName.RetryAfter, out var retryAfter))
                 {
-                    retryAfterSeconds = Math.Max(1, (int)Math.Ceiling(retryAfter.TotalSeconds));
-                    context.HttpContext.Response.Headers.RetryAfter = retryAfterSeconds.ToString(CultureInfo.InvariantCulture);
+                    var retryAfterSeconds = Math.Max(1, (int)Math.Ceiling(retryAfter.TotalSeconds));
+                    context.HttpContext.Response.Headers[HeaderNames.RetryAfter] =
+                        retryAfterSeconds.ToString(CultureInfo.InvariantCulture);
                 }
 
-                if (ShouldReturnJsonRateLimitResponse(context.HttpContext.Request))
+                var problemDetails = new ProblemDetails
                 {
-                    var payload = new ProblemDetails
-                    {
-                        Type = "https://httpstatuses.com/429",
-                        Title = "Too many requests",
-                        Detail = "Too many requests. Please try again later.",
-                        Status = StatusCodes.Status429TooManyRequests
-                    };
+                    Status = StatusCodes.Status429TooManyRequests,
+                    Title = "Too many requests",
+                    Detail = "Please retry after the indicated delay."
+                };
 
-                    if (retryAfterSeconds > 0)
-                    {
-                        payload.Extensions["retryAfterSeconds"] = retryAfterSeconds;
-                    }
-
-                    context.HttpContext.Response.ContentType = "application/problem+json";
-                    await context.HttpContext.Response.WriteAsJsonAsync(payload, cancellationToken);
-                    return;
-                }
-
-                await context.HttpContext.Response.WriteAsync("Too many requests. Please try again later.", cancellationToken);
+                context.HttpContext.Response.ContentType = "application/problem+json";
+                await context.HttpContext.Response.WriteAsJsonAsync(problemDetails, cancellationToken);
             };
 
             options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(httpContext =>
                 RateLimitPartition.GetFixedWindowLimiter(
-                    partitionKey: BuildRateLimitPartitionKey(httpContext),
+                    partitionKey: GetClientKey(httpContext),
                     factory: _ => CreateFixedWindowOptions(rateLimitingSettings.Global)));
 
             AddPartitionedFixedWindowPolicy(options, RateLimitingPolicyNames.AuthLogin, rateLimitingSettings.AuthLogin);
@@ -210,7 +188,7 @@ public static class DependencyInjection
     {
         options.AddPolicy<string>(policyName, httpContext =>
             RateLimitPartition.GetFixedWindowLimiter(
-                partitionKey: BuildRateLimitPartitionKey(httpContext),
+                partitionKey: GetClientKey(httpContext),
                 factory: _ => CreateFixedWindowOptions(settings)));
     }
 
@@ -226,21 +204,14 @@ public static class DependencyInjection
         };
     }
 
-    private static string BuildRateLimitPartitionKey(HttpContext httpContext)
+    private static string GetClientKey(HttpContext httpContext)
     {
-        // Signed-in users share a bucket by account; anonymous requests fall back to IP.
-        if (httpContext.User.Identity?.IsAuthenticated == true)
+        if (httpContext.User?.Identity?.IsAuthenticated == true)
         {
-            var userId = httpContext.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            var userId = httpContext.User.FindFirstValue(ClaimTypes.NameIdentifier);
             if (!string.IsNullOrWhiteSpace(userId))
             {
                 return $"user:{userId}";
-            }
-
-            var userName = httpContext.User.Identity?.Name;
-            if (!string.IsNullOrWhiteSpace(userName))
-            {
-                return $"user:{userName}";
             }
         }
 
@@ -248,57 +219,23 @@ public static class DependencyInjection
         return string.IsNullOrWhiteSpace(remoteIp) ? "ip:unknown" : $"ip:{remoteIp}";
     }
 
-    private static bool ShouldReturnJsonRateLimitResponse(HttpRequest request)
+    private static Microsoft.AspNetCore.Http.SameSiteMode ParseSameSite(string? sameSite)
     {
-        // API clients should receive a machine-readable 429 instead of a browser-style response.
-        if (request.Path.StartsWithSegments("/attendance/qr/options")
-            || request.Path.StartsWithSegments("/attendance/qr/sessions")
-            || request.Path.Equals("/attendance/qr/checkins", StringComparison.OrdinalIgnoreCase))
-        {
-            return true;
-        }
-
-        if (request.Headers.Accept.Any(value => value?.Contains("application/json", StringComparison.OrdinalIgnoreCase) == true))
-        {
-            return true;
-        }
-
-        return !string.IsNullOrWhiteSpace(request.ContentType)
-            && request.ContentType.Contains("application/json", StringComparison.OrdinalIgnoreCase);
+        return Enum.TryParse<Microsoft.AspNetCore.Http.SameSiteMode>(sameSite, ignoreCase: true, out var parsed)
+            ? parsed
+            : Microsoft.AspNetCore.Http.SameSiteMode.Lax;
     }
 
-    // Converts string configuration value to SameSiteMode enum
-    private static SameSiteMode ParseSameSite(string value)
+    private static CookieSecurePolicy ParseSecurePolicy(string? securePolicy)
     {
-        return value?.Trim().ToLowerInvariant() switch
-        {
-            "none" => SameSiteMode.None,
-            "strict" => SameSiteMode.Strict,
-            "lax" => SameSiteMode.Lax,
-            _ => SameSiteMode.Lax
-        };
-    }
-
-    // Converts string configuration value to CookieSecurePolicy enum
-    private static CookieSecurePolicy ParseSecurePolicy(string value)
-    {
-        return value?.Trim().ToLowerInvariant() switch
-        {
-            "always" => CookieSecurePolicy.Always,
-            "none" => CookieSecurePolicy.None,
-            "sameasrequest" => CookieSecurePolicy.SameAsRequest,
-            _ => CookieSecurePolicy.SameAsRequest
-        };
+        return Enum.TryParse<CookieSecurePolicy>(securePolicy, ignoreCase: true, out var parsed)
+            ? parsed
+            : CookieSecurePolicy.SameAsRequest;
     }
 
     private static bool IsQrApiRequest(HttpRequest request)
     {
-        // QR endpoints should return status codes instead of redirecting anonymous users to HTML pages.
-        if (!request.Path.StartsWithSegments("/attendance/qr", out var remaining))
-        {
-            return false;
-        }
-
-        return remaining.HasValue && remaining.Value != "/";
+        return request.Path.StartsWithSegments("/attendance/qr", out var remaining)
+            && remaining.HasValue;
     }
 }

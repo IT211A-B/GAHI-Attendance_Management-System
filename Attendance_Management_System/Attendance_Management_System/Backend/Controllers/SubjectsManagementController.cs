@@ -1,23 +1,26 @@
-﻿using Attendance_Management_System.Backend.DTOs.Requests;
+using Attendance_Management_System.Backend.DTOs.Requests;
 using Attendance_Management_System.Backend.DTOs.Responses;
 using Attendance_Management_System.Backend.Interfaces.Services;
 using Attendance_Management_System.Backend.ViewModels.Subjects;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
 
 namespace Attendance_Management_System.Backend.Controllers;
 
 [Authorize(Policy = "AdminOrTeacher")]
 [Route("subjects")]
-public class SubjectsManagementController : AppControllerBase
+public class SubjectsManagementController : Controller
 {
     private readonly ISubjectsService _subjectsService;
     private readonly ICoursesService _coursesService;
+    private readonly ILogger<SubjectsManagementController> _logger;
 
-    public SubjectsManagementController(ISubjectsService subjectsService, ICoursesService coursesService)
+    public SubjectsManagementController(ISubjectsService subjectsService, ICoursesService coursesService, ILogger<SubjectsManagementController> logger)
     {
         _subjectsService = subjectsService;
         _coursesService = coursesService;
+        _logger = logger;
     }
 
     [HttpGet("")]
@@ -40,17 +43,20 @@ public class SubjectsManagementController : AppControllerBase
             return View(nameof(Index), viewModel);
         }
 
-        var result = await ExecuteServiceCallAsync(() => _subjectsService.CreateSubjectAsync(new CreateSubjectRequest
+        try
         {
-            Name = form.Name.Trim(),
-            Code = form.Code.Trim(),
-            CourseId = form.CourseId,
-            Units = form.Units
-        }));
-
-        if (!result.Success)
+            await _subjectsService.CreateSubjectAsync(new CreateSubjectRequest
+            {
+                Name = form.Name.Trim(),
+                Code = form.Code.Trim(),
+                CourseId = form.CourseId,
+                Units = form.Units
+            });
+        }
+        catch (Exception ex)
         {
-            ModelState.AddModelError("CreateForm.CourseId", result.Error?.Message ?? "Unable to create subject right now.");
+            _logger.LogError(ex, "Failed to create subject.");
+            ModelState.AddModelError("CreateForm.CourseId", "Unable to create subject right now.");
             return View(nameof(Index), viewModel);
         }
 
@@ -69,17 +75,20 @@ public class SubjectsManagementController : AppControllerBase
             return RedirectToAction(nameof(Index));
         }
 
-        var result = await ExecuteServiceCallAsync(() => _subjectsService.UpdateSubjectAsync(id, new UpdateSubjectRequest
+        try
         {
-            Name = form.Name.Trim(),
-            Code = form.Code.Trim(),
-            CourseId = form.CourseId,
-            Units = form.Units
-        }));
-
-        if (!result.Success)
+            await _subjectsService.UpdateSubjectAsync(id, new UpdateSubjectRequest
+            {
+                Name = form.Name.Trim(),
+                Code = form.Code.Trim(),
+                CourseId = form.CourseId,
+                Units = form.Units
+            });
+        }
+        catch (Exception ex)
         {
-            TempData["SubjectsError"] = result.Error?.Message ?? "Unable to update subject right now.";
+            _logger.LogError(ex, "Failed to update subject {SubjectId}.", id);
+            TempData["SubjectsError"] = "Unable to update subject right now.";
             return RedirectToAction(nameof(Index));
         }
 
@@ -92,11 +101,14 @@ public class SubjectsManagementController : AppControllerBase
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Delete(int id, int? replacementSubjectId)
     {
-        var result = await ExecuteServiceCallAsync(() => _subjectsService.DeleteSubjectAsync(id, replacementSubjectId));
-
-        if (!result.Success)
+        try
         {
-            TempData["SubjectsError"] = result.Error?.Message ?? "Unable to delete subject right now.";
+            await _subjectsService.DeleteSubjectAsync(id, replacementSubjectId);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to delete subject {SubjectId}.", id);
+            TempData["SubjectsError"] = "Unable to delete subject right now.";
             return RedirectToAction(nameof(Index));
         }
 
@@ -116,7 +128,8 @@ public class SubjectsManagementController : AppControllerBase
         }
         catch (Exception ex)
         {
-            viewModel.ErrorMessage = string.IsNullOrWhiteSpace(ex.Message) ? "Unable to load courses right now." : ex.Message;
+            _logger.LogError(ex, "Failed to load courses for subjects view.");
+            viewModel.ErrorMessage = "Unable to load courses right now.";
             return viewModel;
         }
 
@@ -133,15 +146,20 @@ public class SubjectsManagementController : AppControllerBase
             .GroupBy(course => course.Id)
             .ToDictionary(group => group.Key, group => group.First().Label);
 
-        var result = await ExecuteServiceCallAsync(() => _subjectsService.GetAllSubjectsAsync());
+        List<SubjectDto> subjects;
 
-        if (!result.Success || result.Data is null)
+        try
         {
-            viewModel.ErrorMessage = result.Error?.Message ?? "Unable to load subjects right now.";
+            subjects = await _subjectsService.GetAllSubjectsAsync();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to load subjects.");
+            viewModel.ErrorMessage = "Unable to load subjects right now.";
             return viewModel;
         }
 
-        viewModel.Subjects = result.Data
+        viewModel.Subjects = subjects
             .OrderBy(s => s.Name)
             .ThenBy(s => s.Code)
             .Select(subject => new SubjectListItemViewModel
@@ -168,4 +186,3 @@ public class SubjectsManagementController : AppControllerBase
             : $"{code.Trim()} - {courseName}";
     }
 }
-

@@ -1,20 +1,24 @@
-﻿using System.Security.Claims;
+using System.Security.Claims;
+using Attendance_Management_System.Backend.DTOs.Responses;
 using Attendance_Management_System.Backend.Interfaces.Services;
 using Attendance_Management_System.Backend.ViewModels.TeacherHistory;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
 
 namespace Attendance_Management_System.Backend.Controllers;
 
 [Authorize(Policy = "TeacherOnly")]
 [Route("teacher-history")]
-public class TeacherHistoryManagementController : AppControllerBase
+public class TeacherHistoryManagementController : Controller
 {
     private readonly ITeacherHistoryService _teacherHistoryService;
+    private readonly ILogger<TeacherHistoryManagementController> _logger;
 
-    public TeacherHistoryManagementController(ITeacherHistoryService teacherHistoryService)
+    public TeacherHistoryManagementController(ITeacherHistoryService teacherHistoryService, ILogger<TeacherHistoryManagementController> logger)
     {
         _teacherHistoryService = teacherHistoryService;
+        _logger = logger;
     }
 
     [HttpGet("")]
@@ -33,15 +37,20 @@ public class TeacherHistoryManagementController : AppControllerBase
             SelectedDate = selectedDate
         };
 
-        var schedulesResult = await ExecuteServiceCallAsync(() => _teacherHistoryService.GetTeacherSchedulesAsync(userId.Value));
+        List<TeacherScheduleDto> schedules;
 
-        if (!schedulesResult.Success || schedulesResult.Data is null)
+        try
         {
-            viewModel.ErrorMessage = schedulesResult.Error?.Message ?? "Unable to load your assigned schedules right now.";
+            schedules = await _teacherHistoryService.GetTeacherSchedulesAsync(userId.Value);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to load teacher schedules for user {UserId}.", userId.Value);
+            viewModel.ErrorMessage = "Unable to load your assigned schedules right now.";
             return View(viewModel);
         }
 
-        viewModel.Schedules = schedulesResult.Data
+        viewModel.Schedules = schedules
             .OrderBy(s => s.DayOfWeek)
             .ThenBy(s => s.StartTime)
             .Select(schedule => new TeacherScheduleOptionViewModel
@@ -56,30 +65,42 @@ public class TeacherHistoryManagementController : AppControllerBase
             return View(viewModel);
         }
 
-        var historyResult = await ExecuteServiceCallAsync(() => _teacherHistoryService.GetScheduleHistoryAsync(scheduleId.Value, userId.Value, selectedDate));
-        if (!historyResult.Success || historyResult.Data is null)
+        ScheduleHistoryDto history;
+
+        try
         {
-            viewModel.ErrorMessage = historyResult.Error?.Message ?? "Unable to load schedule history right now.";
+            history = await _teacherHistoryService.GetScheduleHistoryAsync(scheduleId.Value, userId.Value, selectedDate);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to load schedule history for schedule {ScheduleId}.", scheduleId.Value);
+            viewModel.ErrorMessage = "Unable to load schedule history right now.";
+            return View(viewModel);
+        }
+
+        if (history is null)
+        {
+            viewModel.ErrorMessage = "Unable to load schedule history right now.";
             return View(viewModel);
         }
 
         viewModel.ScheduleDetails = new TeacherScheduleDetailsViewModel
         {
-            SubjectName = historyResult.Data.Schedule.SubjectName,
-            Section = historyResult.Data.Schedule.Section,
-            Classroom = historyResult.Data.Schedule.Classroom,
-            Day = historyResult.Data.Schedule.Day,
-            StartTime = historyResult.Data.Schedule.StartTime,
-            EndTime = historyResult.Data.Schedule.EndTime
+            SubjectName = history.Schedule.SubjectName,
+            Section = history.Schedule.Section,
+            Classroom = history.Schedule.Classroom,
+            Day = history.Schedule.Day,
+            StartTime = history.Schedule.StartTime,
+            EndTime = history.Schedule.EndTime
         };
 
-        viewModel.TotalStudents = historyResult.Data.Summary.TotalStudents;
-        viewModel.PresentCount = historyResult.Data.Summary.PresentCount;
-        viewModel.LateCount = historyResult.Data.Summary.LateCount;
-        viewModel.AbsentCount = historyResult.Data.Summary.AbsentCount;
-        viewModel.UnmarkedCount = historyResult.Data.Summary.UnmarkedCount;
+        viewModel.TotalStudents = history.Summary.TotalStudents;
+        viewModel.PresentCount = history.Summary.PresentCount;
+        viewModel.LateCount = history.Summary.LateCount;
+        viewModel.AbsentCount = history.Summary.AbsentCount;
+        viewModel.UnmarkedCount = history.Summary.UnmarkedCount;
 
-        viewModel.Records = historyResult.Data.Records
+        viewModel.Records = history.Records
             .OrderBy(r => r.StudentName)
             .Select(record => new TeacherAttendanceRecordViewModel
             {
@@ -100,4 +121,3 @@ public class TeacherHistoryManagementController : AppControllerBase
         return int.TryParse(userIdClaim, out var userId) ? userId : null;
     }
 }
-

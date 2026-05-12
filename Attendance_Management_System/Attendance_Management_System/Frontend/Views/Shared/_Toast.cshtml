@@ -1,0 +1,23 @@
+@{
+    // Collect transient messages from TempData to display as toasts on page load.
+    // Controllers set these on redirect: TempData["ToastSuccess"], TempData["ToastError"],
+    // TempData["ToastWarning"], TempData["ToastInfo"].
+    var toastSuccess = TempData["ToastSuccess"] as string;
+    var toastError = TempData["ToastError"] as string;
+    var toastWarning = TempData["ToastWarning"] as string;
+    var toastInfo = TempData["ToastInfo"] as string;
+
+    // Also pick up legacy TempData keys used by some controllers.
+    if (TempData["EnrollmentsSuccess"] is string enrollSuccess && string.IsNullOrEmpty(toastSuccess))
+    {
+        toastSuccess = enrollSuccess;
+    }
+    if (TempData["EnrollmentsError"] is string enrollError && string.IsNullOrEmpty(toastError))
+    {
+        toastError = enrollError;
+    }
+}
+
+<div id="toast-container" class="toast-container" data-toast-success="@toastSuccess" data-toast-error="@toastError"
+     data-toast-warning="@toastWarning" data-toast-info="@toastInfo" aria-live="polite" aria-relevant="additions">
+</div>
