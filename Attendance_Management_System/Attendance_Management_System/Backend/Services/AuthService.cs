@@ -7,6 +7,7 @@ using Attendance_Management_System.Backend.Enums;
 using Attendance_Management_System.Backend.Helpers;
 using Attendance_Management_System.Backend.Interfaces.Services;
 using Attendance_Management_System.Backend.Persistence;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.EntityFrameworkCore;
@@ -28,6 +29,7 @@ public class AuthService : IAuthService
     private readonly IAccountEmailService _accountEmailService;
     private readonly INotificationService _notificationService;
     private readonly EmailSettings _emailSettings;
+    private readonly IHttpContextAccessor _httpContextAccessor;
     private readonly ILogger<AuthService> _logger;
 
     public AuthService(
@@ -37,6 +39,7 @@ public class AuthService : IAuthService
         IAccountEmailService accountEmailService,
         INotificationService notificationService,
         IOptions<EmailSettings> emailSettings,
+        IHttpContextAccessor httpContextAccessor,
         ILogger<AuthService> logger)
     {
         _userManager = userManager;
@@ -45,6 +48,7 @@ public class AuthService : IAuthService
         _accountEmailService = accountEmailService;
         _notificationService = notificationService;
         _emailSettings = emailSettings.Value;
+        _httpContextAccessor = httpContextAccessor;
         _logger = logger;
     }
 
@@ -289,6 +293,7 @@ public class AuthService : IAuthService
         var user = await _userManager.FindByEmailAsync(normalizedEmail);
         if (user == null || string.IsNullOrWhiteSpace(user.Email))
         {
+            _logger.LogInformation("Ignored forgot-password request for unknown email {Email}.", normalizedEmail);
             // Keep the response neutral so callers cannot infer whether an account exists.
             return CreateSuccessResponse(responseMessage);
         }
@@ -309,7 +314,8 @@ public class AuthService : IAuthService
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Failed to send password reset email for user {UserId}.", user.Id);
+            _logger.LogError(ex, "Failed to send password reset email for user {UserId}.", user.Id);
+            return CreateFailureResponse("Unable to send password reset email right now. Please try again later.");
         }
 
         return CreateSuccessResponse(responseMessage);
@@ -574,12 +580,47 @@ public class AuthService : IAuthService
 
     private string ResolvePublicBaseUrl()
     {
-        if (string.IsNullOrWhiteSpace(_emailSettings.PublicBaseUrl))
+        var configuredBaseUrl = _emailSettings.PublicBaseUrl?.Trim();
+        if (!string.IsNullOrWhiteSpace(configuredBaseUrl) && !IsLoopbackBaseUrl(configuredBaseUrl))
         {
-            throw new InvalidOperationException($"{EmailSettings.SectionName}:{nameof(EmailSettings.PublicBaseUrl)} is not configured.");
+            return configuredBaseUrl;
         }
 
-        return _emailSettings.PublicBaseUrl.Trim();
+        var requestOrigin = ResolveRequestOrigin();
+        if (!string.IsNullOrWhiteSpace(requestOrigin))
+        {
+            return requestOrigin;
+        }
+
+        if (!string.IsNullOrWhiteSpace(configuredBaseUrl))
+        {
+            return configuredBaseUrl;
+        }
+
+        throw new InvalidOperationException($"{EmailSettings.SectionName}:{nameof(EmailSettings.PublicBaseUrl)} is not configured.");
+    }
+
+    private string? ResolveRequestOrigin()
+    {
+        var request = _httpContextAccessor.HttpContext?.Request;
+        if (request == null || !request.Host.HasValue)
+        {
+            return null;
+        }
+
+        var scheme = request.Scheme;
+        if (!string.Equals(scheme, Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase)
+            && !string.Equals(scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        return $"{scheme}://{request.Host.Value.TrimEnd('/')}";
+    }
+
+    private static bool IsLoopbackBaseUrl(string baseUrl)
+    {
+        return Uri.TryCreate(baseUrl, UriKind.Absolute, out var uri) && uri.IsLoopback;
     }
 
     private static string? DecodeToken(string token)
