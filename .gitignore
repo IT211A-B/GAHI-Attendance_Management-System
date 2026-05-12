@@ -56,7 +56,6 @@ yarn-debug.log*
 yarn-error.log*
 
 # secret config / local settings
-appsettings.*.json
 secrets.json
 
 # runtime
@@ -122,6 +121,8 @@ Thumbs.db
 
 # Ensure facilities for local storage keys / secrets not committed
 **/appsettings.Development.json
+
+# Docker build context rules live in .dockerignore
 
 # Optional: keep lock file if you want deterministic NuGet restore
 # Uncomment if you commit package-lock style files for reproducible builds
