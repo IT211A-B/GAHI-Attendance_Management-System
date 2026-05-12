@@ -130,73 +130,85 @@ public class AuthService : IAuthService
 
         User? user = null;
         string? studentNumber = null;
+        AuthResponse? registrationFailure = null;
 
-        await using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
-        try
+        var executionStrategy = _context.Database.CreateExecutionStrategy();
+        await executionStrategy.ExecuteAsync(async () =>
         {
-            user = new User
+            await using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
+            try
             {
-                UserName = request.Email,
-                Email = request.Email,
-                Role = UserRole.Student.ToStorageValue(),
-                IsActive = true,
-                EmailConfirmed = false
-            };
+                user = new User
+                {
+                    UserName = request.Email,
+                    Email = request.Email,
+                    Role = UserRole.Student.ToStorageValue(),
+                    IsActive = true,
+                    EmailConfirmed = false
+                };
 
-            var userCreateResult = await _userManager.CreateAsync(user, request.Password);
-            if (!userCreateResult.Succeeded)
+                var userCreateResult = await _userManager.CreateAsync(user, request.Password);
+                if (!userCreateResult.Succeeded)
+                {
+                    await transaction.RollbackAsync(cancellationToken);
+                    var errors = string.Join(", ", userCreateResult.Errors.Select(error => error.Description));
+                    registrationFailure = CreateFailureResponse($"Registration failed: {errors}");
+                    return;
+                }
+
+                studentNumber = await GenerateStudentNumberAsync(cancellationToken);
+                if (studentNumber == null)
+                {
+                    await transaction.RollbackAsync(cancellationToken);
+                    _logger.LogWarning("Unable to generate a unique student number after {AttemptCount} attempts.", StudentNumberGenerationMaxAttempts);
+                    registrationFailure = CreateFailureResponse("Unable to complete registration right now. Please try again.");
+                    return;
+                }
+
+                var student = new Student
+                {
+                    UserId = user.Id,
+                    CourseId = request.CourseId,
+                    SectionId = null,
+                    StudentNumber = studentNumber,
+                    FirstName = request.FirstName,
+                    LastName = request.LastName,
+                    MiddleName = request.MiddleName,
+                    Birthdate = request.Birthdate,
+                    Gender = request.Gender,
+                    Address = request.Address,
+                    GuardianName = request.GuardianName,
+                    GuardianContact = request.GuardianContact,
+                    YearLevel = resolvedYearLevel,
+                    IsActive = true
+                };
+
+                _context.Students.Add(student);
+                await _context.SaveChangesAsync(cancellationToken);
+
+                var enrollment = new Enrollment
+                {
+                    StudentId = student.Id,
+                    SectionId = assignedSection.Id,
+                    AcademicYearId = request.AcademicYearId,
+                    Status = EnrollmentStatus.Pending.ToStorageValue()
+                };
+
+                _context.Enrollments.Add(enrollment);
+                await _context.SaveChangesAsync(cancellationToken);
+
+                await transaction.CommitAsync(cancellationToken);
+            }
+            catch
             {
                 await transaction.RollbackAsync(cancellationToken);
-                var errors = string.Join(", ", userCreateResult.Errors.Select(error => error.Description));
-                return CreateFailureResponse($"Registration failed: {errors}");
+                registrationFailure = CreateFailureResponse("Unable to complete registration right now. Please try again.");
             }
+        });
 
-            studentNumber = await GenerateStudentNumberAsync(cancellationToken);
-            if (studentNumber == null)
-            {
-                await transaction.RollbackAsync(cancellationToken);
-                _logger.LogWarning("Unable to generate a unique student number after {AttemptCount} attempts.", StudentNumberGenerationMaxAttempts);
-                return CreateFailureResponse("Unable to complete registration right now. Please try again.");
-            }
-
-            var student = new Student
-            {
-                UserId = user.Id,
-                CourseId = request.CourseId,
-                SectionId = null,
-                StudentNumber = studentNumber,
-                FirstName = request.FirstName,
-                LastName = request.LastName,
-                MiddleName = request.MiddleName,
-                Birthdate = request.Birthdate,
-                Gender = request.Gender,
-                Address = request.Address,
-                GuardianName = request.GuardianName,
-                GuardianContact = request.GuardianContact,
-                YearLevel = resolvedYearLevel,
-                IsActive = true
-            };
-
-            _context.Students.Add(student);
-            await _context.SaveChangesAsync(cancellationToken);
-
-            var enrollment = new Enrollment
-            {
-                StudentId = student.Id,
-                SectionId = assignedSection.Id,
-                AcademicYearId = request.AcademicYearId,
-                Status = EnrollmentStatus.Pending.ToStorageValue()
-            };
-
-            _context.Enrollments.Add(enrollment);
-            await _context.SaveChangesAsync(cancellationToken);
-
-            await transaction.CommitAsync(cancellationToken);
-        }
-        catch
+        if (registrationFailure != null)
         {
-            await transaction.RollbackAsync(cancellationToken);
-            return CreateFailureResponse("Unable to complete registration right now. Please try again.");
+            return registrationFailure;
         }
 
         if (user == null || string.IsNullOrWhiteSpace(studentNumber))

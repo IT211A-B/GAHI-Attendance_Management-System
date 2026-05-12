@@ -132,4 +132,3 @@ Thumbs.db
 # - Track source files, csproj, .sln
 # - Ignore generated artifacts and local machine-specific configs
 # - Avoid committing secrets / local environment files
-
