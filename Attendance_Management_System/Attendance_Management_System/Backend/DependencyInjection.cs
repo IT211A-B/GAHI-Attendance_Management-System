@@ -26,7 +26,8 @@ public static class DependencyInjection
         var connectionString = configuration.GetConnectionString("Default");
 
         services.AddDbContext<AppDbContext>(options =>
-            options.UseNpgsql(connectionString));
+            options.UseNpgsql(connectionString, npgsqlOptions =>
+                npgsqlOptions.EnableRetryOnFailure()));
 
         services.Configure<AttendanceSettings>(configuration.GetSection(AttendanceSettings.SectionName));
         services.Configure<AttendanceQrSettings>(configuration.GetSection(AttendanceQrSettings.SectionName));
