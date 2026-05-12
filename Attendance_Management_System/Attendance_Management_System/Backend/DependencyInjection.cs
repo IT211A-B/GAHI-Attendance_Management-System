@@ -31,6 +31,7 @@ public static class DependencyInjection
 
         services.Configure<AttendanceSettings>(configuration.GetSection(AttendanceSettings.SectionName));
         services.Configure<AttendanceQrSettings>(configuration.GetSection(AttendanceQrSettings.SectionName));
+        services.AddHttpContextAccessor();
 
         var emailSettingsSection = configuration.GetSection(EmailSettings.SectionName);
         services.Configure<EmailSettings>(emailSettingsSection);
