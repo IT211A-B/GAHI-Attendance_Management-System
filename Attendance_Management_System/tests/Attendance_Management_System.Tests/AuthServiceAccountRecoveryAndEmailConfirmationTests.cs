@@ -95,6 +95,52 @@ public class AuthServiceAccountRecoveryAndEmailConfirmationTests
     }
 
     [Fact]
+    public async Task ForgotPasswordAsync_UsesCurrentRequestOrigin_WhenConfiguredPublicBaseUrlIsLocalhost()
+    {
+        await using var context = CreateContext();
+        var userManager = CreateUserManager();
+        var accountEmailServiceMock = new Mock<IAccountEmailService>(MockBehavior.Strict);
+
+        var user = new User
+        {
+            Id = 205,
+            Email = "student@example.com",
+            IsActive = true
+        };
+
+        const string rawToken = "Reset+/Token=Value";
+        var encodedToken = WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(rawToken));
+        string? capturedLink = null;
+
+        userManager.FindByEmailHandler = _ => Task.FromResult<User?>(user);
+        userManager.GeneratePasswordResetTokenHandler = _ => Task.FromResult(rawToken);
+
+        accountEmailServiceMock
+            .Setup(service => service.SendPasswordResetEmailAsync(user.Email!, user.Email!, It.IsAny<string>()))
+            .Callback<string, string, string>((_, _, resetLink) => capturedLink = resetLink)
+            .Returns(Task.CompletedTask);
+
+        var httpContext = new DefaultHttpContext();
+        httpContext.Request.Scheme = "https";
+        httpContext.Request.Host = new HostString("donbosco-attendance-management-system.onrender.com");
+
+        var service = CreateService(
+            context,
+            userManager,
+            accountEmailServiceMock,
+            new EmailSettings { PublicBaseUrl = "https://localhost:7050" },
+            new HttpContextAccessor { HttpContext = httpContext });
+
+        var result = await service.ForgotPasswordAsync(new ForgotPasswordRequest
+        {
+            Email = user.Email!
+        });
+
+        Assert.True(result.Success);
+        Assert.Equal($"https://donbosco-attendance-management-system.onrender.com/reset-password?userId={user.Id}&token={encodedToken}", capturedLink);
+    }
+
+    [Fact]
     public async Task ResetPasswordAsync_ResetsPassword_WhenTokenIsValid()
     {
         await using var context = CreateContext();
@@ -370,7 +416,8 @@ public class AuthServiceAccountRecoveryAndEmailConfirmationTests
         AppDbContext context,
         FakeUserManager userManager,
         Mock<IAccountEmailService> accountEmailServiceMock,
-        EmailSettings? emailSettings = null)
+        EmailSettings? emailSettings = null,
+        IHttpContextAccessor? httpContextAccessor = null)
     {
         var sectionAllocationServiceMock = new Mock<ISectionAllocationService>(MockBehavior.Strict);
         var notificationServiceMock = new Mock<INotificationService>(MockBehavior.Strict);
@@ -382,6 +429,7 @@ public class AuthServiceAccountRecoveryAndEmailConfirmationTests
             accountEmailServiceMock.Object,
             notificationServiceMock.Object,
             Options.Create(emailSettings ?? new EmailSettings { PublicBaseUrl = "https://localhost:7050" }),
+            httpContextAccessor ?? new HttpContextAccessor(),
             NullLogger<AuthService>.Instance);
     }
 
