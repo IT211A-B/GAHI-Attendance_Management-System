@@ -13,6 +13,7 @@ Host=<db-host>;Port=5432;Database=postgres;Username=postgres.<project-ref>;Passw
 ```
 
 Notes:
+
 - Use direct DB host/port for EF Core migrations on startup.
 - Do not commit this string in source control.
 
@@ -27,41 +28,47 @@ Notes:
 
 Set these in the Render service before first successful boot:
 
-- ConnectionStrings__Default: Supabase PostgreSQL connection string
-- EmailSettings__PublicBaseUrl: your Render URL or custom HTTPS domain
-- AttendanceQrSettings__SigningKey: long random secret value
+- ConnectionStrings\_\_Default: Supabase PostgreSQL connection string
+- EmailSettings\_\_PublicBaseUrl: your Render URL or custom HTTPS domain
+- AttendanceQrSettings\_\_SigningKey: long random secret value
 
 Mail settings:
-- EmailSettings__Username: Gmail address used to send email
-- EmailSettings__Password: Gmail app password
+
+- EmailSettings\_\_Username: Gmail address used to send email (required in production)
+- EmailSettings\_\_Password: Gmail app password (required in production)
 
 The blueprint/app defaults Gmail SMTP to `smtp.gmail.com`, port `587`, STARTTLS mode, and uses `EmailSettings__Username` as the From address unless you override it.
+If you copy a Gmail app password with grouped spaces, the app strips whitespace before SMTP auth.
 
 Recommended production cookie override:
-- CookieSettings__SecurePolicy=Always
+
+- CookieSettings\_\_SecurePolicy=Always
 
 ## 4) First boot behavior
 
 On startup the app automatically:
+
 - Runs EF Core migrations.
 - Runs seed data initialization.
 
 If deployment fails, check Render logs first for:
-- Invalid/missing EmailSettings__PublicBaseUrl
+
+- Invalid/missing EmailSettings\_\_PublicBaseUrl
 - Invalid DB connection string
 - TLS/SSL DB connection settings
 
 ## 5) Verify deployment
 
 After deploy, confirm:
+
 - /health returns HTTP 200
 - /login loads
 - Signup/login email flows use the HTTPS public base URL
 
 ## 6) Optional hardening after first successful deploy
 
-- Move to a custom domain and update EmailSettings__PublicBaseUrl.
-- Rotate AttendanceQrSettings__SigningKey periodically.
+- Move to a custom domain and update EmailSettings\_\_PublicBaseUrl.
+- Rotate AttendanceQrSettings\_\_SigningKey periodically.
 - Restrict CORS/origins if you split frontend later.
 - Add managed backups/alerts in Supabase and Render.
 
