@@ -199,7 +199,9 @@ public class SectionPageService : ISectionPageService
             SelectedAttendanceDate = requestedAttendanceDate ?? DateOnly.FromDateTime(DateTime.Today)
         };
 
-        var sectionsResult = await TryCallAsync(() => _sectionsService.GetAllSectionsAsync());
+        var sectionsResult = role.IsRole(UserRole.Teacher)
+            ? await TryCallAsync(() => _sectionsService.GetSectionsByTeacherUserIdAsync(currentUserId))
+            : await TryCallAsync(() => _sectionsService.GetAllSectionsAsync());
         if (!sectionsResult.Success || sectionsResult.Data is null)
         {
             viewModel.ErrorMessage = sectionsResult.Error ?? "Unable to load sections right now.";

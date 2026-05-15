@@ -13,7 +13,6 @@ public class AttendanceDto
     public string? SectionName { get; set; }
     public DateOnly Date { get; set; }
     public TimeOnly? TimeIn { get; set; }
-    public TimeOnly? TimeOut { get; set; }
     public string? Remarks { get; set; }
     public DateTimeOffset MarkedAt { get; set; }
     public int MarkedBy { get; set; }

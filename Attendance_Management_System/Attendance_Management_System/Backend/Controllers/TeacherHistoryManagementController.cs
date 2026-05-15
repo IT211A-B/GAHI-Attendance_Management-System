@@ -117,7 +117,6 @@ public class TeacherHistoryManagementController : Controller
                 StudentId = record.StudentId,
                 StudentName = string.IsNullOrWhiteSpace(record.StudentName) ? "-" : record.StudentName,
                 TimeInText = record.TimeIn?.ToString("HH:mm") ?? "-",
-                TimeOutText = record.TimeOut?.ToString("HH:mm") ?? "-",
                 Remarks = string.IsNullOrWhiteSpace(record.Remarks) ? record.StatusLabel : record.Remarks
             })
             .ToList();

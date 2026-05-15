@@ -38,6 +38,5 @@ public class TeacherAttendanceRecordViewModel
     public int StudentId { get; set; }
     public string StudentName { get; set; } = "-";
     public string TimeInText { get; set; } = "-";
-    public string TimeOutText { get; set; } = "-";
     public string Remarks { get; set; } = "-";
 }
