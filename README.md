@@ -31,9 +31,11 @@ The **Don Bosco Attendance Management System** is a pure ASP.NET MVC web applica
 ## 📸 Screenshots
 
 <div align="center">
-  <img src="Attendance_Management_System/Attendance_Management_System/Frontend/wwwroot/images/login-hero.svg" alt="Login experience" width="48%" style="border-radius: 8px; box-shadow: 0 8px 18px rgba(15, 23, 42, 0.15);" />
+  <img src="Attendance_Management_System/IMAGES/3678ffe7-a31c-47b7-ab01-08cb84b26447.jpg" alt="Dashboard overview" width="32%" style="border-radius: 8px; box-shadow: 0 8px 18px rgba(15, 23, 42, 0.15);" />
   &nbsp;
-  <img src="Attendance_Management_System/Attendance_Management_System/Frontend/wwwroot/images/Gemini_Generated_Image_s4on5ys4on5ys4on-Photoroom.png" alt="Branding mark" width="48%" style="border-radius: 8px; box-shadow: 0 8px 18px rgba(15, 23, 42, 0.15);" />
+  <img src="Attendance_Management_System/IMAGES/37fa21a3-45ff-4e1b-afce-0c32cb921809.jpg" alt="Attendance QR session" width="32%" style="border-radius: 8px; box-shadow: 0 8px 18px rgba(15, 23, 42, 0.15);" />
+  &nbsp;
+  <img src="Attendance_Management_System/IMAGES/e5f9b5bc-7fc6-47e2-8605-2d35002aa21f.jpg" alt="Section timetable" width="32%" style="border-radius: 8px; box-shadow: 0 8px 18px rgba(15, 23, 42, 0.15);" />
 </div>
 
 <br />
