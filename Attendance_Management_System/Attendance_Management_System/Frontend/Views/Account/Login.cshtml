@@ -66,6 +66,12 @@
                         <a asp-action="ForgotPassword">Forgot your password?</a>
                     </p>
 
+                    @if (ViewData["EmailVerificationRequired"] as bool? == true)
+                    {
+                        <input type="hidden" name="email" value="@ViewData["EmailVerificationAddress"]" form="resend-verification-form" />
+                        <button type="submit" class="btn-secondary" form="resend-verification-form">Resend verification email</button>
+                    }
+
                     <label class="checkbox-row">
                         <input asp-for="RememberMe" />
                         <span>Keep me signed in on this device</span>
@@ -78,6 +84,8 @@
                         <a asp-action="Signup">Sign up</a>
                     </p>
                 </form>
+
+                <form id="resend-verification-form" asp-action="ResendVerification" method="post"></form>
             </section>
         </main>
 

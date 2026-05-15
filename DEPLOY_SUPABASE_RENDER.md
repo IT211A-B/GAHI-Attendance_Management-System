@@ -35,7 +35,9 @@ Mail settings:
 - EmailSettings__Username: Gmail address used to send email
 - EmailSettings__Password: Gmail app password
 
-The blueprint/app defaults Gmail SMTP to `smtp.gmail.com`, port `587`, STARTTLS mode, and uses `EmailSettings__Username` as the From address unless you override it.
+Production startup now validates the SMTP settings. If the username/password are missing, Render will show an `OptionsValidationException` in the logs and the service will not boot until the variables are set. For Gmail, use an app password, not the normal account password. Enter the 16-character app password without spaces.
+
+The blueprint/app defaults Gmail SMTP to `smtp.gmail.com`, port `587`, STARTTLS mode, and uses `EmailSettings__Username` as the From address unless you override `EmailSettings__FromAddress`.
 
 Recommended production cookie override:
 - CookieSettings__SecurePolicy=Always
@@ -48,6 +50,7 @@ On startup the app automatically:
 
 If deployment fails, check Render logs first for:
 - Invalid/missing EmailSettings__PublicBaseUrl
+- Missing EmailSettings__Username or EmailSettings__Password
 - Invalid DB connection string
 - TLS/SSL DB connection settings
 
