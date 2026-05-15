@@ -37,7 +37,9 @@ public static class DependencyInjection
         services.AddHttpContextAccessor();
 
         var emailSettingsSection = configuration.GetSection(EmailSettings.SectionName);
-        services.Configure<EmailSettings>(emailSettingsSection);
+        services.AddOptions<EmailSettings>()
+            .Bind(emailSettingsSection)
+            .ValidateOnStart();
         services.AddSingleton<IValidateOptions<EmailSettings>, EmailSettingsValidator>();
 
         var emailSettings = emailSettingsSection.Get<EmailSettings>() ?? new EmailSettings();
