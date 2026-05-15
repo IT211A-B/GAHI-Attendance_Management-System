@@ -38,7 +38,6 @@ public class AttendanceRecordItemViewModel
     public string StudentName { get; set; } = string.Empty;
     public string SubjectName { get; set; } = "-";
     public string TimeIn { get; set; } = "-";
-    public string TimeOut { get; set; } = "-";
     public string Remarks { get; set; } = "-";
     public string MarkerName { get; set; } = "-";
 }

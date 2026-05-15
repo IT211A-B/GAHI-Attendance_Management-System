@@ -1,9 +1,11 @@
+using Attendance_Management_System.Backend.Configuration;
 using Attendance_Management_System.Backend.DTOs.Responses;
 using Attendance_Management_System.Backend.Enums;
 using Attendance_Management_System.Backend.Helpers;
 using Attendance_Management_System.Backend.Interfaces.Services;
 using Attendance_Management_System.Backend.ValueObjects;
 using Attendance_Management_System.Backend.ViewModels.Sections;
+using Microsoft.Extensions.Options;
 
 namespace Attendance_Management_System.Backend.Services;
 
@@ -18,6 +20,7 @@ public class SectionPageService : ISectionPageService
     private readonly ICoursesService _coursesService;
     private readonly ISubjectsService _subjectsService;
     private readonly IClassroomsService _classroomsService;
+    private readonly AttendanceSettings _attendanceSettings;
 
     private static readonly int[] TimetableDayOrder = { 1, 2, 3, 4, 5, 6, 0 };
     private static readonly Dictionary<int, string> TimetableDayNames = new()
@@ -31,8 +34,8 @@ public class SectionPageService : ISectionPageService
         [6] = "Saturday"
     };
 
-    private static readonly TimeOnly TimetableStart = new(5, 0);
-    private static readonly TimeOnly TimetableEnd = new(19, 0);
+    private static readonly TimeOnly TimetableStart = new(1, 0);
+    private static readonly int TimetableSlotCount = 48; // 24 hours ÷ 30 min slots
 
     public SectionPageService(
         ISectionsService sectionsService,
@@ -43,7 +46,8 @@ public class SectionPageService : ISectionPageService
         IAcademicYearsService academicYearsService,
         ICoursesService coursesService,
         ISubjectsService subjectsService,
-        IClassroomsService classroomsService)
+        IClassroomsService classroomsService,
+        IOptions<AttendanceSettings> attendanceSettings)
     {
         _sectionsService = sectionsService;
         _schedulesService = schedulesService;
@@ -54,6 +58,9 @@ public class SectionPageService : ISectionPageService
         _coursesService = coursesService;
         _subjectsService = subjectsService;
         _classroomsService = classroomsService;
+        _attendanceSettings = attendanceSettings.Value?.IsValid() == true
+            ? attendanceSettings.Value
+            : AttendanceSettings.Default;
     }
 
     public async Task<SectionManagementIndexViewModel> BuildSectionManagementIndexViewModelAsync(int currentUserId, string role)
@@ -196,10 +203,13 @@ public class SectionPageService : ISectionPageService
         {
             IsAdmin = role.IsRole(UserRole.Admin),
             IsTeacher = role.IsRole(UserRole.Teacher),
-            SelectedAttendanceDate = requestedAttendanceDate ?? DateOnly.FromDateTime(DateTime.Today)
+            SelectedAttendanceDate = requestedAttendanceDate
+                ?? AttendancePolicy.GetSchoolDate(_attendanceSettings, DateTimeOffset.UtcNow)
         };
 
-        var sectionsResult = await TryCallAsync(() => _sectionsService.GetAllSectionsAsync());
+        var sectionsResult = role.IsRole(UserRole.Teacher)
+            ? await TryCallAsync(() => _sectionsService.GetSectionsByTeacherUserIdAsync(currentUserId))
+            : await TryCallAsync(() => _sectionsService.GetAllSectionsAsync());
         if (!sectionsResult.Success || sectionsResult.Data is null)
         {
             viewModel.ErrorMessage = sectionsResult.Error ?? "Unable to load sections right now.";
@@ -708,8 +718,9 @@ public class SectionPageService : ISectionPageService
     {
         var rows = new List<SectionTimetableRowViewModel>();
 
-        for (var slotStart = TimetableStart; slotStart < TimetableEnd; slotStart = slotStart.AddMinutes(30))
+        for (var slotIndex = 0; slotIndex < TimetableSlotCount; slotIndex++)
         {
+            var slotStart = TimetableStart.AddMinutes(slotIndex * 30);
             var slotEnd = slotStart.AddMinutes(30);
             var cells = new List<SectionTimetableCellViewModel>();
 

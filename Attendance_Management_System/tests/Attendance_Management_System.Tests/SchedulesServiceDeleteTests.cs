@@ -3,6 +3,25 @@ namespace Attendance_Management_System.Tests;
 public class SchedulesServiceDeleteTests
 {
     [Fact]
+    public async Task GetSchedulesAsync_ReturnsOwnedSchedule_WhenSectionAssignmentIsMissing()
+    {
+        await using var context = CreateContext();
+        var seed = await SeedScheduleAsync(context);
+
+        var assignment = await context.SectionTeachers
+            .FirstAsync(item => item.SectionId == seed.SectionId && item.TeacherId == seed.OwnerTeacherId);
+        context.SectionTeachers.Remove(assignment);
+        await context.SaveChangesAsync();
+
+        var service = CreateService(context);
+        var schedules = await service.GetSchedulesAsync(seed.OwnerUserId, "teacher");
+
+        var schedule = Assert.Single(schedules);
+        Assert.Equal(seed.ScheduleId, schedule.Id);
+        Assert.True(schedule.IsMine);
+    }
+
+    [Fact]
     public async Task DeleteScheduleAsync_ReturnsConflict_WhenAttendanceExists()
     {
         await using var context = CreateContext();

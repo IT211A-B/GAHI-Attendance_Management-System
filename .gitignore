@@ -8,8 +8,10 @@
 *.user
 *.userosscache
 *.sln.docstates
+*.lscache
 
 # Build results
+*.lscache
 [Bb]in/
 [Oo]bj/
 out/
@@ -108,6 +110,7 @@ wwwroot/lib/
 # Local debug and profiling files
 *.pdb
 *.cache
+*.lscache
 
 # macOS
 *.DS_Store

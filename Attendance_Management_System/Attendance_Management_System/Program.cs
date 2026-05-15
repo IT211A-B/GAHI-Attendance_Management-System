@@ -134,7 +134,7 @@ if (!app.Environment.IsDevelopment())
             "style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; " +
             "connect-src 'self' https:; object-src 'none'; base-uri 'self'; " +
             "frame-ancestors 'none'";
-        context.Response.Headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()";
+        context.Response.Headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=(self)";
         await next();
     });
 }

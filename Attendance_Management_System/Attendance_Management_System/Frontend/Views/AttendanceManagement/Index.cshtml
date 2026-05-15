@@ -1,6 +1,7 @@
 @model Attendance_Management_System.Backend.ViewModels.Attendance.AttendanceIndexViewModel
 @{
     ViewData["Title"] = "Attendance";
+    var selectedDateValue = Model.SelectedDate.ToString("yyyy-MM-dd");
 }
 
 <section class="panel">
@@ -40,7 +41,7 @@
         </div>
         <div>
             <label for="date">Date</label>
-            <input id="date" name="date" type="date" class="input-select" value="@Model.SelectedDate.ToString("yyyy-MM-dd")" />
+            <input id="date" name="date" type="date" class="input-select" value="@selectedDateValue" />
         </div>
         <button type="submit" class="btn-primary btn-inline">Load Attendance</button>
     </form>
@@ -57,26 +58,23 @@
     {
         <article class="panel">
             <h3>Mark Attendance</h3>
-            <form asp-controller="AttendanceManagement" asp-action="Mark" method="post" class="filters-grid three">
+            <form action="@Url.Action("Mark", "AttendanceManagement")" method="post" class="filters-grid three">
                 @Html.AntiForgeryToken()
-                <input type="hidden" asp-for="MarkForm.SectionId" value="@Model.SelectedSectionId" />
-                <input type="hidden" asp-for="MarkForm.ScheduleId" value="@Model.SelectedScheduleId" />
-                <input type="hidden" asp-for="MarkForm.Date" value="@Model.SelectedDate.ToString("yyyy-MM-dd")" />
+                <input type="hidden" name="MarkForm.SectionId" value="@Model.SelectedSectionId" />
+                <input type="hidden" name="MarkForm.ScheduleId" value="@Model.SelectedScheduleId" />
+                <input type="hidden" name="MarkForm.Date" value="@selectedDateValue" />
 
                 <div>
-                    <label asp-for="MarkForm.StudentId"></label>
-                    <input asp-for="MarkForm.StudentId" class="input-select" type="number" min="1" />
-                    <span asp-validation-for="MarkForm.StudentId" class="field-validation"></span>
+                    <label for="MarkForm_StudentId">Student ID</label>
+                    <input id="MarkForm_StudentId" name="MarkForm.StudentId" class="input-select" type="number" min="1" />
                 </div>
                 <div>
-                    <label asp-for="MarkForm.TimeIn"></label>
-                    <input asp-for="MarkForm.TimeIn" class="input-select" type="time" />
-                    <span asp-validation-for="MarkForm.TimeIn" class="field-validation"></span>
+                    <label for="MarkForm_TimeIn">Time in</label>
+                    <input id="MarkForm_TimeIn" name="MarkForm.TimeIn" class="input-select" type="time" />
                 </div>
                 <div>
-                    <label asp-for="MarkForm.Remarks"></label>
-                    <input asp-for="MarkForm.Remarks" class="input-select" />
-                    <span asp-validation-for="MarkForm.Remarks" class="field-validation"></span>
+                    <label for="MarkForm_Remarks">Remarks</label>
+                    <input id="MarkForm_Remarks" name="MarkForm.Remarks" class="input-select" />
                 </div>
 
                 <button type="submit" class="btn-primary btn-inline">Mark</button>
@@ -98,7 +96,6 @@
                         <th>Student</th>
                         <th>Subject</th>
                         <th>Time In</th>
-                        <th>Time Out</th>
                         <th>Remarks</th>
                         <th>Marked By</th>
                     </tr>
@@ -107,7 +104,7 @@
                     @if (!Model.Records.Any())
                     {
                         <tr>
-                            <td colspan="7" class="muted">No attendance records for this filter.</td>
+                            <td colspan="6" class="muted">No attendance records for this filter.</td>
                         </tr>
                     }
                     else
@@ -119,7 +116,6 @@
                                 <td>@record.StudentName</td>
                                 <td>@record.SubjectName</td>
                                 <td>@record.TimeIn</td>
-                                <td>@record.TimeOut</td>
                                 <td>@record.Remarks</td>
                                 <td>@record.MarkerName</td>
                             </tr>

@@ -9,7 +9,8 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Attendance_Management_System.Backend.Services;
 
-// Service for schedule management operations
+// Manages schedule CRUD operations with conflict detection to prevent overlapping class times.
+// Supports both single schedule creation and batch creation across multiple weekdays.
 public class SchedulesService : ISchedulesService
 {
     private readonly AppDbContext _context;
@@ -29,7 +30,7 @@ public class SchedulesService : ISchedulesService
         _conflictService = conflictService;
     }
 
-    // Get all schedules (teacher sees their assigned sections, admin sees all)
+    // Retrieves all schedules visible to the current user (teacher sees own sections, admin sees all).
     public async Task<List<ScheduleDto>> GetSchedulesAsync(int userId, string role)
     {
         List<Schedule> schedules;
@@ -48,7 +49,7 @@ public class SchedulesService : ISchedulesService
         }
         else
         {
-            // Teacher sees schedules in their assigned sections
+            // Teacher sees schedules in assigned sections plus any slots they own from older data.
             var teacherId = await GetTeacherIdByUserIdAsync(userId);
             if (teacherId == null)
             {
@@ -60,12 +61,11 @@ public class SchedulesService : ISchedulesService
                     .ThenInclude(sec => sec!.Classroom)
                 .Include(s => s.Teacher)
                 .Include(s => s.Subject)
-                .Join(_context.SectionTeachers,
-                    s => s.SectionId,
-                    st => st.SectionId,
-                    (s, st) => new { Schedule = s, SectionTeacher = st })
-                .Where(x => x.SectionTeacher.TeacherId == teacherId.Value)
-                .Select(x => x.Schedule)
+                .Where(schedule =>
+                    schedule.TeacherId == teacherId.Value
+                    || _context.SectionTeachers.Any(assignment =>
+                        assignment.SectionId == schedule.SectionId
+                        && assignment.TeacherId == teacherId.Value))
                 .OrderBy(s => s.DayOfWeek)
                 .ThenBy(s => s.StartTime)
                 .ToListAsync();

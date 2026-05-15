@@ -10,6 +10,9 @@ using Microsoft.Extensions.Options;
 
 namespace Attendance_Management_System.Backend.Services;
 
+// Builds role-specific dashboard view models for Admin, Teacher, and Student users.
+// Handles data filtering by date windows and calculates attendance metrics.
+// Each role receives a tailored set of metrics and data relevant to their responsibilities.
 public class DashboardService : IDashboardService
 {
     // Shared limits keep dashboard queries bounded for fast initial page loads.
@@ -182,7 +185,7 @@ public class DashboardService : IDashboardService
             .ThenBy(s => s.StartTime)
             .ToListAsync();
 
-        var todayDate = DateOnly.FromDateTime(DateTime.Today);
+        var todayDate = AttendancePolicy.GetSchoolDate(_attendanceSettings, DateTimeOffset.UtcNow);
         // Teacher counters use the same selected date window as the rest of the dashboard.
         var (presentCount, lateCount, absentCount) = await BuildTeacherWindowTotalsAsync(teacher.Id, filter);
         var upcomingClasses = BuildUpcomingClasses(schedules, todayDate, UpcomingDaysRange);
@@ -352,7 +355,7 @@ public class DashboardService : IDashboardService
         DateOnly? from,
         DateOnly? to)
     {
-        var today = DateOnly.FromDateTime(DateTime.Today);
+        var today = AttendancePolicy.GetSchoolDate(_attendanceSettings, DateTimeOffset.UtcNow);
         var selectedWindow = NormalizeWindow(window);
 
         var filter = new DashboardDateFilterViewModel

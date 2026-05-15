@@ -12,7 +12,8 @@ using Microsoft.Extensions.Options;
 
 namespace Attendance_Management_System.Backend.Services;
 
-// Service implementation for managing student attendance
+// Handles individual and bulk attendance marking with full audit trail.
+// Enforces validation rules for schedule ownership and teacher backfill windows.
 public class AttendanceService : IAttendanceService
 {
     private readonly AppDbContext _context;
@@ -58,13 +59,14 @@ public class AttendanceService : IAttendanceService
                 && a.StudentId == request.StudentId
                 && a.Date == request.Date);
 
-        var academicYear = await GetActiveAcademicYearAsync();
-        if (academicYear == null)
+        var section = await _context.Sections
+            .AsNoTracking()
+            .FirstOrDefaultAsync(section => section.Id == request.SectionId);
+        if (section == null)
         {
-            throw new KeyNotFoundException("No active academic year found.");
+            throw new KeyNotFoundException("Section not found.");
         }
 
-        var section = await _context.Sections.FindAsync(request.SectionId);
         var markerName = await GetMarkerNameAsync(teacherContext.UserId);
         var now = DateTimeOffset.UtcNow;
         var normalizedRemarks = NormalizeRemarks(request.TimeIn, request.Remarks);
@@ -81,7 +83,7 @@ public class AttendanceService : IAttendanceService
                 ScheduleId = request.ScheduleId,
                 StudentId = request.StudentId,
                 SectionId = request.SectionId,
-                AcademicYearId = academicYear.Id,
+                AcademicYearId = section.AcademicYearId,
                 Date = request.Date,
                 TimeIn = request.TimeIn,
                 Remarks = normalizedRemarks,
@@ -141,7 +143,7 @@ public class AttendanceService : IAttendanceService
             attendance,
             schedule,
             student,
-            section?.Name,
+            section.Name,
             markerName,
             afterStatus,
             isMarked: true);
@@ -164,13 +166,14 @@ public class AttendanceService : IAttendanceService
 
         var schedule = scheduleValidation.Schedule;
 
-        var academicYear = await GetActiveAcademicYearAsync();
-        if (academicYear == null)
+        var section = await _context.Sections
+            .AsNoTracking()
+            .FirstOrDefaultAsync(section => section.Id == request.SectionId);
+        if (section == null)
         {
-            throw new KeyNotFoundException("No active academic year found.");
+            throw new KeyNotFoundException("Section not found.");
         }
 
-        var section = await _context.Sections.FindAsync(request.SectionId);
         var markerName = await GetMarkerNameAsync(teacherContext.UserId);
         var now = DateTimeOffset.UtcNow;
 
@@ -217,7 +220,7 @@ public class AttendanceService : IAttendanceService
                     ScheduleId = request.ScheduleId,
                     StudentId = entry.StudentId,
                     SectionId = request.SectionId,
-                    AcademicYearId = academicYear.Id,
+                    AcademicYearId = section.AcademicYearId,
                     Date = request.Date,
                     TimeIn = entry.TimeIn,
                     Remarks = normalizedRemarks,
@@ -296,7 +299,7 @@ public class AttendanceService : IAttendanceService
                 row.Attendance,
                 schedule,
                 row.Student,
-                section?.Name,
+                section.Name,
                 markerName,
                 row.AfterStatus,
                 isMarked: true))
@@ -390,7 +393,6 @@ public class AttendanceService : IAttendanceService
                 SectionName = section.Name,
                 Date = date,
                 TimeIn = null,
-                TimeOut = null,
                 Remarks = AttendancePolicy.ToLabel(AttendanceStatusKind.Unmarked),
                 MarkedAt = DateTimeOffset.MinValue,
                 MarkedBy = 0,
@@ -479,7 +481,6 @@ public class AttendanceService : IAttendanceService
                 SectionName = attendance.Section?.Name,
                 Date = attendance.Date,
                 TimeIn = attendance.TimeIn,
-                TimeOut = attendance.TimeOut,
                 Remarks = attendance.Remarks,
                 MarkedAt = attendance.MarkedAt,
                 MarkedBy = attendance.MarkedBy,
@@ -510,12 +511,12 @@ public class AttendanceService : IAttendanceService
             return ScheduleValidationResult.Fail(new KeyNotFoundException("Schedule not found for this section."));
         }
 
-        if ((int)date.DayOfWeek != schedule.DayOfWeek)
+        if (!_attendanceSettings.AllowOffScheduleAttendance && (int)date.DayOfWeek != schedule.DayOfWeek)
         {
             return ScheduleValidationResult.Fail(new InvalidOperationException("Attendance date must match the schedule weekday."));
         }
 
-        if (date < schedule.EffectiveFrom || (schedule.EffectiveTo.HasValue && date > schedule.EffectiveTo.Value))
+        if (!AttendancePolicy.IsWithinEffectiveDateRange(schedule, date))
         {
             return ScheduleValidationResult.Fail(
                 new InvalidOperationException("Attendance date is outside the schedule effective date range."));
@@ -603,11 +604,6 @@ public class AttendanceService : IAttendanceService
         return ScheduleValidationResult.Pass(schedule);
     }
 
-    private async Task<AcademicYear?> GetActiveAcademicYearAsync()
-    {
-        return await _context.AcademicYears.FirstOrDefaultAsync(academicYear => academicYear.IsActive);
-    }
-
     private static string? NormalizeRemarks(TimeOnly? timeIn, string? remarks)
     {
         var trimmed = remarks?.Trim();
@@ -671,7 +667,6 @@ public class AttendanceService : IAttendanceService
             SectionName = sectionName,
             Date = attendance.Date,
             TimeIn = attendance.TimeIn,
-            TimeOut = attendance.TimeOut,
             Remarks = attendance.Remarks,
             MarkedAt = attendance.MarkedAt,
             MarkedBy = attendance.MarkedBy,
