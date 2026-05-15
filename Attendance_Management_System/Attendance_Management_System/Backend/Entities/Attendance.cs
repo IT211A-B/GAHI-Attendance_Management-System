@@ -23,9 +23,6 @@ public class Attendance : EntityBase
     // Time the student checked in (null if absent)
     public TimeOnly? TimeIn { get; set; }
 
-    // Time the student checked out (null if still in class or absent)
-    public TimeOnly? TimeOut { get; set; }
-
     // Optional notes about the attendance (e.g., "Late - traffic")
     public string? Remarks { get; set; }
 

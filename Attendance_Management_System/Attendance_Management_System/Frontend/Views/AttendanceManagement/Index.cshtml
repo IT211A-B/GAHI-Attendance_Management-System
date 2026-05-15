@@ -1,6 +1,7 @@
 @model Attendance_Management_System.Backend.ViewModels.Attendance.AttendanceIndexViewModel
 @{
     ViewData["Title"] = "Attendance";
+    var selectedDateValue = Model.SelectedDate.ToString("yyyy-MM-dd");
 }
 
 <section class="panel">
@@ -40,7 +41,7 @@
         </div>
         <div>
             <label for="date">Date</label>
-            <input id="date" name="date" type="date" class="input-select" value="@Model.SelectedDate.ToString("yyyy-MM-dd")" />
+            <input id="date" name="date" type="date" class="input-select" value="@selectedDateValue" />
         </div>
         <button type="submit" class="btn-primary btn-inline">Load Attendance</button>
     </form>
@@ -61,7 +62,7 @@
                 @Html.AntiForgeryToken()
                 <input type="hidden" asp-for="MarkForm.SectionId" value="@Model.SelectedSectionId" />
                 <input type="hidden" asp-for="MarkForm.ScheduleId" value="@Model.SelectedScheduleId" />
-                <input type="hidden" asp-for="MarkForm.Date" value="@Model.SelectedDate.ToString("yyyy-MM-dd")" />
+                <input type="hidden" asp-for="MarkForm.Date" value="@selectedDateValue" />
 
                 <div>
                     <label asp-for="MarkForm.StudentId"></label>
@@ -98,7 +99,6 @@
                         <th>Student</th>
                         <th>Subject</th>
                         <th>Time In</th>
-                        <th>Time Out</th>
                         <th>Remarks</th>
                         <th>Marked By</th>
                     </tr>
@@ -107,7 +107,7 @@
                     @if (!Model.Records.Any())
                     {
                         <tr>
-                            <td colspan="7" class="muted">No attendance records for this filter.</td>
+                            <td colspan="6" class="muted">No attendance records for this filter.</td>
                         </tr>
                     }
                     else
@@ -119,7 +119,6 @@
                                 <td>@record.StudentName</td>
                                 <td>@record.SubjectName</td>
                                 <td>@record.TimeIn</td>
-                                <td>@record.TimeOut</td>
                                 <td>@record.Remarks</td>
                                 <td>@record.MarkerName</td>
                             </tr>
