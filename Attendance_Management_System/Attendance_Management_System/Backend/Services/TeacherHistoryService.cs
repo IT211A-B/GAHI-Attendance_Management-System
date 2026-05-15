@@ -99,7 +99,7 @@ public class TeacherHistoryService : ITeacherHistoryService
         }
 
         // Use provided date or default to today
-        var filterDate = date ?? DateOnly.FromDateTime(DateTime.Today);
+        var filterDate = date ?? AttendancePolicy.GetSchoolDate(_attendanceSettings, DateTimeOffset.UtcNow);
 
         // Get attendance records for the schedule and date.
         var attendances = await _context.Attendances
