@@ -67,8 +67,6 @@
 
                 @if (User.IsInRole("admin") || User.IsInRole("teacher"))
                 {
-                    <a class="sidebar-link @(currentController == "SectionManagement" ? "active" : "")"
-                       asp-controller="SectionManagement" asp-action="Index">Sections</a>
                     <a class="sidebar-link @(currentController == "Timetable" ? "active" : "")" asp-controller="Timetable"
                        asp-action="Index">Timetable</a>
                     <a class="sidebar-link @(currentController == "SectionAttendance" ? "active" : "")"
