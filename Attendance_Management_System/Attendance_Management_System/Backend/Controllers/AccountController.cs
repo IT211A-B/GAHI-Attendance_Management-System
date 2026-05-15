@@ -12,6 +12,8 @@ using Npgsql;
 
 namespace Attendance_Management_System.Backend.Controllers;
 
+// Handles user authentication: login, signup, password reset, email verification.
+// All endpoints are publicly accessible except logout which requires an authenticated user.
 [Route("")]
 public class AccountController : Controller
 {
