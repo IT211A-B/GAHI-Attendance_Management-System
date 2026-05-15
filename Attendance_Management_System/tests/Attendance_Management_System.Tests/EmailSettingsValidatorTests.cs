@@ -55,6 +55,60 @@ public class EmailSettingsValidatorTests
         Assert.True(result.Succeeded);
     }
 
+    [Fact]
+    public void Validate_ReturnsFailure_InProduction_WhenUrlIsNotHttps()
+    {
+        var validator = CreateValidator(Environments.Production);
+
+        var settings = CreateProductionSettings();
+        settings.PublicBaseUrl = "http://attendance.example.edu";
+
+        var result = validator.Validate(Options.DefaultName, settings);
+
+        Assert.True(result.Failed);
+        Assert.Contains(result.Failures!, failure => failure.Contains("must use https in Production", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void Validate_ReturnsFailure_InProduction_WhenUrlIsLocalhost()
+    {
+        var validator = CreateValidator(Environments.Production);
+
+        var settings = CreateProductionSettings();
+        settings.PublicBaseUrl = "https://localhost:7050";
+
+        var result = validator.Validate(Options.DefaultName, settings);
+
+        Assert.True(result.Failed);
+        Assert.Contains(result.Failures!, failure => failure.Contains("non-localhost URL in Production", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void Validate_ReturnsFailure_InProduction_WhenSmtpCredentialsAreMissing()
+    {
+        var validator = CreateValidator(Environments.Production);
+
+        var settings = CreateProductionSettings();
+        settings.Username = "";
+        settings.Password = "";
+
+        var result = validator.Validate(Options.DefaultName, settings);
+
+        Assert.True(result.Failed);
+        Assert.Contains(result.Failures!, failure => failure.Contains(nameof(EmailSettings.Username), StringComparison.Ordinal));
+        Assert.Contains(result.Failures!, failure => failure.Contains(nameof(EmailSettings.Password), StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Validate_ReturnsSuccess_InProduction_WhenSmtpSettingsAreComplete()
+    {
+        var validator = CreateValidator(Environments.Production);
+
+        var result = validator.Validate(Options.DefaultName, CreateProductionSettings());
+
+        Assert.True(result.Succeeded);
+    }
+
     private static EmailSettings CreateValidSettings(string publicBaseUrl)
     {
         return new EmailSettings
@@ -63,8 +117,30 @@ public class EmailSettingsValidatorTests
         };
     }
 
+    private static EmailSettings CreateProductionSettings()
+    {
+        return new EmailSettings
+        {
+            PublicBaseUrl = "https://attendance.example.edu",
+            Host = "smtp.gmail.com",
+            Port = 587,
+            Username = "sender@example.edu",
+            Password = "smtp-app-password",
+            FromName = "Don Bosco Attendance",
+            UseSsl = false
+        };
+    }
+
     private static EmailSettingsValidator CreateValidator()
     {
         return new EmailSettingsValidator();
+    }
+
+    private static EmailSettingsValidator CreateValidator(string environmentName)
+    {
+        var environment = new Mock<IHostEnvironment>();
+        environment.SetupGet(item => item.EnvironmentName).Returns(environmentName);
+
+        return new EmailSettingsValidator(environment.Object);
     }
 }
