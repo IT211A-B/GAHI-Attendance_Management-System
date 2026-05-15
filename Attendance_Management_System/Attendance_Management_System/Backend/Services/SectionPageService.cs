@@ -1,9 +1,11 @@
+using Attendance_Management_System.Backend.Configuration;
 using Attendance_Management_System.Backend.DTOs.Responses;
 using Attendance_Management_System.Backend.Enums;
 using Attendance_Management_System.Backend.Helpers;
 using Attendance_Management_System.Backend.Interfaces.Services;
 using Attendance_Management_System.Backend.ValueObjects;
 using Attendance_Management_System.Backend.ViewModels.Sections;
+using Microsoft.Extensions.Options;
 
 namespace Attendance_Management_System.Backend.Services;
 
@@ -18,6 +20,7 @@ public class SectionPageService : ISectionPageService
     private readonly ICoursesService _coursesService;
     private readonly ISubjectsService _subjectsService;
     private readonly IClassroomsService _classroomsService;
+    private readonly AttendanceSettings _attendanceSettings;
 
     private static readonly int[] TimetableDayOrder = { 1, 2, 3, 4, 5, 6, 0 };
     private static readonly Dictionary<int, string> TimetableDayNames = new()
@@ -43,7 +46,8 @@ public class SectionPageService : ISectionPageService
         IAcademicYearsService academicYearsService,
         ICoursesService coursesService,
         ISubjectsService subjectsService,
-        IClassroomsService classroomsService)
+        IClassroomsService classroomsService,
+        IOptions<AttendanceSettings> attendanceSettings)
     {
         _sectionsService = sectionsService;
         _schedulesService = schedulesService;
@@ -54,6 +58,9 @@ public class SectionPageService : ISectionPageService
         _coursesService = coursesService;
         _subjectsService = subjectsService;
         _classroomsService = classroomsService;
+        _attendanceSettings = attendanceSettings.Value?.IsValid() == true
+            ? attendanceSettings.Value
+            : AttendanceSettings.Default;
     }
 
     public async Task<SectionManagementIndexViewModel> BuildSectionManagementIndexViewModelAsync(int currentUserId, string role)
@@ -196,7 +203,8 @@ public class SectionPageService : ISectionPageService
         {
             IsAdmin = role.IsRole(UserRole.Admin),
             IsTeacher = role.IsRole(UserRole.Teacher),
-            SelectedAttendanceDate = requestedAttendanceDate ?? DateOnly.FromDateTime(DateTime.Today)
+            SelectedAttendanceDate = requestedAttendanceDate
+                ?? AttendancePolicy.GetSchoolDate(_attendanceSettings, DateTimeOffset.UtcNow)
         };
 
         var sectionsResult = role.IsRole(UserRole.Teacher)

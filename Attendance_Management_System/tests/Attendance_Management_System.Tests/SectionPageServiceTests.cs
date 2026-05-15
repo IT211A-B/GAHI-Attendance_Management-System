@@ -68,6 +68,66 @@ public class SectionPageServiceTests
     }
 
     [Fact]
+    public async Task BuildSectionAttendanceIndexViewModelAsync_DefaultsToSchoolDate_WhenDateNotProvided()
+    {
+        var expectedDate = DateOnly.FromDateTime(DateTimeOffset.UtcNow.UtcDateTime);
+
+        var sectionsService = new Mock<ISectionsService>();
+        sectionsService
+            .Setup(service => service.GetSectionsByTeacherUserIdAsync(101, It.IsAny<CancellationToken>()))
+            .ReturnsAsync([
+                new SectionDto { Id = 2, Name = "Teacher Section" }
+            ]);
+
+        var schedulesService = new Mock<ISchedulesService>();
+        schedulesService
+            .Setup(service => service.GetSchedulesAsync(101, "teacher"))
+            .ReturnsAsync([
+                new ScheduleDto
+                {
+                    Id = 12,
+                    SectionId = 2,
+                    SubjectName = "Algorithms",
+                    DayOfWeek = (int)DayOfWeek.Monday,
+                    DayName = "Monday",
+                    StartTime = "08:00",
+                    EndTime = "09:00",
+                    IsMine = true
+                }
+            ]);
+
+        var studentsService = new Mock<IStudentsService>();
+        studentsService
+            .Setup(service => service.GetStudentsBySectionAsync(2, 101, "teacher"))
+            .ReturnsAsync([]);
+
+        var attendanceService = new Mock<IAttendanceService>();
+        attendanceService
+            .Setup(service => service.GetSectionAttendanceAsync(
+                It.IsAny<int>(),
+                It.IsAny<DateOnly>(),
+                It.IsAny<int>(),
+                It.IsAny<int>(),
+                It.IsAny<string>()))
+            .ReturnsAsync(new AttendanceSummaryDto());
+
+        var service = CreateService(
+            sectionsService: sectionsService,
+            schedulesService: schedulesService,
+            studentsService: studentsService,
+            attendanceService: attendanceService);
+
+        var result = await service.BuildSectionAttendanceIndexViewModelAsync(
+            currentUserId: 101,
+            role: "teacher",
+            requestedSectionId: null,
+            requestedScheduleId: null,
+            requestedAttendanceDate: null);
+
+        Assert.Equal(expectedDate, result.SelectedAttendanceDate);
+    }
+
+    [Fact]
     public async Task ValidateSubjectSelectionForSectionAsync_ReturnsInvalid_WhenSubjectIdIsNotPositive()
     {
         var service = CreateService();
@@ -136,7 +196,8 @@ public class SectionPageServiceTests
         Mock<ISchedulesService>? schedulesService = null,
         Mock<IStudentsService>? studentsService = null,
         Mock<IAttendanceService>? attendanceService = null,
-        Mock<ISubjectsService>? subjectsService = null)
+        Mock<ISubjectsService>? subjectsService = null,
+        AttendanceSettings? attendanceSettings = null)
     {
         return new SectionPageService(
             sectionsService?.Object ?? Mock.Of<ISectionsService>(),
@@ -147,6 +208,7 @@ public class SectionPageServiceTests
             Mock.Of<IAcademicYearsService>(),
             Mock.Of<ICoursesService>(),
             subjectsService?.Object ?? Mock.Of<ISubjectsService>(),
-            Mock.Of<IClassroomsService>());
+            Mock.Of<IClassroomsService>(),
+            Options.Create(attendanceSettings ?? AttendanceSettings.Default));
     }
 }
