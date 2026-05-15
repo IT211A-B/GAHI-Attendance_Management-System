@@ -82,8 +82,8 @@ Environment variables (set in Render or your container runtime):
 | `ASPNETCORE_ENVIRONMENT` | Set to `Production` in hosted environments. |
 | `ConnectionStrings__Default` | PostgreSQL connection string (Supabase or managed Postgres). |
 | `EmailSettings__PublicBaseUrl` | Public HTTPS base URL used in email links. |
-| `EmailSettings__Username` | SMTP username. For Gmail, use the sending Gmail address. |
-| `EmailSettings__Password` | SMTP password. For Gmail, use an app password. |
+| `EmailSettings__Username` | Required in production. SMTP username. For Gmail, use the sending Gmail address. |
+| `EmailSettings__Password` | Required in production. SMTP password. For Gmail, use a 16-character app password without spaces. |
 | `EmailSettings__Host` | Optional SMTP host. Defaults to `smtp.gmail.com`. |
 | `EmailSettings__Port` | Optional SMTP port. Defaults to `587`. |
 | `EmailSettings__FromAddress` | Optional from address. Defaults to `EmailSettings__Username`. |
@@ -93,6 +93,8 @@ Environment variables (set in Render or your container runtime):
 | `CookieSettings__SecurePolicy` | Set to `Always` for production cookies. |
 | `Logging__LogLevel__Default` | Default log level (recommended `Warning` for production). |
 | `DataProtection__KeyPath` | Optional key storage path for cookie encryption keys. |
+
+Production validates email settings on startup so signup verification and forgot-password links do not silently fail. If Render logs show `OptionsValidationException` for `EmailSettings`, set the missing SMTP variables and redeploy.
 
 ## Testing
 
