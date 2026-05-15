@@ -8,8 +8,10 @@
 *.user
 *.userosscache
 *.sln.docstates
+*.lscache
 
 # Build results
+*.lscache
 [Bb]in/
 [Oo]bj/
 out/
