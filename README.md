@@ -1,8 +1,8 @@
 <div align="center">
-  <img src="Attendance_Management_System/Attendance_Management_System/Frontend/wwwroot/images/login-hero.svg" alt="App Logo" width="200" style="margin-bottom: 20px;" />
+  <img src="Attendance_Management_System/Attendance_Management_System/Frontend/wwwroot/images/Gemini_Generated_Image_s4on5ys4on5ys4on-Photoroom.png" alt="Don Bosco AMS logo" width="190" style="margin-bottom: 18px;" />
   <br />
   <h1>🏫 Don Bosco Attendance Management System</h1>
-  <p><em>A modern, efficient, and robust attendance tracking solution built with ASP.NET Core MVC.</em></p>
+  <p><em>A modern, efficient attendance platform built with ASP.NET Core MVC.</em></p>
   
   <p>
     <a href="https://dotnet.microsoft.com/"><img src="https://img.shields.io/badge/.NET-9.0-512BD4?style=flat&logo=dotnet" alt=".NET 9.0" /></a>
@@ -16,13 +16,13 @@
 
 ## 📖 About The Project
 
-The **Don Bosco Attendance Management System** is a pure ASP.NET MVC web application designed to streamline student attendance tracking. Utilizing server-rendered Razor views and backed by a robust custom PostgreSQL database, the system ensures high performance, security, and an intuitive user experience for administrators, teachers, and students.
+The **Don Bosco Attendance Management System** is a pure ASP.NET MVC web application designed to streamline student attendance tracking. With server-rendered Razor views, SignalR notifications, and a PostgreSQL-backed domain model, the system delivers a secure, fast, and intuitive experience for administrators, teachers, and students.
 
 ### ✨ Key Features
 
 - **🔐 Role-Based Access Control:** Distinct, secure navigation hubs for Admins, Teachers, and Students.
 - **📱 QR Code Attendance:** Rapid and unforgeable attendance check-ins using dynamically signed QR codes.
-- **✉️ Automated Notifications:** Integrated SMTP support for alerts and password reset flows.
+- **🔔 Real-Time Notifications:** SignalR-powered updates plus SMTP support for alerts and password reset flows.
 - **📊 Comprehensive Reports:** Visual insights into attendance trends and absentee warning levels.
 - **🛡️ Secure Infrastructure:** Cookie-based ASP.NET Identity with secure hashing and data protection.
 
@@ -30,12 +30,10 @@ The **Don Bosco Attendance Management System** is a pure ASP.NET MVC web applica
 
 ## 📸 Screenshots
 
-> **Note:** Here are placeholders where you can feature actual system screenshots. Keep them up-to-date as the UI evolves!
-
 <div align="center">
-  <img src="https://images.unsplash.com/photo-1551288049-bebda4e38f71?auto=format&fit=crop&w=800&q=80" alt="Dashboard View" width="48%" style="border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);" />
+  <img src="Attendance_Management_System/Attendance_Management_System/Frontend/wwwroot/images/login-hero.svg" alt="Login experience" width="48%" style="border-radius: 8px; box-shadow: 0 8px 18px rgba(15, 23, 42, 0.15);" />
   &nbsp;
-  <img src="https://images.unsplash.com/photo-1581078426770-6d336e5de7bf?auto=format&fit=crop&w=800&q=80" alt="Student Tracking" width="48%" style="border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);" />
+  <img src="Attendance_Management_System/Attendance_Management_System/Frontend/wwwroot/images/Gemini_Generated_Image_s4on5ys4on5ys4on-Photoroom.png" alt="Branding mark" width="48%" style="border-radius: 8px; box-shadow: 0 8px 18px rgba(15, 23, 42, 0.15);" />
 </div>
 
 <br />
