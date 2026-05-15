@@ -131,7 +131,7 @@ if (!app.Environment.IsDevelopment())
         context.Response.Headers["Referrer-Policy"] = "strict-origin-when-cross-origin";
         context.Response.Headers["Content-Security-Policy"] =
             "default-src 'self'; img-src 'self' data:; font-src 'self' data:; " +
-            "style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; " +
+            "style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; " +
             "connect-src 'self' https:; object-src 'none'; base-uri 'self'; " +
             "frame-ancestors 'none'";
         context.Response.Headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()";
