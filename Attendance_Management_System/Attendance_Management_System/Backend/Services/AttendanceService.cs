@@ -58,13 +58,14 @@ public class AttendanceService : IAttendanceService
                 && a.StudentId == request.StudentId
                 && a.Date == request.Date);
 
-        var academicYear = await GetActiveAcademicYearAsync();
-        if (academicYear == null)
+        var section = await _context.Sections
+            .AsNoTracking()
+            .FirstOrDefaultAsync(section => section.Id == request.SectionId);
+        if (section == null)
         {
-            throw new KeyNotFoundException("No active academic year found.");
+            throw new KeyNotFoundException("Section not found.");
         }
 
-        var section = await _context.Sections.FindAsync(request.SectionId);
         var markerName = await GetMarkerNameAsync(teacherContext.UserId);
         var now = DateTimeOffset.UtcNow;
         var normalizedRemarks = NormalizeRemarks(request.TimeIn, request.Remarks);
@@ -81,7 +82,7 @@ public class AttendanceService : IAttendanceService
                 ScheduleId = request.ScheduleId,
                 StudentId = request.StudentId,
                 SectionId = request.SectionId,
-                AcademicYearId = academicYear.Id,
+                AcademicYearId = section.AcademicYearId,
                 Date = request.Date,
                 TimeIn = request.TimeIn,
                 Remarks = normalizedRemarks,
@@ -141,7 +142,7 @@ public class AttendanceService : IAttendanceService
             attendance,
             schedule,
             student,
-            section?.Name,
+            section.Name,
             markerName,
             afterStatus,
             isMarked: true);
@@ -164,13 +165,14 @@ public class AttendanceService : IAttendanceService
 
         var schedule = scheduleValidation.Schedule;
 
-        var academicYear = await GetActiveAcademicYearAsync();
-        if (academicYear == null)
+        var section = await _context.Sections
+            .AsNoTracking()
+            .FirstOrDefaultAsync(section => section.Id == request.SectionId);
+        if (section == null)
         {
-            throw new KeyNotFoundException("No active academic year found.");
+            throw new KeyNotFoundException("Section not found.");
         }
 
-        var section = await _context.Sections.FindAsync(request.SectionId);
         var markerName = await GetMarkerNameAsync(teacherContext.UserId);
         var now = DateTimeOffset.UtcNow;
 
@@ -217,7 +219,7 @@ public class AttendanceService : IAttendanceService
                     ScheduleId = request.ScheduleId,
                     StudentId = entry.StudentId,
                     SectionId = request.SectionId,
-                    AcademicYearId = academicYear.Id,
+                    AcademicYearId = section.AcademicYearId,
                     Date = request.Date,
                     TimeIn = entry.TimeIn,
                     Remarks = normalizedRemarks,
@@ -296,7 +298,7 @@ public class AttendanceService : IAttendanceService
                 row.Attendance,
                 schedule,
                 row.Student,
-                section?.Name,
+                section.Name,
                 markerName,
                 row.AfterStatus,
                 isMarked: true))
@@ -599,11 +601,6 @@ public class AttendanceService : IAttendanceService
         }
 
         return ScheduleValidationResult.Pass(schedule);
-    }
-
-    private async Task<AcademicYear?> GetActiveAcademicYearAsync()
-    {
-        return await _context.AcademicYears.FirstOrDefaultAsync(academicYear => academicYear.IsActive);
     }
 
     private static string? NormalizeRemarks(TimeOnly? timeIn, string? remarks)
