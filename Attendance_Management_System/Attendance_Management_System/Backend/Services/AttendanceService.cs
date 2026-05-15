@@ -12,7 +12,8 @@ using Microsoft.Extensions.Options;
 
 namespace Attendance_Management_System.Backend.Services;
 
-// Service implementation for managing student attendance
+// Handles individual and bulk attendance marking with full audit trail.
+// Enforces validation rules for schedule ownership and teacher backfill windows.
 public class AttendanceService : IAttendanceService
 {
     private readonly AppDbContext _context;
@@ -510,12 +511,12 @@ public class AttendanceService : IAttendanceService
             return ScheduleValidationResult.Fail(new KeyNotFoundException("Schedule not found for this section."));
         }
 
-        if ((int)date.DayOfWeek != schedule.DayOfWeek)
+        if (!_attendanceSettings.AllowOffScheduleAttendance && (int)date.DayOfWeek != schedule.DayOfWeek)
         {
             return ScheduleValidationResult.Fail(new InvalidOperationException("Attendance date must match the schedule weekday."));
         }
 
-        if (date < schedule.EffectiveFrom || (schedule.EffectiveTo.HasValue && date > schedule.EffectiveTo.Value))
+        if (!AttendancePolicy.IsWithinEffectiveDateRange(schedule, date))
         {
             return ScheduleValidationResult.Fail(
                 new InvalidOperationException("Attendance date is outside the schedule effective date range."));

@@ -12,6 +12,9 @@ public class AttendanceSettings
     // How many days teachers can backfill attendance from school "today".
     public int TeacherBackfillDays { get; set; } = 7;
 
+    // Allow attendance marking on dates that do not match the schedule weekday.
+    public bool AllowOffScheduleAttendance { get; set; } = false;
+
     // School timezone used for date-window validation.
     public string TimezoneId { get; set; } = "Asia/Manila";
 
@@ -28,6 +31,7 @@ public class AttendanceSettings
     {
         LateGraceMinutes = 15,
         TeacherBackfillDays = 7,
+        AllowOffScheduleAttendance = false,
         TimezoneId = "Asia/Manila"
     };
 }
