@@ -141,6 +141,8 @@ a {
   border-bottom: 1px solid var(--border);
   background: rgba(255, 255, 255, 0.72);
   backdrop-filter: blur(8px);
+  position: relative;
+  z-index: 1200;
   padding: 0.85rem 1.5rem;
   display: flex;
   align-items: center;
@@ -242,12 +244,12 @@ a {
   top: calc(100% + 0.5rem);
   right: 0;
   width: min(440px, calc(100vw - 2.2rem));
-  border: 1px solid #cbd5e1;
+  border: 1px solid #94a3b8;
   border-radius: 14px;
-  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+  background: #ffffff;
   box-shadow:
-    0 24px 48px rgba(15, 23, 42, 0.22),
-    0 0 0 1px rgba(15, 23, 42, 0.06);
+    0 28px 60px rgba(15, 23, 42, 0.28),
+    0 0 0 1px rgba(15, 23, 42, 0.08);
   padding: 0.7rem;
   display: grid;
   gap: 0.65rem;
@@ -284,17 +286,22 @@ a {
 }
 
 .notification-item {
-  border: 1px solid #cbd5e1;
+  border: 1px solid #d1d5db;
   border-radius: 12px;
-  background: #f1f5f9;
+  background: #ffffff;
   padding: 0.55rem 0.62rem;
   display: grid;
   gap: 0.3rem;
+  color: #0f172a;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
 }
 
 .notification-item.unread {
-  border-color: #60a5fa;
-  background: #dbeafe;
+  border-color: #38bdf8;
+  background: #e0f2fe;
+  box-shadow:
+    inset 4px 0 0 #38bdf8,
+    0 1px 2px rgba(15, 23, 42, 0.08);
 }
 
 .notification-item-header {
@@ -313,14 +320,14 @@ a {
 .notification-item-time {
   margin: 0;
   font-size: 0.72rem;
-  color: #64748b;
+  color: #475569;
 }
 
 .notification-item-message {
   margin: 0;
   font-size: 0.8rem;
   line-height: 1.4;
-  color: #334155;
+  color: #1f2937;
 }
 
 .notification-item-actions {
@@ -351,8 +358,8 @@ a {
   margin: 0;
   border: 1px dashed #94a3b8;
   border-radius: 10px;
-  background: #f1f5f9;
-  color: #475569;
+  background: #ffffff;
+  color: #334155;
   font-size: 0.82rem;
   text-align: center;
   padding: 0.72rem;
