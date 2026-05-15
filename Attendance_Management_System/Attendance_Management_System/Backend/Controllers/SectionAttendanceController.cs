@@ -54,10 +54,39 @@ public class SectionAttendanceController : Controller
         if (!ModelState.IsValid) { TempData["SectionAttendanceError"] = "Please provide valid attendance details."; return RedirectToAction(nameof(Index), new { sectionId = form.SectionId, scheduleId = form.ScheduleId, attendanceDate = form.Date.ToString("yyyy-MM-dd") }); }
         var teacherContextResult = await _sectionPageService.BuildTeacherContextAsync(context.UserId, context.Role);
         if (!teacherContextResult.Success) { TempData["SectionAttendanceError"] = teacherContextResult.Error ?? "Unable to identify teacher context."; return RedirectToAction(nameof(Index), new { sectionId = form.SectionId, scheduleId = form.ScheduleId, attendanceDate = form.Date.ToString("yyyy-MM-dd") }); }
-        try { await _attendanceService.MarkAttendanceAsync(new MarkAttendanceRequest { SectionId = form.SectionId, ScheduleId = form.ScheduleId, StudentId = form.StudentId, Date = form.Date, TimeIn = form.TimeIn, Remarks = NormalizeOptional(form.Remarks) }, teacherContextResult.Context); }
-        catch (Exception ex) { _logger.LogError(ex, "Failed to mark attendance for student {StudentId}.", form.StudentId); TempData["SectionAttendanceError"] = "Unable to mark attendance right now."; return RedirectToAction(nameof(Index), new { sectionId = form.SectionId, scheduleId = form.ScheduleId, attendanceDate = form.Date.ToString("yyyy-MM-dd") }); }
+        try
+        {
+            await _attendanceService.MarkAttendanceAsync(
+                new MarkAttendanceRequest
+                {
+                    SectionId = form.SectionId,
+                    ScheduleId = form.ScheduleId,
+                    StudentId = form.StudentId,
+                    Date = form.Date,
+                    TimeIn = form.TimeIn,
+                    Remarks = NormalizeOptional(form.Remarks)
+                },
+                teacherContextResult.Context);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to mark attendance for student {StudentId}.", form.StudentId);
+            TempData["SectionAttendanceError"] = BuildAttendanceErrorMessage(ex);
+            return RedirectToAction(nameof(Index), new { sectionId = form.SectionId, scheduleId = form.ScheduleId, attendanceDate = form.Date.ToString("yyyy-MM-dd") });
+        }
+
         TempData["SectionAttendanceSuccess"] = "Attendance marked successfully.";
         return RedirectToAction(nameof(Index), new { sectionId = form.SectionId, scheduleId = form.ScheduleId, attendanceDate = form.Date.ToString("yyyy-MM-dd") });
+    }
+
+    private static string BuildAttendanceErrorMessage(Exception exception)
+    {
+        return exception switch
+        {
+            InvalidOperationException or KeyNotFoundException or UnauthorizedAccessException
+                when !string.IsNullOrWhiteSpace(exception.Message) => exception.Message,
+            _ => "Unable to mark attendance right now."
+        };
     }
 
     private static string? NormalizeOptional(string? value)
