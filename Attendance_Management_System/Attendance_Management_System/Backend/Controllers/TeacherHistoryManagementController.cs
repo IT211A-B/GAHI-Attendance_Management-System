@@ -1,10 +1,13 @@
 using System.Security.Claims;
+using Attendance_Management_System.Backend.Configuration;
 using Attendance_Management_System.Backend.DTOs.Responses;
+using Attendance_Management_System.Backend.Helpers;
 using Attendance_Management_System.Backend.Interfaces.Services;
 using Attendance_Management_System.Backend.ViewModels.TeacherHistory;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace Attendance_Management_System.Backend.Controllers;
 
@@ -14,11 +17,18 @@ public class TeacherHistoryManagementController : Controller
 {
     private readonly ITeacherHistoryService _teacherHistoryService;
     private readonly ILogger<TeacherHistoryManagementController> _logger;
+    private readonly AttendanceSettings _attendanceSettings;
 
-    public TeacherHistoryManagementController(ITeacherHistoryService teacherHistoryService, ILogger<TeacherHistoryManagementController> logger)
+    public TeacherHistoryManagementController(
+        ITeacherHistoryService teacherHistoryService,
+        ILogger<TeacherHistoryManagementController> logger,
+        IOptions<AttendanceSettings> attendanceSettings)
     {
         _teacherHistoryService = teacherHistoryService;
         _logger = logger;
+        _attendanceSettings = attendanceSettings.Value?.IsValid() == true
+            ? attendanceSettings.Value
+            : AttendanceSettings.Default;
     }
 
     [HttpGet("")]
@@ -30,7 +40,7 @@ public class TeacherHistoryManagementController : Controller
             return Challenge();
         }
 
-        var selectedDate = date ?? DateOnly.FromDateTime(DateTime.Today);
+        var selectedDate = date ?? AttendancePolicy.GetSchoolDate(_attendanceSettings, DateTimeOffset.UtcNow);
         var viewModel = new TeacherHistoryIndexViewModel
         {
             SelectedScheduleId = scheduleId,
@@ -107,7 +117,6 @@ public class TeacherHistoryManagementController : Controller
                 StudentId = record.StudentId,
                 StudentName = string.IsNullOrWhiteSpace(record.StudentName) ? "-" : record.StudentName,
                 TimeInText = record.TimeIn?.ToString("HH:mm") ?? "-",
-                TimeOutText = record.TimeOut?.ToString("HH:mm") ?? "-",
                 Remarks = string.IsNullOrWhiteSpace(record.Remarks) ? record.StatusLabel : record.Remarks
             })
             .ToList();

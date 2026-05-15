@@ -31,8 +31,8 @@ public class SectionPageService : ISectionPageService
         [6] = "Saturday"
     };
 
-    private static readonly TimeOnly TimetableStart = new(5, 0);
-    private static readonly TimeOnly TimetableEnd = new(19, 0);
+    private static readonly TimeOnly TimetableStart = new(1, 0);
+    private static readonly int TimetableSlotCount = 48; // 24 hours ÷ 30 min slots
 
     public SectionPageService(
         ISectionsService sectionsService,
@@ -199,7 +199,9 @@ public class SectionPageService : ISectionPageService
             SelectedAttendanceDate = requestedAttendanceDate ?? DateOnly.FromDateTime(DateTime.Today)
         };
 
-        var sectionsResult = await TryCallAsync(() => _sectionsService.GetAllSectionsAsync());
+        var sectionsResult = role.IsRole(UserRole.Teacher)
+            ? await TryCallAsync(() => _sectionsService.GetSectionsByTeacherUserIdAsync(currentUserId))
+            : await TryCallAsync(() => _sectionsService.GetAllSectionsAsync());
         if (!sectionsResult.Success || sectionsResult.Data is null)
         {
             viewModel.ErrorMessage = sectionsResult.Error ?? "Unable to load sections right now.";
@@ -708,8 +710,9 @@ public class SectionPageService : ISectionPageService
     {
         var rows = new List<SectionTimetableRowViewModel>();
 
-        for (var slotStart = TimetableStart; slotStart < TimetableEnd; slotStart = slotStart.AddMinutes(30))
+        for (var slotIndex = 0; slotIndex < TimetableSlotCount; slotIndex++)
         {
+            var slotStart = TimetableStart.AddMinutes(slotIndex * 30);
             var slotEnd = slotStart.AddMinutes(30);
             var cells = new List<SectionTimetableCellViewModel>();
 

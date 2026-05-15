@@ -99,7 +99,7 @@ public class TeacherHistoryService : ITeacherHistoryService
         }
 
         // Use provided date or default to today
-        var filterDate = date ?? DateOnly.FromDateTime(DateTime.Today);
+        var filterDate = date ?? AttendancePolicy.GetSchoolDate(_attendanceSettings, DateTimeOffset.UtcNow);
 
         // Get attendance records for the schedule and date.
         var attendances = await _context.Attendances
@@ -155,7 +155,6 @@ public class TeacherHistoryService : ITeacherHistoryService
                 SectionName = schedule.Section?.Name,
                 Date = attendance.Date,
                 TimeIn = attendance.TimeIn,
-                TimeOut = attendance.TimeOut,
                 Remarks = string.IsNullOrWhiteSpace(attendance.Remarks)
                     ? AttendancePolicy.ToLabel(status)
                     : attendance.Remarks,
@@ -188,7 +187,6 @@ public class TeacherHistoryService : ITeacherHistoryService
                 SectionName = schedule.Section?.Name,
                 Date = filterDate,
                 TimeIn = null,
-                TimeOut = null,
                 Remarks = AttendancePolicy.ToLabel(AttendanceStatusKind.Unmarked),
                 MarkedAt = DateTimeOffset.MinValue,
                 MarkedBy = 0,
