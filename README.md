@@ -31,7 +31,10 @@ The **Don Bosco Attendance Management System** is a pure ASP.NET MVC web applica
 ## 📸 Screenshots
 
 <div align="center">
-  <img src="Attendance_Management_System/IMAGES/Screenshot%202026-05-15%20225733.png" alt="Dashboard notifications" width="88%" style="border-radius: 10px; box-shadow: 0 12px 26px rgba(15, 23, 42, 0.18);" />
+  <img src="Attendance_Management_System/IMAGES/Dashboard.jpg" alt="Dashboard" width="88%" style="border-radius: 10px; box-shadow: 0 12px 26px rgba(15, 23, 42, 0.18); margin-bottom: 20px;" />
+  <img src="Attendance_Management_System/IMAGES/Login.jpg" alt="Login" width="88%" style="border-radius: 10px; box-shadow: 0 12px 26px rgba(15, 23, 42, 0.18); margin-bottom: 20px;" />
+  <img src="Attendance_Management_System/IMAGES/QrCodePage.jpg" alt="Attendance QR" width="88%" style="border-radius: 10px; box-shadow: 0 12px 26px rgba(15, 23, 42, 0.18); margin-bottom: 20px;" />
+  <img src="Attendance_Management_System/IMAGES/Timetable.jpg" alt="Timetable" width="88%" style="border-radius: 10px; box-shadow: 0 12px 26px rgba(15, 23, 42, 0.18);" />
 </div>
 
 <br />
@@ -106,22 +109,22 @@ See [DEPLOY_SUPABASE_RENDER.md](DEPLOY_SUPABASE_RENDER.md) for the end-to-end Re
 
 Environment variables (set in Render or your container runtime):
 
-| Variable | Purpose |
-| --- | --- |
-| `ASPNETCORE_ENVIRONMENT` | Set to `Production` in hosted environments. |
-| `ConnectionStrings__Default` | PostgreSQL connection string (Supabase or managed Postgres). |
-| `EmailSettings__PublicBaseUrl` | Public HTTPS base URL used in email links. |
-| `EmailSettings__Username` | Required in production. SMTP username. For Gmail, use the sending Gmail address. |
-| `EmailSettings__Password` | Required in production. SMTP password. For Gmail, use a 16-character app password without spaces. |
-| `EmailSettings__Host` | Optional SMTP host. Defaults to `smtp.gmail.com`. |
-| `EmailSettings__Port` | Optional SMTP port. Defaults to `587`. |
-| `EmailSettings__FromAddress` | Optional from address. Defaults to `EmailSettings__Username`. |
-| `EmailSettings__FromName` | Optional from display name. Defaults to `Don Bosco Attendance`. |
-| `EmailSettings__UseSsl` | Optional SMTP SSL toggle. Defaults to `false` for Gmail port 587 STARTTLS. |
-| `AttendanceQrSettings__SigningKey` | Secret key for QR signing. |
-| `CookieSettings__SecurePolicy` | Set to `Always` for production cookies. |
-| `Logging__LogLevel__Default` | Default log level (recommended `Warning` for production). |
-| `DataProtection__KeyPath` | Optional key storage path for cookie encryption keys. |
+| Variable                           | Purpose                                                                                           |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `ASPNETCORE_ENVIRONMENT`           | Set to `Production` in hosted environments.                                                       |
+| `ConnectionStrings__Default`       | PostgreSQL connection string (Supabase or managed Postgres).                                      |
+| `EmailSettings__PublicBaseUrl`     | Public HTTPS base URL used in email links.                                                        |
+| `EmailSettings__Username`          | Required in production. SMTP username. For Gmail, use the sending Gmail address.                  |
+| `EmailSettings__Password`          | Required in production. SMTP password. For Gmail, use a 16-character app password without spaces. |
+| `EmailSettings__Host`              | Optional SMTP host. Defaults to `smtp.gmail.com`.                                                 |
+| `EmailSettings__Port`              | Optional SMTP port. Defaults to `587`.                                                            |
+| `EmailSettings__FromAddress`       | Optional from address. Defaults to `EmailSettings__Username`.                                     |
+| `EmailSettings__FromName`          | Optional from display name. Defaults to `Don Bosco Attendance`.                                   |
+| `EmailSettings__UseSsl`            | Optional SMTP SSL toggle. Defaults to `false` for Gmail port 587 STARTTLS.                        |
+| `AttendanceQrSettings__SigningKey` | Secret key for QR signing.                                                                        |
+| `CookieSettings__SecurePolicy`     | Set to `Always` for production cookies.                                                           |
+| `Logging__LogLevel__Default`       | Default log level (recommended `Warning` for production).                                         |
+| `DataProtection__KeyPath`          | Optional key storage path for cookie encryption keys.                                             |
 
 ## 🧪 Testing
 
