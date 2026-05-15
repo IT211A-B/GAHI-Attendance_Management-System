@@ -77,24 +77,22 @@ See [DEPLOY_SUPABASE_RENDER.md](DEPLOY_SUPABASE_RENDER.md) for the end-to-end Re
 
 Environment variables (set in Render or your container runtime):
 
-| Variable                           | Purpose                                                                              |
-| ---------------------------------- | ------------------------------------------------------------------------------------ |
-| `ASPNETCORE_ENVIRONMENT`           | Set to `Production` in hosted environments.                                          |
-| `ConnectionStrings__Default`       | PostgreSQL connection string (Supabase or managed Postgres).                         |
-| `EmailSettings__PublicBaseUrl`     | Public HTTPS base URL used in email links.                                           |
-| `EmailSettings__Username`          | **Required in production.** SMTP username. For Gmail, use the sending Gmail address. |
-| `EmailSettings__Password`          | **Required in production.** SMTP password. For Gmail, use an app password.           |
-| `EmailSettings__Host`              | Optional SMTP host. Defaults to `smtp.gmail.com`.                                    |
-| `EmailSettings__Port`              | Optional SMTP port. Defaults to `587`.                                               |
-| `EmailSettings__FromAddress`       | Optional from address. Defaults to `EmailSettings__Username`.                        |
-| `EmailSettings__FromName`          | Optional from display name. Defaults to `Don Bosco Attendance`.                      |
-| `EmailSettings__UseSsl`            | Optional SMTP SSL toggle. Defaults to `false` for Gmail port 587 STARTTLS.           |
-| `AttendanceQrSettings__SigningKey` | Secret key for QR signing.                                                           |
-| `CookieSettings__SecurePolicy`     | Set to `Always` for production cookies.                                              |
-| `Logging__LogLevel__Default`       | Default log level (recommended `Warning` for production).                            |
-| `DataProtection__KeyPath`          | Optional key storage path for cookie encryption keys.                                |
-
-If you use Gmail app passwords, copy the full 16-character value; grouped spaces are tolerated but you should still save the secret without spaces.
+| Variable | Purpose |
+| --- | --- |
+| `ASPNETCORE_ENVIRONMENT` | Set to `Production` in hosted environments. |
+| `ConnectionStrings__Default` | PostgreSQL connection string (Supabase or managed Postgres). |
+| `EmailSettings__PublicBaseUrl` | Public HTTPS base URL used in email links. |
+| `EmailSettings__Username` | SMTP username. For Gmail, use the sending Gmail address. |
+| `EmailSettings__Password` | SMTP password. For Gmail, use an app password. |
+| `EmailSettings__Host` | Optional SMTP host. Defaults to `smtp.gmail.com`. |
+| `EmailSettings__Port` | Optional SMTP port. Defaults to `587`. |
+| `EmailSettings__FromAddress` | Optional from address. Defaults to `EmailSettings__Username`. |
+| `EmailSettings__FromName` | Optional from display name. Defaults to `Don Bosco Attendance`. |
+| `EmailSettings__UseSsl` | Optional SMTP SSL toggle. Defaults to `false` for Gmail port 587 STARTTLS. |
+| `AttendanceQrSettings__SigningKey` | Secret key for QR signing. |
+| `CookieSettings__SecurePolicy` | Set to `Always` for production cookies. |
+| `Logging__LogLevel__Default` | Default log level (recommended `Warning` for production). |
+| `DataProtection__KeyPath` | Optional key storage path for cookie encryption keys. |
 
 ## Testing
 

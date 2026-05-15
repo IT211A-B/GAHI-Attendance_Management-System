@@ -37,14 +37,12 @@ public static class DependencyInjection
         services.AddHttpContextAccessor();
 
         var emailSettingsSection = configuration.GetSection(EmailSettings.SectionName);
-        services.AddOptions<EmailSettings>()
-            .Bind(emailSettingsSection)
-            .ValidateOnStart();
+        services.Configure<EmailSettings>(emailSettingsSection);
         services.AddSingleton<IValidateOptions<EmailSettings>, EmailSettingsValidator>();
 
         var emailSettings = emailSettingsSection.Get<EmailSettings>() ?? new EmailSettings();
         var smtpUser = emailSettings.Username?.Trim() ?? string.Empty;
-        var smtpPassword = ResolveSmtpPassword(emailSettings);
+        var smtpPassword = emailSettings.Password ?? string.Empty;
 
         services
             .AddFluentEmail(ResolveEmailFromAddress(emailSettings), ResolveEmailFromName(emailSettings))
@@ -244,29 +242,6 @@ public static class DependencyInjection
     private static int ResolveSmtpPort(EmailSettings emailSettings)
     {
         return emailSettings.Port > 0 ? emailSettings.Port : 587;
-    }
-
-    private static string ResolveSmtpPassword(EmailSettings emailSettings)
-    {
-        var configuredPassword = emailSettings.Password?.Trim() ?? string.Empty;
-        if (string.IsNullOrWhiteSpace(configuredPassword))
-        {
-            return string.Empty;
-        }
-
-        if (!IsGmailSmtpHost(emailSettings.Host) || !configuredPassword.Any(char.IsWhiteSpace))
-        {
-            return configuredPassword;
-        }
-
-        // Gmail app passwords are displayed with spaces; remove whitespace to avoid auth failures.
-        return string.Concat(configuredPassword.Where(character => !char.IsWhiteSpace(character)));
-    }
-
-    private static bool IsGmailSmtpHost(string? host)
-    {
-        var normalizedHost = host?.Trim();
-        return string.Equals(normalizedHost, "smtp.gmail.com", StringComparison.OrdinalIgnoreCase);
     }
 
     private static string ResolveEmailFromAddress(EmailSettings emailSettings)
