@@ -11,6 +11,8 @@ using Microsoft.Extensions.Options;
 
 namespace Attendance_Management_System.Backend.Controllers;
 
+// Provides teachers with a view of their class schedules and attendance history.
+// Allows viewing past attendance records by schedule and date.
 [Authorize(Policy = "TeacherOnly")]
 [Route("teacher-history")]
 public class TeacherHistoryManagementController : Controller
@@ -31,6 +33,7 @@ public class TeacherHistoryManagementController : Controller
             : AttendanceSettings.Default;
     }
 
+    // Main page showing teacher's schedules and optional attendance history.
     [HttpGet("")]
     public async Task<IActionResult> Index([FromQuery] int? scheduleId, [FromQuery] DateOnly? date)
     {

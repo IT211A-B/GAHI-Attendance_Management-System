@@ -58,9 +58,75 @@ public class AttendanceServiceTests
         Assert.Equal("Present", result.Single().StatusLabel);
     }
 
-    private static AttendanceService CreateService(AppDbContext context)
+    [Fact]
+    public async Task MarkAttendanceAsync_AllowsOffScheduleDates_WhenSettingEnabled()
     {
-        return new AttendanceService(context, Options.Create(AttendanceSettings.Default));
+        await using var context = CreateContext();
+        SeedAttendanceLookupRows(context);
+
+        var service = CreateService(context, new AttendanceSettings
+        {
+            LateGraceMinutes = 15,
+            TeacherBackfillDays = 7,
+            AllowOffScheduleAttendance = true,
+            TimezoneId = "Asia/Manila"
+        });
+
+        var date = new DateOnly(2026, 5, 12);
+        var schedule = await context.Schedules.SingleAsync();
+        schedule.DayOfWeek = ((int)date.DayOfWeek + 1) % 7;
+        await context.SaveChangesAsync();
+
+        var result = await service.MarkAttendanceAsync(
+            new MarkAttendanceRequest
+            {
+                SectionId = 30,
+                ScheduleId = 40,
+                StudentId = 50,
+                Date = date,
+                TimeIn = new TimeOnly(8, 5)
+            },
+            new TeacherContext { UserId = 10, IsAdmin = true });
+
+        Assert.Equal("Present", result.StatusLabel);
+    }
+
+    [Fact]
+    public async Task MarkAttendanceAsync_RejectsOffScheduleDates_WhenSettingDisabled()
+    {
+        await using var context = CreateContext();
+        SeedAttendanceLookupRows(context);
+
+        var service = CreateService(context, new AttendanceSettings
+        {
+            LateGraceMinutes = 15,
+            TeacherBackfillDays = 7,
+            AllowOffScheduleAttendance = false,
+            TimezoneId = "Asia/Manila"
+        });
+
+        var date = new DateOnly(2026, 5, 12);
+        var schedule = await context.Schedules.SingleAsync();
+        schedule.DayOfWeek = ((int)date.DayOfWeek + 1) % 7;
+        await context.SaveChangesAsync();
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => service.MarkAttendanceAsync(
+            new MarkAttendanceRequest
+            {
+                SectionId = 30,
+                ScheduleId = 40,
+                StudentId = 50,
+                Date = date,
+                TimeIn = new TimeOnly(8, 5)
+            },
+            new TeacherContext { UserId = 10, IsAdmin = true }));
+
+        Assert.Equal("Attendance date must match the schedule weekday.", exception.Message);
+    }
+
+    private static AttendanceService CreateService(AppDbContext context, AttendanceSettings? settings = null)
+    {
+        return new AttendanceService(context, Options.Create(settings ?? AttendanceSettings.Default));
     }
 
     private static AppDbContext CreateContext()

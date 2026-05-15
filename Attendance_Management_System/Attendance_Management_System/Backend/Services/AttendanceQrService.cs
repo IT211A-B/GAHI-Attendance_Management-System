@@ -244,7 +244,14 @@ public class AttendanceQrService : IAttendanceQrService
             throw new UnauthorizedAccessException("Selected period is not owned by your account.");
         }
 
-        if (!AttendancePolicy.IsDateAlignedWithSchedule(schedule, schoolDate))
+        if (_attendanceSettings.AllowOffScheduleAttendance)
+        {
+            if (!AttendancePolicy.IsWithinEffectiveDateRange(schedule, schoolDate))
+            {
+                throw new InvalidOperationException("Selected period is not active for today.");
+            }
+        }
+        else if (!AttendancePolicy.IsDateAlignedWithSchedule(schedule, schoolDate))
         {
             throw new InvalidOperationException("Selected period is not active for today.");
         }
@@ -354,7 +361,18 @@ public class AttendanceQrService : IAttendanceQrService
             throw new KeyNotFoundException("Associated schedule not found.");
         }
 
-        if (!AttendancePolicy.IsDateAlignedWithSchedule(schedule, ownerContext.SchoolDate))
+        if (_attendanceSettings.AllowOffScheduleAttendance)
+        {
+            if (!AttendancePolicy.IsWithinEffectiveDateRange(schedule, ownerContext.SchoolDate))
+            {
+                session.IsActive = false;
+                session.ClosedAtUtc = nowUtc;
+                await _context.SaveChangesAsync();
+
+                throw new InvalidOperationException("Schedule is no longer active for today.");
+            }
+        }
+        else if (!AttendancePolicy.IsDateAlignedWithSchedule(schedule, ownerContext.SchoolDate))
         {
             session.IsActive = false;
             session.ClosedAtUtc = nowUtc;
@@ -685,12 +703,18 @@ public class AttendanceQrService : IAttendanceQrService
     private IQueryable<Schedule> BuildOwnedSchedulesForSchoolDateQuery(int teacherId, DateOnly schoolDate)
     {
         // Centralized "active today" filter keeps all suggestion endpoints consistent.
-        return _context.Schedules
+        var query = _context.Schedules
             .AsNoTracking()
             .Where(schedule => schedule.TeacherId == teacherId
-                && schedule.DayOfWeek == (int)schoolDate.DayOfWeek
                 && schoolDate >= schedule.EffectiveFrom
                 && (!schedule.EffectiveTo.HasValue || schoolDate <= schedule.EffectiveTo.Value));
+
+        if (!_attendanceSettings.AllowOffScheduleAttendance)
+        {
+            query = query.Where(schedule => schedule.DayOfWeek == (int)schoolDate.DayOfWeek);
+        }
+
+        return query;
     }
 
     private static int ClampTake(int take)
