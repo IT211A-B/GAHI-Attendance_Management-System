@@ -70,7 +70,10 @@ public class SectionPageServiceTests
     [Fact]
     public async Task BuildSectionAttendanceIndexViewModelAsync_DefaultsToSchoolDate_WhenDateNotProvided()
     {
-        var expectedDate = DateOnly.FromDateTime(DateTimeOffset.UtcNow.UtcDateTime);
+        var attendanceSettings = AttendanceSettings.Default;
+        var expectedDate = Attendance_Management_System.Backend.Helpers.AttendancePolicy.GetSchoolDate(
+            attendanceSettings,
+            DateTimeOffset.UtcNow);
 
         var sectionsService = new Mock<ISectionsService>();
         sectionsService
@@ -115,7 +118,8 @@ public class SectionPageServiceTests
             sectionsService: sectionsService,
             schedulesService: schedulesService,
             studentsService: studentsService,
-            attendanceService: attendanceService);
+            attendanceService: attendanceService,
+            attendanceSettings: attendanceSettings);
 
         var result = await service.BuildSectionAttendanceIndexViewModelAsync(
             currentUserId: 101,
