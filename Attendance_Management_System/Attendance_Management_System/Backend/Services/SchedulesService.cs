@@ -228,29 +228,34 @@ public class SchedulesService : ISchedulesService
             }
         }
 
-        // Batch creation must be atomic so a partial weekday range is never persisted.
-        await using var transaction = await _context.Database.BeginTransactionAsync();
+        var createdSchedules = new List<Schedule>();
+        var executionStrategy = _context.Database.CreateExecutionStrategy();
+        await executionStrategy.ExecuteAsync(async () =>
+        {
+            // Batch creation must be atomic so a partial weekday range is never persisted.
+            await using var transaction = await _context.Database.BeginTransactionAsync();
 
-        // Keep self-assignment behavior for teacher-created schedules
-        await EnsureTeacherAssignedToSectionAsync(teacherId.Value, request.SectionId);
+            // Keep self-assignment behavior for teacher-created schedules
+            await EnsureTeacherAssignedToSectionAsync(teacherId.Value, request.SectionId);
 
-        var createdSchedules = targetDays
-            .Select(dayOfWeek => new Schedule
-            {
-                SectionId = request.SectionId,
-                TeacherId = teacherId.Value,
-                SubjectId = request.SubjectId,
-                DayOfWeek = dayOfWeek,
-                StartTime = request.StartTime,
-                EndTime = request.EndTime,
-                EffectiveFrom = request.EffectiveFrom,
-                EffectiveTo = request.EffectiveTo
-            })
-            .ToList();
+            createdSchedules = targetDays
+                .Select(dayOfWeek => new Schedule
+                {
+                    SectionId = request.SectionId,
+                    TeacherId = teacherId.Value,
+                    SubjectId = request.SubjectId,
+                    DayOfWeek = dayOfWeek,
+                    StartTime = request.StartTime,
+                    EndTime = request.EndTime,
+                    EffectiveFrom = request.EffectiveFrom,
+                    EffectiveTo = request.EffectiveTo
+                })
+                .ToList();
 
-        _context.Schedules.AddRange(createdSchedules);
-        await _context.SaveChangesAsync();
-        await transaction.CommitAsync();
+            _context.Schedules.AddRange(createdSchedules);
+            await _context.SaveChangesAsync();
+            await transaction.CommitAsync();
+        });
 
         var dtos = await BuildScheduleDtosAsync(createdSchedules, userId);
         return dtos;
