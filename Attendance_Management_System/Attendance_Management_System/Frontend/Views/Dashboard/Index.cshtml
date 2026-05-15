@@ -1,6 +1,14 @@
 @model Attendance_Management_System.Backend.ViewModels.Dashboard.DashboardIndexViewModel
+<!-- 
+  DEFENSE PREP: Dashboard View
+  This acts as the analytics and landing hub. It displays role-specific statistics based on 
+  the user logged in (Admin, Teacher, Student). Notice how we inject the Model 
+  straight from `DashboardController` into Razor for server-side evaluation. 
+-->
 @{
     ViewData["Title"] = "Dashboard";
+    
+    // Fallback UI Labels logic
     var periodLabel = string.IsNullOrWhiteSpace(Model.AcademicPeriodLabel)
         ? "Current academic period"
         : Model.AcademicPeriodLabel;
@@ -13,11 +21,13 @@
 
 @if (!string.IsNullOrWhiteSpace(Model.ErrorMessage))
 {
+    <!-- DEFENSE PREP: Basic validation feedback output visually if fetching data fails -->
     <p class="form-validation">@Model.ErrorMessage</p>
 }
 
 @if (Model.IsStudent || Model.IsTeacher)
 {
+    <!-- DEFENSE PREP: Filtering Panel allows the user to filter Dashboard charts by Date Window -->
     <article class="panel dashboard-filter-panel">
         <h3>Quick Filters</h3>
         <form method="get" class="filters-grid three dashboard-filter-grid">
