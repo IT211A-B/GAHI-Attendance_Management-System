@@ -31,11 +31,7 @@ The **Don Bosco Attendance Management System** is a pure ASP.NET MVC web applica
 ## 📸 Screenshots
 
 <div align="center">
-  <img src="Attendance_Management_System/IMAGES/3678ffe7-a31c-47b7-ab01-08cb84b26447.jpg" alt="Dashboard overview" width="32%" style="border-radius: 8px; box-shadow: 0 8px 18px rgba(15, 23, 42, 0.15);" />
-  &nbsp;
-  <img src="Attendance_Management_System/IMAGES/37fa21a3-45ff-4e1b-afce-0c32cb921809.jpg" alt="Attendance QR session" width="32%" style="border-radius: 8px; box-shadow: 0 8px 18px rgba(15, 23, 42, 0.15);" />
-  &nbsp;
-  <img src="Attendance_Management_System/IMAGES/e5f9b5bc-7fc6-47e2-8605-2d35002aa21f.jpg" alt="Section timetable" width="32%" style="border-radius: 8px; box-shadow: 0 8px 18px rgba(15, 23, 42, 0.15);" />
+  <img src="Attendance_Management_System/IMAGES/Screenshot%202026-05-15%20225733.png" alt="Dashboard notifications" width="88%" style="border-radius: 10px; box-shadow: 0 12px 26px rgba(15, 23, 42, 0.18);" />
 </div>
 
 <br />
