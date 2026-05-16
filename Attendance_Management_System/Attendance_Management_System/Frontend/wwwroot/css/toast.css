@@ -1,9 +1,12 @@
 /* ============================================================
-   Toast Notification System
+   Toast Notification System - Defense Prep Comments
    Non‑intrusive transient feedback (success, error, warning, info)
    without breaking the existing UI.
+   These styles control the sliding popup boxes that appear in the top right.
    ============================================================ */
 
+/* DEFENSE PREP: The Toast container stays fixed on the top-right overlaying the app.
+   pointer-events: none ensures background clicks go through spaces between toasts. */
 .toast-container {
   position: fixed;
   top: 1rem;
@@ -16,6 +19,7 @@
 }
 
 .toast {
+  /* DEFENSE PREP: Make the individual toast clickable (e.g. for the X close button) */
   pointer-events: auto;
   display: flex;
   align-items: flex-start;

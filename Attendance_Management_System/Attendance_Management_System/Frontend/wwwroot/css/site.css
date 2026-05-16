@@ -1,4 +1,12 @@
+/* ============================================================
+   Global Site Styles - Defense Prep Comments
+   This file manages the overall look and feel of the application,
+   specifically a modern glassmorphism aesthetic with soft gradients,
+   clean borders, and CSS variables for theming.
+   ============================================================ */
+
 :root {
+  /* DEFENSE: CSS variables mapped to Tailwind-like colors for consistent design across views */
   --bg: #f9fafb;
   --surface: #ffffff;
   --text: #111827;
@@ -12,7 +20,7 @@
   --danger: #dc2626;
   --radius-lg: 18px;
   --radius-md: 12px;
-  --shadow-soft: 0 16px 40px rgba(15, 23, 42, 0.08);
+  --shadow-soft: 0 16px 40px rgba(15, 23, 42, 0.08); /* Soft drop shadow for floating elements */
 }
 
 * {
@@ -27,6 +35,7 @@ body {
 body {
   margin: 0;
   color: var(--text);
+  /* DEFENSE: Two radial gradients add the subtle blue mesh glow behind our views */
   background:
     radial-gradient(1000px 500px at 0% -10%, #dbeafe 0%, transparent 60%),
     radial-gradient(900px 450px at 100% 0%, #e0e7ff 0%, transparent 55%),
@@ -38,6 +47,8 @@ a {
   color: inherit;
 }
 
+/* DEFENSE: App Layout Grid. We use CSS Grid for the sidebar vs main content area.
+   Sidebar is fixed at 260px wide on desktop. */
 .app-shell {
   min-height: 100vh;
   display: grid;
@@ -46,8 +57,9 @@ a {
 
 .app-sidebar {
   border-right: 1px solid var(--border);
-  background: rgba(255, 255, 255, 0.75);
-  backdrop-filter: blur(8px);
+  /* DEFENSE: Glassmorphism effect for the sidebar */
+  background: rgba(255, 255, 255, 0.75); /* Semi-transparent background */
+  backdrop-filter: blur(8px); /* CSS Blur to frost what is behind it */
   padding: 1.25rem 1rem;
 }
 
@@ -141,8 +153,6 @@ a {
   border-bottom: 1px solid var(--border);
   background: rgba(255, 255, 255, 0.72);
   backdrop-filter: blur(8px);
-  position: relative;
-  z-index: 1200;
   padding: 0.85rem 1.5rem;
   display: flex;
   align-items: center;

@@ -3,10 +3,15 @@
     ViewData["Title"] = "Users";
 }
 
+<!-- DEFENSE PREP: User Management View (Admin Only)
+     This view follows a standard CRUD pattern heavily relying on Server-Rendered MVC forms.
+     It demonstrates inserting new users securely and listing existing ones. -->
 <section class="panel">
     <h3>User Management</h3>
     <p class="muted">Server-rendered C# MVC user administration with form-based write actions.</p>
 
+    <!-- DEFENSE PREP: TempData is used here to pass success/error flash messages 
+         from the backend Controller to the front-end view after a redirect. -->
     @if (TempData["UsersSuccess"] is string successMessage)
     {
         <p class="status-pill active">@successMessage</p>
@@ -19,6 +24,8 @@
 
     <article class="panel">
         <h3>Create User</h3>
+        <!-- DEFENSE PREP: Standard ASP.NET Core forms automatically inject a hidden 
+             AntiForgeryToken block for CSRF protection. -->
         <form asp-controller="UserManagement" asp-action="Create" method="post" class="filters-grid three">
             @Html.AntiForgeryToken()
             <div>
