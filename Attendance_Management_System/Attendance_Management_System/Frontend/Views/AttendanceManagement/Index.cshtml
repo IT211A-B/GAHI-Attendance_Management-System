@@ -1,7 +1,6 @@
 @model Attendance_Management_System.Backend.ViewModels.Attendance.AttendanceIndexViewModel
 @{
     ViewData["Title"] = "Attendance";
-    var selectedDateValue = Model.SelectedDate.ToString("yyyy-MM-dd");
 }
 
 <section class="panel">
@@ -41,7 +40,7 @@
         </div>
         <div>
             <label for="date">Date</label>
-            <input id="date" name="date" type="date" class="input-select" value="@selectedDateValue" />
+            <input id="date" name="date" type="date" class="input-select" value="@Model.SelectedDate.ToString("yyyy-MM-dd")" />
         </div>
         <button type="submit" class="btn-primary btn-inline">Load Attendance</button>
     </form>
@@ -58,23 +57,26 @@
     {
         <article class="panel">
             <h3>Mark Attendance</h3>
-            <form action="@Url.Action("Mark", "AttendanceManagement")" method="post" class="filters-grid three">
+            <form asp-controller="AttendanceManagement" asp-action="Mark" method="post" class="filters-grid three">
                 @Html.AntiForgeryToken()
-                <input type="hidden" name="MarkForm.SectionId" value="@Model.SelectedSectionId" />
-                <input type="hidden" name="MarkForm.ScheduleId" value="@Model.SelectedScheduleId" />
-                <input type="hidden" name="MarkForm.Date" value="@selectedDateValue" />
+                <input type="hidden" asp-for="MarkForm.SectionId" value="@Model.SelectedSectionId" />
+                <input type="hidden" asp-for="MarkForm.ScheduleId" value="@Model.SelectedScheduleId" />
+                <input type="hidden" asp-for="MarkForm.Date" value="@Model.SelectedDate.ToString("yyyy-MM-dd")" />
 
                 <div>
-                    <label for="MarkForm_StudentId">Student ID</label>
-                    <input id="MarkForm_StudentId" name="MarkForm.StudentId" class="input-select" type="number" min="1" />
+                    <label asp-for="MarkForm.StudentId"></label>
+                    <input asp-for="MarkForm.StudentId" class="input-select" type="number" min="1" />
+                    <span asp-validation-for="MarkForm.StudentId" class="field-validation"></span>
                 </div>
                 <div>
-                    <label for="MarkForm_TimeIn">Time in</label>
-                    <input id="MarkForm_TimeIn" name="MarkForm.TimeIn" class="input-select" type="time" />
+                    <label asp-for="MarkForm.TimeIn"></label>
+                    <input asp-for="MarkForm.TimeIn" class="input-select" type="time" />
+                    <span asp-validation-for="MarkForm.TimeIn" class="field-validation"></span>
                 </div>
                 <div>
-                    <label for="MarkForm_Remarks">Remarks</label>
-                    <input id="MarkForm_Remarks" name="MarkForm.Remarks" class="input-select" />
+                    <label asp-for="MarkForm.Remarks"></label>
+                    <input asp-for="MarkForm.Remarks" class="input-select" />
+                    <span asp-validation-for="MarkForm.Remarks" class="field-validation"></span>
                 </div>
 
                 <button type="submit" class="btn-primary btn-inline">Mark</button>

@@ -2061,8 +2061,6 @@
 
 		var scanner = null;
 		var scannerState = "idle";
-		var scannerStartId = 0;
-		var scannerConfig = { fps: 10, qrbox: { width: 230, height: 230 } };
 
 		function hasToast() {
 			return typeof window.amsToast !== "undefined" && window.amsToast.show;
@@ -2090,95 +2088,7 @@
 			}
 		}
 
-		function browserCanScanWithCamera() {
-			if (window.isSecureContext === false) {
-				setStatus("Camera scanning requires HTTPS or localhost. Open the app with HTTPS, or paste the token manually.");
-				return false;
-			}
-
-			if (!navigator.mediaDevices || typeof navigator.mediaDevices.getUserMedia !== "function") {
-				setStatus("This browser does not support camera scanning. Paste the token manually.");
-				return false;
-			}
-
-			return true;
-		}
-
-		function getCameraFailureMessage(error) {
-			var message = error && (error.name || error.message || String(error));
-
-			if (/notallowed|permission|denied/i.test(message || "")) {
-				return "Camera permission was denied. Allow camera access in the browser, then start again.";
-			}
-
-			if (/notfound|devicesnotfound|overconstrained|constraint/i.test(message || "")) {
-				return "No usable camera was found. Paste the token manually.";
-			}
-
-			return "Camera start failed. Allow camera access, then start again or paste the token manually.";
-		}
-
-		function chooseCamera(cameras) {
-			if (!cameras || !cameras.length) {
-				return null;
-			}
-
-			var rearCamera = cameras.find(function (camera) {
-				return /back|rear|environment/i.test(camera.label || "");
-			});
-
-			return rearCamera || cameras[0];
-		}
-
-		function startWithCamera(cameraConfig) {
-			if (!scanner) {
-				return Promise.reject(new Error("Scanner stopped."));
-			}
-
-			return scanner.start(
-				cameraConfig,
-				scannerConfig,
-				function (decodedText) {
-					tokenInput.value = decodedText;
-					setStatus("QR detected. Submit attendance when ready.");
-					stopScanner();
-				},
-				function () {
-					// Ignore transient decode errors while scanning.
-				});
-		}
-
-		function startWithAvailableCamera() {
-			if (!window.Html5Qrcode || typeof window.Html5Qrcode.getCameras !== "function") {
-				return Promise.reject(new Error("Camera enumeration is unavailable."));
-			}
-
-			return window.Html5Qrcode.getCameras()
-				.then(function (cameras) {
-					var selectedCamera = chooseCamera(cameras);
-					if (!selectedCamera) {
-						return Promise.reject(new Error("No camera found."));
-					}
-
-					return startWithCamera({ deviceId: { exact: selectedCamera.id } });
-				});
-		}
-
-		function clearScannerAfterFailure() {
-			try {
-				if (scanner) {
-					scanner.clear();
-				}
-			} catch (error) {
-				// Ignore cleanup failures.
-			}
-
-			scanner = null;
-		}
-
 		function stopScanner() {
-			scannerStartId += 1;
-
 			if (!scanner) {
 				scannerState = "idle";
 				setStatus("Scanner already stopped.");
@@ -2233,41 +2143,35 @@
 				return;
 			}
 
-			if (!browserCanScanWithCamera()) {
-				return;
-			}
-
-			var currentStartId = scannerStartId + 1;
-			scannerStartId = currentStartId;
 			scanner = new window.Html5Qrcode(scannerContainerId);
 			scannerState = "starting";
-			setStatus("Requesting camera permission...");
+			setStatus("Starting scanner...");
 
-			startWithCamera({ facingMode: "environment" })
-				.catch(function () {
-					if (currentStartId !== scannerStartId || !scanner) {
-						return Promise.reject(new Error("Scanner stopped."));
+			scanner
+				.start(
+					{ facingMode: "environment" },
+					{ fps: 8, qrbox: { width: 230, height: 230 } },
+					function (decodedText) {
+						tokenInput.value = decodedText;
+						setStatus("QR detected. Submit attendance when ready.");
+						stopScanner();
+					},
+					function () {
+						// Ignore transient decode errors while scanning.
 					}
-
-					setStatus("Back camera unavailable. Trying another camera...");
-					return startWithAvailableCamera();
-				})
+				)
 				.then(function () {
-					if (currentStartId !== scannerStartId || !scanner) {
-						return;
-					}
-
 					scannerState = "running";
-					setStatus("Scanner running. Point the camera at the teacher QR.");
 				})
-				.catch(function (error) {
-					if (currentStartId !== scannerStartId) {
-						return;
-					}
-
+				.catch(function () {
 					scannerState = "idle";
-					setStatus(getCameraFailureMessage(error));
-					clearScannerAfterFailure();
+					setStatus("Camera start failed. Paste token manually.");
+					try {
+						scanner.clear();
+					} catch (error) {
+						// Ignore cleanup failures.
+					}
+					scanner = null;
 				});
 		});
 
