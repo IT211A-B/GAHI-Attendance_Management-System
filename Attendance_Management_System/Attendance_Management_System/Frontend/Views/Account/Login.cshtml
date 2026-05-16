@@ -1,9 +1,14 @@
 @model Attendance_Management_System.Backend.ViewModels.Auth.LoginViewModel
 @{
-    Layout = null;
+    Layout = null; // DEFENSE PREP: Set to null so the login page doesn't show the dashboard sidebar.
     ViewData["Title"] = "Sign in";
 }
 
+<!-- 
+  DEFENSE PREP: Login View
+  This serves as the entry point for authentication. Upon successful POST of credentials, 
+  the backend issues a cookie-based auth token, and the user is redirected to their Dashboard.
+-->
 <!DOCTYPE html>
 <html lang="en">
 

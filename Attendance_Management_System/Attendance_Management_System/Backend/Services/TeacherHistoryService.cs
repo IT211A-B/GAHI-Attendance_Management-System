@@ -9,8 +9,8 @@ using Microsoft.Extensions.Options;
 
 namespace Attendance_Management_System.Backend.Services;
 
-// Service implementation for teacher history operations
-// Provides read-only access to teacher's schedules and attendance history
+// Provides read-only access to teacher's schedules and attendance history.
+// Enables teachers to view their assigned schedule slots and mark attendance for each class session.
 public class TeacherHistoryService : ITeacherHistoryService
 {
     private readonly AppDbContext _context;
@@ -24,7 +24,7 @@ public class TeacherHistoryService : ITeacherHistoryService
             : AttendanceSettings.Default;
     }
 
-    // Get all schedule slots for sections the teacher is assigned to
+    // Retrieves all schedule slots for sections the teacher is assigned to.
     public async Task<List<TeacherScheduleDto>> GetTeacherSchedulesAsync(int userId)
     {
         // Find the teacher record by UserId

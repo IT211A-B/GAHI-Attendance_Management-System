@@ -10,6 +10,9 @@ using Microsoft.Extensions.Options;
 
 namespace Attendance_Management_System.Backend.Services;
 
+// Builds role-specific dashboard view models for Admin, Teacher, and Student users.
+// Handles data filtering by date windows and calculates attendance metrics.
+// Each role receives a tailored set of metrics and data relevant to their responsibilities.
 public class DashboardService : IDashboardService
 {
     // Shared limits keep dashboard queries bounded for fast initial page loads.

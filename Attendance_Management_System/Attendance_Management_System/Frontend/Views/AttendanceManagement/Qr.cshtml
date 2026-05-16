@@ -1,6 +1,15 @@
 @model Attendance_Management_System.Backend.ViewModels.Attendance.AttendanceQrPageViewModel
+<!-- 
+  DEFENSE PREP: QR Generation (Teacher Side) 
+  This view renders the HTML payload with `data-*` attributes containing API endpoints. 
+  Our `site.js` module `handleAttendanceQrPage()` reads these attributes immediately upon loading to initialize 
+  the QR Code token generation lifecycle and start polling for live student check-ins.
+-->
 @{
     ViewData["Title"] = "Attendance QR";
+    
+    // DEFENSE PREP: Generating precise URLs from the Route map.
+    // Notice how C# uses `new { sessionId = "__SESSION__" }`. The JS side will string.replace("__SESSION__") with the real session ID dynamically.
     var sectionsUrl = Url.Action("SearchQrSections", "AttendanceManagement") ?? "/attendance/qr/options/sections";
     var subjectsUrl = Url.Action("SearchQrSubjects", "AttendanceManagement") ?? "/attendance/qr/options/subjects";
     var periodsUrl = Url.Action("SearchQrPeriods", "AttendanceManagement") ?? "/attendance/qr/options/periods";

@@ -4,7 +4,8 @@ using Attendance_Management_System.Backend.Enums;
 
 namespace Attendance_Management_System.Backend.Helpers;
 
-// Provides static helper methods for attendance policy calculations and validations.
+// Provides centralized attendance policy calculations and validations.
+// Ensures consistent status determination (Present/Late/Absent) across the entire application.
 public static class AttendancePolicy
 {
     // Resolves the school's timezone from settings, falling back to UTC if invalid.
@@ -42,6 +43,22 @@ public static class AttendancePolicy
         return targetDate >= earliestDate && targetDate <= schoolToday;
     }
 
+    // Validates that a date falls within the schedule's effective date range.
+    public static bool IsWithinEffectiveDateRange(Schedule schedule, DateOnly targetDate)
+    {
+        if (targetDate < schedule.EffectiveFrom)
+        {
+            return false;
+        }
+
+        if (schedule.EffectiveTo.HasValue && targetDate > schedule.EffectiveTo.Value)
+        {
+            return false;
+        }
+
+        return true;
+    }
+
     // Validates that a date matches the schedule's day of week and effective date range.
     public static bool IsDateAlignedWithSchedule(Schedule schedule, DateOnly targetDate)
     {
@@ -51,19 +68,7 @@ public static class AttendancePolicy
             return false;
         }
 
-        // Ensure the date is on or after the schedule's effective start date.
-        if (targetDate < schedule.EffectiveFrom)
-        {
-            return false;
-        }
-
-        // Ensure the date is on or before the schedule's effective end date (if set).
-        if (schedule.EffectiveTo.HasValue && targetDate > schedule.EffectiveTo.Value)
-        {
-            return false;
-        }
-
-        return true;
+        return IsWithinEffectiveDateRange(schedule, targetDate);
     }
 
     // Calculates the time after which a student is considered late.

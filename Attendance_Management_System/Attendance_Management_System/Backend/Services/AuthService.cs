@@ -17,7 +17,8 @@ using System.Text.Json;
 
 namespace Attendance_Management_System.Backend.Services;
 
-// Handles authentication operations: login, registration, and user profile retrieval
+// Core authentication service handling user registration, login, email verification, and password recovery.
+// Works with ASP.NET Identity for user management and integrates with email service for notifications.
 public class AuthService : IAuthService
 {
     private const string StudentNumberPrefix = "STD-";
