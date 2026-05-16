@@ -98,7 +98,6 @@
                         <th>Student</th>
                         <th>Subject</th>
                         <th>Time In</th>
-                        <th>Time Out</th>
                         <th>Remarks</th>
                         <th>Marked By</th>
                     </tr>
@@ -107,7 +106,7 @@
                     @if (!Model.Records.Any())
                     {
                         <tr>
-                            <td colspan="7" class="muted">No attendance records for this filter.</td>
+                            <td colspan="6" class="muted">No attendance records for this filter.</td>
                         </tr>
                     }
                     else
@@ -119,7 +118,6 @@
                                 <td>@record.StudentName</td>
                                 <td>@record.SubjectName</td>
                                 <td>@record.TimeIn</td>
-                                <td>@record.TimeOut</td>
                                 <td>@record.Remarks</td>
                                 <td>@record.MarkerName</td>
                             </tr>
