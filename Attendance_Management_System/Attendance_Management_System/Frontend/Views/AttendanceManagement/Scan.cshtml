@@ -1,19 +1,25 @@
 @{
     ViewData["Title"] = "Attendance Scan";
+    // DEFENSE PREP: This URL points to the backend C# controller action that receives the scanned QR payload.
+    // We pass it to the JS via data-checkin-url on the container div below.
     var checkinUrl = Url.Action("SubmitQrCheckin", "AttendanceManagement") ?? "/attendance/qr/checkins";
 }
 
+<!-- DEFENSE PREP: This view activates the Student QR Scanning UI using Html5Qrcode.
+     The 'data-attendance-qr-page="student"' attribute triggers the specific scanner logic in site.js -->
 <section class="panel attendance-scan-page" data-attendance-qr-page="student" data-checkin-url="@checkinUrl">
     <h3>Student QR Scan</h3>
     <p class="muted">
-        Scan your teacher QR token and submit attendance. Your signed-in student account is used for identity checks.
+        Scan your teacher's session QR token to submit attendance. Your signed-in student account (Identity) is strictly used to authenticate this check-in.
     </p>
 
     <section class="grid-2 compact-gap">
         <article class="panel">
             <h4>Scanner</h4>
+            <!-- DEFENSE PREP: This div acts as the target for the Html5Qrcode webcam feed canvas -->
             <div id="attendance-scanner" class="attendance-scanner"></div>
             <div class="row-actions">
+                <!-- DEFENSE PREP: These buttons hook up to start/stop the webcam gracefully via JS -->
                 <button type="button" class="btn-primary" id="scan-start-btn">Start Scanner</button>
                 <button type="button" class="btn-secondary" id="scan-stop-btn">Stop Scanner</button>
             </div>

@@ -15,6 +15,7 @@
 		return typeof window.anime === "function";
 	}
 
+	// Lazy-load images tagged with data-lazy-src to reduce initial payload.
 	function initializeLazyLoading() {
 		var lazyImages = Array.from(document.querySelectorAll("img[data-lazy-src]"));
 		if (!lazyImages.length) {
@@ -273,6 +274,7 @@
 	}
 
 	// Initialize floating help chat with role-filtered predefined Q&A entries.
+	// Initialize floating help chat with role-aware FAQs.
 	function initializePredefinedChatWidget() {
 		var widget = document.getElementById("predefined-chat-widget");
 		if (!widget) {
@@ -297,7 +299,7 @@
 		var activeCategory = "all";
 		var entries = [];
 
-		// Keep these entries as plain objects so an API payload can swap in later.
+		// Fallback FAQ entries when no API feed is configured.
 		var fallbackEntries = [
 			{
 				id: "scan_qr",
@@ -417,6 +419,7 @@
 			return "faq_" + String(index + 1);
 		}
 
+		// Normalize raw FAQ items into consistent shape.
 		function normalizeEntry(raw, index) {
 			if (!raw || typeof raw !== "object") {
 				return null;
@@ -451,6 +454,7 @@
 			};
 		}
 
+		// Filter and normalize all FAQ entries.
 		function normalizeEntries(rawItems) {
 			if (!Array.isArray(rawItems)) {
 				return [];
@@ -466,6 +470,7 @@
 		}
 
 		function loadEntries() {
+			// Prefer API payloads but gracefully fall back to local FAQ entries.
 			if (!apiUrl) {
 				return Promise.resolve(normalizeEntries(fallbackEntries));
 			}
@@ -503,10 +508,12 @@
 				});
 		}
 
+		// Role gate: only show entries for the current role.
 		function canAccess(entry) {
 			return entry.roles.indexOf(currentRole) >= 0;
 		}
 
+		// Category filter for chat tabs.
 		function matchesCategory(entry) {
 			if (activeCategory === "all") {
 				return true;
@@ -515,6 +522,7 @@
 			return entry.category === activeCategory;
 		}
 
+		// Search filter matches question text or tags.
 		function matchesSearch(entry, query) {
 			if (!query) {
 				return true;
@@ -530,6 +538,7 @@
 			});
 		}
 
+		// Apply all filters to produce visible FAQ items.
 		function getVisibleEntries() {
 			var query = searchInput ? searchInput.value.trim() : "";
 			return entries.filter(function (entry) {
@@ -537,6 +546,7 @@
 			});
 		}
 
+		// Render the selected FAQ answer into the panel.
 		function setAnswer(entry) {
 			if (!entry) {
 				answer.textContent = "No answer available.";
@@ -563,6 +573,7 @@
 			refreshActiveState();
 		}
 
+		// Keep active button styles in sync with selection.
 		function refreshActiveState() {
 			var buttons = questionList.querySelectorAll(".chat-widget-question");
 			buttons.forEach(function (button) {
@@ -573,6 +584,7 @@
 		}
 
 		function renderQuestions() {
+			// Rebuilds the visible FAQ list based on role, category, and search.
 			var visible = getVisibleEntries();
 			questionList.replaceChildren();
 
@@ -624,6 +636,7 @@
 		}
 
 		function openWidget() {
+			// Keep state mirrored in data attributes for CSS and accessibility.
 			panel.hidden = false;
 			widget.setAttribute("data-widget-state", "open");
 			launcher.setAttribute("aria-expanded", "true");
@@ -692,6 +705,7 @@
 		});
 	}
 
+	// Notifications dropdown: load, render, and live-update items.
 	function initializeNotificationCenter() {
 		var center = document.querySelector("[data-notification-center='true']");
 		if (!center) {
@@ -708,6 +722,7 @@
 			return;
 		}
 
+		// Endpoints are injected via data-* attributes in the layout.
 		var listUrl = (center.getAttribute("data-list-url") || "").trim();
 		var markReadUrlTemplate = (center.getAttribute("data-mark-read-url-template") || "").trim();
 		var markAllReadUrl = (center.getAttribute("data-mark-all-read-url") || "").trim();
@@ -721,6 +736,7 @@
 		var hasLoaded = false;
 		var signalrConnection = null;
 
+		// Expand the mark-read URL template with a notification ID.
 		function buildNotificationMarkReadUrl(notificationId) {
 			if (!markReadUrlTemplate) {
 				return "";
@@ -795,6 +811,7 @@
 			listContainer.appendChild(emptyText);
 		}
 
+		// Rebuild the notification list based on current data.
 		function renderNotifications() {
 			listContainer.replaceChildren();
 
@@ -900,6 +917,7 @@
 			renderNotifications();
 		}
 
+		// Initial fetch from the notifications endpoint.
 		function loadNotifications() {
 			if (!listUrl) {
 				renderEmptyState("Notification endpoint is unavailable.");
@@ -949,6 +967,7 @@
 				});
 		}
 
+		// Open the panel and lazy-load notifications on first open.
 		function openPanel() {
 			panel.hidden = false;
 			toggleBtn.setAttribute("aria-expanded", "true");
@@ -1008,6 +1027,7 @@
 			}
 		});
 
+		// Live updates via SignalR; fall back to polling if unavailable.
 		if (window.signalR && hubUrl) {
 			signalrConnection = new window.signalR.HubConnectionBuilder()
 				.withUrl(hubUrl)
@@ -1032,6 +1052,7 @@
 		loadNotifications();
 	}
 
+	// Mobile navigation toggles the sidebar and backdrop.
 	function initializeMobileSidebar() {
 		var toggleBtn = document.getElementById("mobile-nav-toggle");
 		var sidebar = document.getElementById("app-sidebar");
@@ -1046,6 +1067,7 @@
 		}
 
 		function syncState(isOpen) {
+			// Body class drives scroll lock and layout adjustments.
 			document.body.classList.toggle("sidebar-open", isOpen);
 			backdrop.hidden = !isOpen;
 			toggleBtn.setAttribute("aria-expanded", isOpen ? "true" : "false");
@@ -1100,6 +1122,7 @@
 
 	// Determine whether the content area or window is the primary scroll container.
 	function getPrimaryScrollTarget() {
+		// Prefer the content panel if it is scrollable, otherwise fall back to window.
 		var content = document.querySelector(".content");
 		if (!content) {
 			return null;
@@ -1152,6 +1175,7 @@
 
 	// Save current scroll position to session storage before form submission.
 	function persistScrollForPostback() {
+		// Capture scroll state before POST so we can restore after server-render.
 		var snapshot = captureScrollSnapshot();
 		var payload = {
 			path: window.location.pathname,
@@ -1170,6 +1194,7 @@
 
 	// Restore scroll position after a postback, if valid state exists.
 	function restoreScrollAfterPostback() {
+		// Restore only if the snapshot is recent and matches the current path.
 		var rawPayload;
 		try {
 			rawPayload = sessionStorage.getItem(postbackScrollStateKey);
@@ -1251,6 +1276,7 @@
 	var studentSubmitCooldownMs = 2000;
 	var studentLastSubmitAt = 0;
 
+	// Parse JSON without throwing on invalid payloads.
 	function parseJsonSafe(data) {
 		if (!data) {
 			return null;
@@ -1263,6 +1289,7 @@
 		}
 	}
 
+	// Debounce rapid input events (e.g., typeahead search).
 	function debounce(callback, waitMs) {
 		var timeoutId = 0;
 		return function () {
@@ -1274,6 +1301,7 @@
 		};
 	}
 
+	// Build a URL with sanitized query parameters.
 	function makeApiUrl(baseUrl, queryParams) {
 		var url = new URL(baseUrl, window.location.origin);
 		if (!queryParams) {
@@ -1297,6 +1325,7 @@
 		return url.toString();
 	}
 
+	// Pull the anti-forgery token injected by the layout.
 	function getAntiForgeryToken() {
 		var tokenInput = document.getElementById("anti-forgery-token");
 		if (!tokenInput) {
@@ -1306,6 +1335,7 @@
 		return String(tokenInput.value || "");
 	}
 
+	// Unified fetch wrapper with JSON handling and error normalization.
 	function requestApi(method, url, body) {
 		var options = {
 			method: method,
@@ -1327,6 +1357,7 @@
 			}
 		}
 
+		// Normalize fetch responses into a predictable { ok, data, message } shape.
 		return window.fetch(url, options)
 			.then(function (response) {
 				return response.text().then(function (rawText) {
@@ -1393,6 +1424,7 @@
 		container.innerHTML = "";
 	}
 
+	// Render the typeahead dropdown used by the QR selectors.
 	function renderSuggestionBox(container, items, labelResolver, selectHandler, emptyMessage) {
 		if (!container) {
 			return;
@@ -1479,12 +1511,14 @@
 		});
 	}
 
+	// Teacher QR page: typeahead selectors, session creation, live feed.
 	function initializeTeacherQrPage() {
 		var page = document.querySelector("[data-attendance-qr-page='teacher']");
 		if (!page) {
 			return;
 		}
 
+		// Data attributes carry backend endpoints configured in the Razor view.
 		var sectionsUrl = page.getAttribute("data-sections-url") || "";
 		var subjectsUrl = page.getAttribute("data-subjects-url") || "";
 		var periodsUrl = page.getAttribute("data-periods-url") || "";
@@ -1793,6 +1827,7 @@
 			});
 		}
 
+		// Drives countdown + live check-ins during an active QR session.
 		function startSessionTimers() {
 			stopSessionTimers();
 
@@ -2004,6 +2039,7 @@
 		loadSectionSuggestions("");
 	}
 
+	// Student scan page: camera-based QR scanning and token submit.
 	function initializeStudentScanPage() {
 		var page = document.querySelector("[data-attendance-qr-page='student']");
 		if (!page) {
@@ -2186,6 +2222,7 @@
 		}
 
 		startBtn.addEventListener("click", function () {
+			// Uses Html5Qrcode if available, otherwise falls back to manual token entry.
 			if (!window.Html5Qrcode) {
 				setStatus("Scanner library failed to load. Paste token manually.");
 				return;
@@ -2239,6 +2276,7 @@
 		});
 
 		submitBtn.addEventListener("click", function () {
+			// Prevent rapid resubmits from accidental double taps.
 			if (Date.now() - studentLastSubmitAt < studentSubmitCooldownMs) {
 				setSubmitResult("Please wait before submitting again.", "result-warning");
 				return;

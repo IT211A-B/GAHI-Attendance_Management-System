@@ -3,7 +3,13 @@
 
 <!DOCTYPE html>
 <html lang="en">
-
+<!-- 
+  DEFENSE PREP: _Layout.cshtml
+  This file serves as the master template for all Razor Views. 
+  It defines the navigation sidebar, the top app bar, structural containers,
+  and imports the global CSS and JS (site.js, toast.js).
+  Each individual view (.cshtml) will inject its content into the `@RenderBody()` block.
+-->
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -20,10 +26,22 @@
 </head>
 
 <body>
+    <!-- 
+      DEFENSE PREP: Anti-forgery Token 
+      This is a crucial security feature in ASP.NET Core that protects our POST/Ajax 
+      requests against CSRF (Cross-Site Request Forgery). The site.js fetch wrapper 
+      grabs this token to authenticate Javascript actions. Let them know this handles security!
+    -->
     @{
         var antiforgeryToken = AntiForgery.GetAndStoreTokens(Context).RequestToken;
     }
     <input type="hidden" id="anti-forgery-token" name="__RequestVerificationToken" value="@antiforgeryToken" />
+    
+    <!-- 
+      DEFENSE PREP: Routing and Access Control 
+      We grab current route info (controller/action) to visually highlight active menus.
+      We also retrieve the current User Role to dictate which navigation items to render.
+    -->
     @{
         var currentController = ViewContext.RouteData.Values["controller"]?.ToString() ?? string.Empty;
         var currentAction = ViewContext.RouteData.Values["action"]?.ToString() ?? string.Empty;
@@ -32,6 +50,8 @@
  "/notifications/__ID__/read";
         var notificationsMarkAllReadUrl = Url.Action("MarkAllRead", "Notifications") ?? "/notifications/read-all";
         var notificationsHubUrl = "/hubs/notifications";
+        
+        // Define user's highest role context to control view access
         var currentUserRole = User.IsInRole("admin")
             ? "admin"
             : User.IsInRole("teacher")
