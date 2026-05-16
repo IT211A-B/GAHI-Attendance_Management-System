@@ -34,8 +34,8 @@ public class SectionPageService : ISectionPageService
         [6] = "Saturday"
     };
 
-    private static readonly TimeOnly TimetableStart = new(1, 0);
-    private static readonly int TimetableSlotCount = 48; // 24 hours ÷ 30 min slots
+    private static readonly TimeOnly TimetableStart = new(5, 0);
+    private static readonly int TimetableSlotCount = 28; // 5 AM to 7 PM (14 hours ÷ 30 min slots)
 
     public SectionPageService(
         ISectionsService sectionsService,

@@ -568,13 +568,7 @@ public class SectionsService : ISectionsService
 
             if (ownedScheduleIds.Count > 0)
             {
-                var hasAttendance = await _context.Attendances
-                    .AnyAsync(attendance => ownedScheduleIds.Contains(attendance.ScheduleId), cancellationToken);
-
-                if (hasAttendance)
-                {
-                    throw new InvalidOperationException("Cannot unassign because one or more of your schedules already have attendance records.");
-                }
+                await RemoveScheduleDependentsAsync(ownedScheduleIds, cancellationToken);
 
                 var ownedSchedules = await teacherSchedulesQuery.ToListAsync(cancellationToken);
                 _context.Schedules.RemoveRange(ownedSchedules);
@@ -595,6 +589,33 @@ public class SectionsService : ISectionsService
         await _context.SaveChangesAsync(cancellationToken);
 
         return;
+    }
+
+    private async Task RemoveScheduleDependentsAsync(IEnumerable<int> scheduleIds, CancellationToken cancellationToken)
+    {
+        var scheduleIdList = scheduleIds.ToList();
+        if (scheduleIdList.Count == 0)
+        {
+            return;
+        }
+
+        var qrSessions = await _context.AttendanceQrSessions
+            .Where(session => scheduleIdList.Contains(session.ScheduleId))
+            .ToListAsync(cancellationToken);
+
+        if (qrSessions.Count > 0)
+        {
+            _context.AttendanceQrSessions.RemoveRange(qrSessions);
+        }
+
+        var attendances = await _context.Attendances
+            .Where(attendance => scheduleIdList.Contains(attendance.ScheduleId))
+            .ToListAsync(cancellationToken);
+
+        if (attendances.Count > 0)
+        {
+            _context.Attendances.RemoveRange(attendances);
+        }
     }
 
     // Retrieves sections filtered by course and year level for enrollment purposes
