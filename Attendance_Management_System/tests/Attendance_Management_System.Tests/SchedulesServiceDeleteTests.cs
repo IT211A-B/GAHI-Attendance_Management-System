@@ -22,7 +22,7 @@ public class SchedulesServiceDeleteTests
     }
 
     [Fact]
-    public async Task DeleteScheduleAsync_ReturnsConflict_WhenAttendanceExists()
+    public async Task DeleteScheduleAsync_DeletesSchedule_WhenAttendanceExists()
     {
         await using var context = CreateContext();
         var seed = await SeedScheduleAsync(context);
@@ -41,15 +41,14 @@ public class SchedulesServiceDeleteTests
         await context.SaveChangesAsync();
 
         var service = CreateService(context);
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
-            () => service.DeleteScheduleAsync(seed.ScheduleId, seed.OwnerUserId, isAdmin: false));
+        await service.DeleteScheduleAsync(seed.ScheduleId, seed.OwnerUserId, isAdmin: false);
 
-        Assert.Equal("Cannot delete schedule with existing attendance records.", exception.Message);
-        Assert.True(await context.Schedules.AnyAsync(schedule => schedule.Id == seed.ScheduleId));
+        Assert.False(await context.Schedules.AnyAsync(schedule => schedule.Id == seed.ScheduleId));
+        Assert.False(await context.Attendances.AnyAsync(attendance => attendance.ScheduleId == seed.ScheduleId));
     }
 
     [Fact]
-    public async Task DeleteScheduleAsync_ReturnsConflict_WhenActiveQrSessionExists()
+    public async Task DeleteScheduleAsync_DeletesSchedule_WhenActiveQrSessionExists()
     {
         await using var context = CreateContext();
         var seed = await SeedScheduleAsync(context);
@@ -73,15 +72,14 @@ public class SchedulesServiceDeleteTests
         await context.SaveChangesAsync();
 
         var service = CreateService(context);
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
-            () => service.DeleteScheduleAsync(seed.ScheduleId, seed.OwnerUserId, isAdmin: false));
+        await service.DeleteScheduleAsync(seed.ScheduleId, seed.OwnerUserId, isAdmin: false);
 
-        Assert.Equal("Cannot delete schedule with active or checked-in QR attendance sessions.", exception.Message);
-        Assert.True(await context.Schedules.AnyAsync(schedule => schedule.Id == seed.ScheduleId));
+        Assert.False(await context.Schedules.AnyAsync(schedule => schedule.Id == seed.ScheduleId));
+        Assert.False(await context.AttendanceQrSessions.AnyAsync(session => session.ScheduleId == seed.ScheduleId));
     }
 
     [Fact]
-    public async Task DeleteScheduleAsync_ReturnsConflict_WhenInactiveQrSessionHasCheckins()
+    public async Task DeleteScheduleAsync_DeletesSchedule_WhenInactiveQrSessionHasCheckins()
     {
         await using var context = CreateContext();
         var seed = await SeedScheduleAsync(context);
@@ -114,11 +112,11 @@ public class SchedulesServiceDeleteTests
         await context.SaveChangesAsync();
 
         var service = CreateService(context);
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
-            () => service.DeleteScheduleAsync(seed.ScheduleId, seed.OwnerUserId, isAdmin: false));
+        await service.DeleteScheduleAsync(seed.ScheduleId, seed.OwnerUserId, isAdmin: false);
 
-        Assert.Equal("Cannot delete schedule with active or checked-in QR attendance sessions.", exception.Message);
-        Assert.True(await context.Schedules.AnyAsync(schedule => schedule.Id == seed.ScheduleId));
+        Assert.False(await context.Schedules.AnyAsync(schedule => schedule.Id == seed.ScheduleId));
+        Assert.False(await context.AttendanceQrSessions.AnyAsync(session => session.ScheduleId == seed.ScheduleId));
+        Assert.False(await context.AttendanceQrCheckins.AnyAsync(checkin => checkin.AttendanceQrSessionId == 1));
     }
 
     [Fact]

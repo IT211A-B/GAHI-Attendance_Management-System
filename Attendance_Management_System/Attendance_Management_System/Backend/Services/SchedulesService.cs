@@ -391,39 +391,7 @@ public class SchedulesService : ISchedulesService
             }
         }
 
-        // Check if attendance records exist for this schedule
-        // Attendance history makes the slot part of record-keeping, so it cannot be deleted.
-        var hasAttendance = await _context.Attendances.AnyAsync(a => a.ScheduleId == id);
-        if (hasAttendance)
-        {
-            throw new InvalidOperationException("Cannot delete schedule with existing attendance records.");
-        }
-
-        var nowUtc = DateTimeOffset.UtcNow;
-
-        // Deletion is blocked when the schedule still has an active QR session or historical check-ins.
-        var hasBlockingQrSessions = await _context.AttendanceQrSessions
-            .Where(session => session.ScheduleId == id)
-            .AnyAsync(session =>
-                (session.IsActive && session.ExpiresAtUtc > nowUtc)
-                || _context.AttendanceQrCheckins.Any(checkin => checkin.AttendanceQrSessionId == session.Id));
-
-        if (hasBlockingQrSessions)
-        {
-            throw new InvalidOperationException("Cannot delete schedule with active or checked-in QR attendance sessions.");
-        }
-
-        // Remove stale QR sessions that are inactive/expired and have no check-ins so FK restrict does not block schedule deletion.
-        var removableQrSessions = await _context.AttendanceQrSessions
-            .Where(session => session.ScheduleId == id)
-            .Where(session => !session.IsActive || session.ExpiresAtUtc <= nowUtc)
-            .Where(session => !_context.AttendanceQrCheckins.Any(checkin => checkin.AttendanceQrSessionId == session.Id))
-            .ToListAsync();
-
-        if (removableQrSessions.Count > 0)
-        {
-            _context.AttendanceQrSessions.RemoveRange(removableQrSessions);
-        }
+            await RemoveScheduleDependentsAsync(id);
 
         _context.Schedules.Remove(schedule);
 
@@ -437,6 +405,27 @@ public class SchedulesService : ISchedulesService
         }
 
         return;
+    }
+
+    private async Task RemoveScheduleDependentsAsync(int scheduleId)
+    {
+        var qrSessions = await _context.AttendanceQrSessions
+            .Where(session => session.ScheduleId == scheduleId)
+            .ToListAsync();
+
+        if (qrSessions.Count > 0)
+        {
+            _context.AttendanceQrSessions.RemoveRange(qrSessions);
+        }
+
+        var attendances = await _context.Attendances
+            .Where(attendance => attendance.ScheduleId == scheduleId)
+            .ToListAsync();
+
+        if (attendances.Count > 0)
+        {
+            _context.Attendances.RemoveRange(attendances);
+        }
     }
 
     // Get available time slots for a classroom on a specific day
