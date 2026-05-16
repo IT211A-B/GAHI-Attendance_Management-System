@@ -8,6 +8,8 @@ using Microsoft.Extensions.Logging;
 
 namespace Attendance_Management_System.Backend.Controllers;
 
+// Provides a checklist-style interface for marking attendance by section and schedule.
+// Allows teachers to view their sections, select a schedule/date, and mark attendance for each student.
 [Authorize(Policy = "AdminOrTeacher")]
 [Route("attendance/checklist")]
 public class SectionAttendanceController : Controller

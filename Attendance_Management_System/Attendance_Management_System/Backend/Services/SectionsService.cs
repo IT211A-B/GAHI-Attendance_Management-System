@@ -12,7 +12,8 @@ using Microsoft.Extensions.Options;
 
 namespace Attendance_Management_System.Backend.Services;
 
-// Service handling all section-related business logic
+// Manages sections (class groups): CRUD operations, timetable generation, teacher assignment, and capacity tracking.
+// Sections represent a specific class group in a course/academic year, assigned to a particular subject and classroom.
 public class SectionsService : ISectionsService
 {
     private static readonly string ApprovedEnrollmentStatus = EnrollmentStatus.Approved.ToStorageValue();

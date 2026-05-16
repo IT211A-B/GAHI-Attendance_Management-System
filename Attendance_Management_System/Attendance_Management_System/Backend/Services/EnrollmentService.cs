@@ -14,7 +14,8 @@ using Microsoft.Extensions.Options;
 
 namespace Attendance_Management_System.Backend.Services;
 
-// Service implementation for managing student enrollments
+// Manages student enrollment lifecycle: submission, approval, rejection, and section reassignment.
+// Handles capacity warnings and notifies students of status changes via email and in-app notifications.
 public class EnrollmentService : IEnrollmentService
 {
     private static readonly string EnrollmentPendingStatus = EnrollmentStatus.Pending.ToStorageValue();
