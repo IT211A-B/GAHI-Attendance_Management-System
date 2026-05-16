@@ -391,7 +391,7 @@ public class SchedulesService : ISchedulesService
             }
         }
 
-            await RemoveScheduleDependentsAsync(id);
+        await RemoveScheduleDependentsAsync(id);
 
         _context.Schedules.Remove(schedule);
 
